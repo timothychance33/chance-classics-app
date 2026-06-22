@@ -77,7 +77,7 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 
 /* ---- Cards / work orders ---- */
 .grid{display:grid;gap:14px}
-.grid.cols{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.grid.cols{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
 .card{
   background:#fbf6ec;border:1px solid var(--line);border-radius:10px;
   box-shadow:0 1px 0 var(--shadow);overflow:hidden;
@@ -186,6 +186,44 @@ button.ghost:hover{background:var(--paper-2)}
 .signout:hover{background:rgba(199,154,75,.12)}
 #gate .card{padding:0}
 small.hint{color:#8a7f70;font-size:12px;display:block;margin-top:6px}
+/* ===== Global overflow guards ===== */
+*{min-width:0}
+html,body{max-width:100%;overflow-x:hidden}
+img,svg{max-width:100%}
+.card{overflow:hidden}
+.card .meta,.card .ttl,.task .tname{overflow-wrap:anywhere;word-break:break-word}
+
+/* ===== Phone layout (<=600px) ===== */
+@media(max-width:600px){
+  header{padding:10px 12px;gap:8px;flex-wrap:wrap}
+  .brand{gap:8px;flex:1 1 auto;min-width:0}
+  .brand .logo-img{height:34px;padding:5px 9px}
+  .roles{margin-left:0;gap:2px;padding:3px;flex:0 0 auto}
+  .roles button{padding:7px 10px;font-size:10px;letter-spacing:.04em}
+  .signout{margin-left:auto;padding:7px 10px;font-size:10px}
+  .wrap{padding:14px 12px 80px}
+  nav.tabs{gap:3px;margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
+  nav.tabs button{padding:9px 12px;font-size:12px;white-space:nowrap;flex:0 0 auto}
+  .grid.cols{grid-template-columns:1fr}
+  .sectionhead{flex-wrap:wrap;gap:8px}
+  .sectionhead h2{font-size:19px}
+  .sectionhead .add,.sectionhead button.act{margin-left:0;width:100%;order:3}
+  .sectionhead .line{display:none}
+  .modal{padding:12px 8px}
+  .modal .sheet{border-radius:12px}
+  .modal .sheet .mb{padding:14px}
+  .row.two,.row.three{grid-template-columns:1fr}
+  .rolegrid{grid-template-columns:1fr}
+  .datechip{min-width:46px;padding:5px 8px}
+  .datechip .d{font-size:17px}
+  input,select,textarea{font-size:16px} /* prevents iOS zoom-on-focus */
+  .login-logo{width:90%;max-width:260px;padding:14px 18px}
+  #gate{padding:0 14px;margin:36px auto}
+}
+@media(max-width:360px){
+  .roles button{padding:6px 8px;font-size:9px}
+  .brand .logo-img{height:30px}
+}
 </style>
 </head>
 <body>
