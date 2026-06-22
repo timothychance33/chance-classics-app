@@ -175,9 +175,16 @@ button.ghost:hover{background:var(--paper-2)}
 .sectionhead .add{margin-left:auto}
 .kicker{font:700 11px/1 sans-serif;letter-spacing:.24em;text-transform:uppercase;color:var(--oxblood);margin-bottom:3px}
 
-/* config gate */
+/* config gate / login */
 #gate{max-width:520px;margin:60px auto;padding:0 20px}
-#gate .card{padding:26px}
+.logincard{max-width:420px;margin:0 auto}
+.login-logo{display:block;max-width:240px;width:70%;height:auto;margin:0 auto 6px;
+  background:var(--ink);padding:16px 20px;border-radius:14px}
+.signout{background:transparent;border:1px solid rgba(199,154,75,.4);color:var(--brass);
+  font:600 11px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;
+  padding:9px 14px;border-radius:999px;cursor:pointer;margin-left:10px}
+.signout:hover{background:rgba(199,154,75,.12)}
+#gate .card{padding:0}
 small.hint{color:#8a7f70;font-size:12px;display:block;margin-top:6px}
 </style>
 </head>
@@ -193,20 +200,25 @@ small.hint{color:#8a7f70;font-size:12px;display:block;margin-top:6px}
     <button data-role="driver">Drivers</button>
     <button data-role="mechanic">Shop</button>
   </div>
+  <button id="signOutBtn" class="signout" onclick="doLogout()" style="display:none" title="Sign out">Sign out</button>
 </header>
 
 <!-- Config gate (first run) -->
 <div id="gate" style="display:none">
-  <div class="kicker">One-time setup</div>
-  <h2 class="display" style="margin:4px 0 14px">Connect your Supabase</h2>
-  <div class="card"><div style="padding:24px">
-    <label>Supabase URL</label>
-    <input id="cfgUrl" placeholder="https://xxxx.supabase.co" />
-    <label>Supabase anon key</label>
-    <input id="cfgKey" placeholder="eyJ..." />
-    <small class="hint">Stored on this device only. Find these in Supabase → Project Settings → API.</small>
-    <div style="margin-top:16px"><button class="act" onclick="saveCfg()">Connect</button></div>
-  </div></div>
+  <div class="logincard">
+    <img class="login-logo" src="" id="loginLogo" alt="Chance Classics" />
+    <div class="kicker" style="text-align:center">Garage Board</div>
+    <h2 class="display" style="margin:6px 0 18px;text-align:center">Sign in</h2>
+    <div class="card"><div style="padding:24px">
+      <label>Email</label>
+      <input id="lgEmail" type="email" autocomplete="username" placeholder="you@example.com" />
+      <label>Password</label>
+      <input id="lgPass" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" />
+      <div style="margin-top:18px"><button class="act" style="width:100%" onclick="doLogin()" id="lgBtn">Sign in</button></div>
+      <div id="lgErr" style="color:var(--oxblood);font-size:13px;margin-top:12px;display:none"></div>
+      <small class="hint" style="text-align:center;margin-top:14px">Accounts are created by the owner. Contact Tim if you need access.</small>
+    </div></div>
+  </div>
 </div>
 
 <div class="wrap" id="app" style="display:none">
@@ -232,9 +244,25 @@ small.hint{color:#8a7f70;font-size:12px;display:block;margin-top:6px}
 
 <script>
 // ---------- config ----------
+// Supabase connection. The anon/publishable key is safe in a browser app
+// because Row Level Security controls what each logged-in user can do.
+// You can either (a) paste your key on the line below, OR (b) leave it as
+// the placeholder and the app will ask for it once on first load and
+// remember it on that device.
+const SUPABASE_URL = 'https://ldhmwuhhejaabsvcyzdo.supabase.co';
+const SUPABASE_KEY_INLINE = 'PASTE_YOUR_ANON_OR_PUBLISHABLE_KEY_HERE';
+
+// Resolve the key: inline value wins; otherwise use a saved on-device value.
+function resolveKey(){
+  if(SUPABASE_KEY_INLINE && !SUPABASE_KEY_INLINE.startsWith('PASTE_')) return SUPABASE_KEY_INLINE;
+  return localStorage.getItem('cc_key') || null;
+}
+let SUPABASE_KEY = resolveKey();
+
 let SB=null;
-let ROLE='admin';
-let CFG={url:localStorage.getItem('cc_url'),key:localStorage.getItem('cc_key')};
+let ROLE='driver';        // set from the logged-in user's profile
+let MYROLE='driver';      // the user's real role (ROLE may change via admin preview)
+let ME=null;              // {id, email, full_name, role}
 let DATA={cars:[],staff:[],bookings:[],prep:[],templates:[]};
 
 const STATUSES=['new','confirmed','prepping','ready','out','completed','cancelled'];
@@ -244,20 +272,95 @@ const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV',
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
 function esc(s){return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 
-function saveCfg(){
-  const u=document.getElementById('cfgUrl').value.trim();
-  const k=document.getElementById('cfgKey').value.trim();
-  if(!u||!k){toast('Enter both fields');return}
-  localStorage.setItem('cc_url',u);localStorage.setItem('cc_key',k);
-  CFG={url:u,key:k};init();
-}
+const isAdmin=()=>MYROLE.includes('admin');
+
+function showGate(){document.getElementById('gate').style.display='block';document.getElementById('app').style.display='none';document.querySelector('header').style.display='none'}
+function showApp(){document.getElementById('gate').style.display='none';document.getElementById('app').style.display='block';document.querySelector('header').style.display='flex'}
 
 async function init(){
-  if(!CFG.url||!CFG.key){document.getElementById('gate').style.display='block';return}
-  document.getElementById('gate').style.display='none';
-  document.getElementById('app').style.display='block';
-  SB=supabase.createClient(CFG.url,CFG.key,{db:{schema:'rental'}});
+  if(!SUPABASE_KEY){
+    showKeyPrompt();
+    return;
+  }
+  SB=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{db:{schema:'rental'},auth:{persistSession:true,autoRefreshToken:true}});
+  // Is there an existing session?
+  const {data:{session}}=await SB.auth.getSession();
+  if(session){await afterLogin(session.user);}
+  else{showGate();}
+  // React to future auth changes (e.g. token refresh, sign out)
+  SB.auth.onAuthStateChange((event,sess)=>{
+    if(event==='SIGNED_OUT'){location.reload();}
+  });
+}
+
+function showKeyPrompt(){
+  document.querySelector('header').style.display='none';
+  document.getElementById('app').style.display='none';
+  const g=document.getElementById('gate');
+  g.style.display='block';
+  g.innerHTML=`<div class="logincard">
+    <div class="kicker" style="text-align:center">First-time setup</div>
+    <h2 class="display" style="margin:6px 0 14px;text-align:center">Connect</h2>
+    <div class="card"><div style="padding:24px">
+      <label>Supabase publishable key</label>
+      <input id="kpKey" placeholder="sb_publishable_..." onkeydown="if(event.key==='Enter')saveKey()" />
+      <div style="margin-top:16px"><button class="act" style="width:100%" onclick="saveKey()">Continue</button></div>
+      <small class="hint" style="text-align:center;margin-top:14px">Paste once — saved on this device. Crew will only ever see a normal sign-in.</small>
+    </div></div></div>`;
+}
+function saveKey(){
+  const k=document.getElementById('kpKey').value.trim();
+  if(!k){toast('Paste your key');return;}
+  localStorage.setItem('cc_key',k);
+  SUPABASE_KEY=k;
+  // restore the login screen markup, then continue
+  location.reload();
+}
+
+async function doLogin(){
+  const email=document.getElementById('lgEmail').value.trim();
+  const pass=document.getElementById('lgPass').value;
+  const err=document.getElementById('lgErr');
+  const btn=document.getElementById('lgBtn');
+  err.style.display='none';
+  if(!email||!pass){err.textContent='Enter your email and password.';err.style.display='block';return;}
+  btn.textContent='Signing in…';btn.disabled=true;
+  const {data,error}=await SB.auth.signInWithPassword({email,password:pass});
+  btn.textContent='Sign in';btn.disabled=false;
+  if(error){err.textContent=error.message;err.style.display='block';return;}
+  await afterLogin(data.user);
+}
+
+async function afterLogin(user){
+  // Load this user's profile (role + name)
+  let role='driver',name=user.email;
+  try{
+    const {data,error}=await SB.from('profiles').select('role,full_name').eq('id',user.id).single();
+    if(!error&&data){role=data.role||'driver';name=data.full_name||user.email;}
+  }catch(e){/* profile may not exist yet; default to driver */}
+  ME={id:user.id,email:user.email,full_name:name,role};
+  MYROLE=role; ROLE=role.includes('admin')?'admin':(role.split(',')[0]||'driver');
+  showApp();
+  setupRoleUI();
   await loadAll();
+}
+
+async function doLogout(){
+  await SB.auth.signOut();
+  // onAuthStateChange will reload
+}
+
+function setupRoleUI(){
+  // Role-preview toggle is admin-only. Non-admins just see their view.
+  const rs=document.getElementById('roleSwitch');
+  const so=document.getElementById('signOutBtn');
+  so.style.display='inline-block';
+  if(isAdmin()){
+    rs.style.display='flex';
+    rs.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x.dataset.role===ROLE));
+  }else{
+    rs.style.display='none';
+  }
 }
 
 async function loadAll(){
@@ -297,7 +400,7 @@ function renderSchedule(){
   if(ROLE==='driver') list=list.filter(b=>b.driver_id); // drivers see assigned-only feel
   list.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
 
-  const addBtn = ROLE==='admin'?`<button class="act add" onclick="bookingModal()">+ New Booking</button>`:'';
+  const addBtn = (isAdmin()&&ROLE==='admin')?`<button class="act add" onclick="bookingModal()">+ New Booking</button>`:'';
   let h=`<div class="sectionhead"><div><div class="kicker">${ROLE==='driver'?'Your runs':'Upcoming'}</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
 
   if(!list.length){h+=`<div class="empty"><div class="big">No bookings yet</div>${ROLE==='admin'?'Add one manually, or sync from Wix.':'Nothing assigned to you right now.'}</div>`;el.innerHTML=h;return}
@@ -321,7 +424,7 @@ function renderSchedule(){
         </div>
         ${pct!==null?`<div class="prog"><i style="width:${pct}%"></i></div><div class="meta" style="margin-top:4px">${pct}% prepped</div>`:''}
         ${b.source==='wix'?'<div class="meta" style="margin-top:6px">↳ from Wix</div>':''}
-        ${ROLE==='admin'?`<div style="margin-top:12px;display:flex;gap:6px"><button class="ghost tinybtn" onclick="bookingModal('${b.id}')">Edit</button><button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep list</button></div>`:
+        ${(isAdmin()&&ROLE==='admin')?`<div style="margin-top:12px;display:flex;gap:6px"><button class="ghost tinybtn" onclick="bookingModal('${b.id}')">Edit</button><button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep list</button></div>`:
           ROLE==='mechanic'?`<div style="margin-top:12px"><button class="ghost tinybtn" onclick="openPrep('${b.id}')">Open prep list</button></div>`:''}
       </div></div>`;
   }
@@ -365,7 +468,7 @@ function prepTaskHtml(bid){
 // CARS
 function renderCars(){
   const el=document.getElementById('panel-cars');
-  const addBtn=ROLE==='admin'?`<button class="act add" onclick="carModal()">+ Add Car</button>`:'';
+  const addBtn=(isAdmin()&&ROLE==='admin')?`<button class="act add" onclick="carModal()">+ Add Car</button>`:'';
   let h=`<div class="sectionhead"><div><div class="kicker">The fleet</div><h2 class="display">Cars</h2></div><span class="line"></span>${addBtn}</div>`;
   if(!DATA.cars.length){h+=`<div class="empty"><div class="big">No cars yet</div>Add your first classic to start scheduling.</div>`;el.innerHTML=h;return}
   h+='<div class="grid cols">';
@@ -377,7 +480,7 @@ function renderCars(){
       <div class="bd">
         <div class="meta">${[c.year,c.make,c.model].filter(Boolean).join(' ')||'—'}${c.color?' · '+esc(c.color):''}</div>
         <div class="meta" style="margin-top:8px">Prep template: ${tpl.length} task${tpl.length===1?'':'s'}</div>
-        ${ROLE==='admin'?`<div style="margin-top:12px;display:flex;gap:6px"><button class="ghost tinybtn" onclick="carModal('${c.id}')">Edit</button><button class="ghost tinybtn" onclick="templateModal('${c.id}')">Prep template</button></div>`:''}
+        ${(isAdmin()&&ROLE==='admin')?`<div style="margin-top:12px;display:flex;gap:6px"><button class="ghost tinybtn" onclick="carModal('${c.id}')">Edit</button><button class="ghost tinybtn" onclick="templateModal('${c.id}')">Prep template</button></div>`:''}
       </div></div>`;
   }
   h+='</div>';el.innerHTML=h;
@@ -386,7 +489,7 @@ function renderCars(){
 // STAFF
 function renderStaff(){
   const el=document.getElementById('panel-staff');
-  const addBtn=ROLE==='admin'?`<button class="act add" onclick="staffModal()">+ Add Crew</button>`:'';
+  const addBtn=(isAdmin()&&ROLE==='admin')?`<button class="act add" onclick="staffModal()">+ Add Crew</button>`:'';
   let h=`<div class="sectionhead"><div><div class="kicker">Who's on</div><h2 class="display">Crew</h2></div><span class="line"></span>${addBtn}</div>`;
   if(!DATA.staff.length){h+=`<div class="empty"><div class="big">No crew yet</div>Add drivers and shop staff.</div>`;el.innerHTML=h;return}
   h+='<div class="grid cols">';
@@ -398,7 +501,7 @@ function renderStaff(){
       <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">${pills}</span></div>
       <div class="bd"><div class="meta">${esc(s.phone||'')} ${s.email?'· '+esc(s.email):''}</div>
       ${!s.active?'<div class="meta">Inactive</div>':''}
-      ${ROLE==='admin'?`<div style="margin-top:10px"><button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button></div>`:''}</div></div>`;
+      ${(isAdmin()&&ROLE==='admin')?`<div style="margin-top:10px"><button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button></div>`:''}</div></div>`;
   }
   h+='</div>';el.innerHTML=h;
 }
@@ -589,12 +692,16 @@ document.getElementById('tabs').addEventListener('click',e=>{
 });
 document.getElementById('roleSwitch').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
+  if(!isAdmin())return; // only admins can preview other roles
   document.querySelectorAll('#roleSwitch button').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');ROLE=b.dataset.role;renderAll();
 });
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
 
 init();
+
+// Use the same embedded logo on the login screen
+(function(){const hl=document.querySelector('.logo-img');const ll=document.getElementById('loginLogo');if(hl&&ll)ll.src=hl.src;})();
 
 // PWA service worker registration
 if('serviceWorker' in navigator){
