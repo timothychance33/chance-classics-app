@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chance Classics — Garage Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,900;1,500&family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --ink:#21130f;        /* deep oxblood-black */
+  --paper:#f5efe3;      /* warm ivory */
+  --paper-2:#ebe2d1;
+  --chrome:#cfc7b8;
+  --oxblood:#6e1d1a;    /* signature — deep vintage maroon */
+  --oxblood-2:#8a2722;
+  --brass:#b88a3e;      /* gold trim accent */
+  --gold:#c79a4b;
+  --green:#3c6b4f;
+  --amber:#b8862c;
+  --line:#d8cdb8;
+  --shadow:rgba(33,19,15,.14);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Inter","Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.display{font-family:"Playfair Display",Georgia,serif;letter-spacing:-.01em;font-weight:700}
+
+/* ---- Top bar ---- */
+header{
+  background:var(--ink);color:var(--paper);
+  border-bottom:4px solid var(--oxblood);
+  padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:50;
+}
+.brand{display:flex;align-items:center;gap:13px;line-height:1}
+.brand .shield{width:42px;height:48px;flex:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+.brand .words{display:flex;flex-direction:column}
+.brand .mark{font:700 23px/.95 "Playfair Display",Georgia,serif;letter-spacing:.01em;color:var(--paper)}
+.brand .mark em{font-style:italic;color:var(--gold)}
+.brand .sub{font:600 9px/1 "Inter",sans-serif;letter-spacing:.34em;color:var(--brass);text-transform:uppercase;margin-top:6px}
+.roles{margin-left:auto;display:flex;gap:4px;background:rgba(0,0,0,.35);padding:4px;border-radius:999px;border:1px solid rgba(199,154,75,.25)}
+.roles button{
+  background:transparent;border:0;color:var(--chrome);
+  font:600 11px/1 "Inter",sans-serif;letter-spacing:.1em;text-transform:uppercase;
+  padding:9px 16px;border-radius:999px;cursor:pointer;transition:.15s;
+}
+.roles button.active{background:var(--oxblood);color:#fff;box-shadow:0 1px 0 rgba(199,154,75,.4) inset}
+
+/* ---- Layout ---- */
+.wrap{max-width:1180px;margin:0 auto;padding:22px 20px 80px}
+nav.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap}
+nav.tabs button{
+  background:var(--paper-2);border:1px solid var(--line);border-bottom:none;
+  font:700 13px/1 sans-serif;padding:11px 18px;border-radius:8px 8px 0 0;cursor:pointer;color:var(--ink)
+}
+nav.tabs button.active{background:var(--ink);color:var(--paper)}
+.panel{display:none}
+.panel.active{display:block}
+
+/* ---- Cards / work orders ---- */
+.grid{display:grid;gap:14px}
+.grid.cols{grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.card{
+  background:#fbf6ec;border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 1px 0 var(--shadow);overflow:hidden;
+}
+.card .hd{
+  display:flex;align-items:center;gap:10px;padding:13px 15px;
+  border-bottom:1px solid var(--line);
+}
+.card .hd .ttl{font-weight:800;font-size:15px}
+.card .bd{padding:13px 15px;font-size:14px}
+.card .meta{color:#6b6052;font-size:12.5px}
+
+/* booking card date chip */
+.datechip{
+  background:var(--ink);color:var(--paper);border-radius:8px;
+  text-align:center;padding:6px 10px;min-width:54px;line-height:1.05;
+}
+.datechip .d{font:900 20px/1 "Arial Black";}
+.datechip .m{font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-top:3px;color:var(--brass)}
+
+/* status pills */
+.pill{display:inline-block;font:700 10.5px/1 sans-serif;letter-spacing:.07em;
+  text-transform:uppercase;padding:5px 9px;border-radius:20px;border:1px solid transparent}
+.s-new{background:#eee;color:#555}
+.s-confirmed{background:#dfeaf5;color:#2c5a86}
+.s-prepping{background:#f6ecd6;color:var(--amber)}
+.s-ready{background:#dcebe0;color:var(--green)}
+.s-out{background:#f3ddd8;color:var(--oxblood)}
+.s-completed{background:#e6e2da;color:#777}
+.s-cancelled{background:#efe0df;color:#9c3a2a;text-decoration:line-through}
+.s-available{background:#dcebe0;color:var(--green)}
+.s-prep{background:#f6ecd6;color:var(--amber)}
+.s-maintenance{background:#f3ddd8;color:var(--oxblood)}
+
+/* prep progress bar */
+.prog{height:8px;background:var(--paper-2);border-radius:5px;overflow:hidden;border:1px solid var(--line)}
+.prog>i{display:block;height:100%;background:var(--green)}
+
+/* forms */
+label{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052;margin:10px 0 4px}
+input,select,textarea{
+  width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;
+  background:#fff;font-size:14px;font-family:inherit;color:var(--ink)
+}
+textarea{min-height:70px;resize:vertical}
+.row{display:grid;gap:12px}
+@media(min-width:620px){.row.two{grid-template-columns:1fr 1fr}.row.three{grid-template-columns:1fr 1fr 1fr}}
+.rolegrid{display:grid;gap:8px;margin-bottom:4px}
+@media(min-width:560px){.rolegrid{grid-template-columns:1fr 1fr 1fr}}
+.rolepick{display:flex;align-items:flex-start;gap:9px;padding:11px;border:1px solid var(--line);
+  border-radius:9px;background:#fff;cursor:pointer;margin:0}
+.rolepick:has(input:checked){border-color:var(--oxblood);background:#fbf4ec;box-shadow:0 0 0 1px var(--oxblood) inset}
+.rolepick input{width:18px;height:18px;flex:none;accent-color:var(--oxblood);margin-top:1px}
+.rolepick b{display:block;font-size:13px;text-transform:none;letter-spacing:0;color:var(--ink)}
+.rolepick small{display:block;font-size:11px;color:#8a7f70;margin-top:2px;line-height:1.25}
+button.act{
+  background:var(--oxblood);color:#fff;border:0;border-radius:8px;
+  font:700 13px/1 sans-serif;letter-spacing:.04em;padding:11px 18px;cursor:pointer;text-transform:uppercase
+}
+button.act:hover{background:var(--oxblood-2)}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);
+  border-radius:7px;font:700 12px/1 sans-serif;padding:8px 12px;cursor:pointer}
+button.ghost:hover{background:var(--paper-2)}
+.tinybtn{font-size:11px;padding:5px 9px}
+
+/* checklist */
+.task{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.task:last-child{border-bottom:0}
+.task input[type=checkbox]{width:18px;height:18px;flex:none;accent-color:var(--green)}
+.task.done span.tname{text-decoration:line-through;color:#9b9082}
+.task .who{margin-left:auto;font-size:11px;color:#6b6052}
+
+/* empty + toast */
+.empty{padding:40px 20px;text-align:center;color:#8a7f70;border:2px dashed var(--line);border-radius:12px;background:#fbf6ec}
+.empty .big{font:900 16px/1.3 "Arial Black";color:var(--ink);margin-bottom:6px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(120px);
+  background:var(--ink);color:var(--paper);padding:12px 20px;border-radius:10px;
+  font-size:13px;font-weight:600;transition:.3s;z-index:99;border-left:4px solid var(--oxblood)}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(26,20,16,.55);display:none;align-items:flex-start;
+  justify-content:center;padding:30px 16px;z-index:80;overflow:auto}
+.modal.show{display:flex}
+.modal .sheet{background:var(--paper);border-radius:14px;max-width:640px;width:100%;
+  border-top:5px solid var(--oxblood);box-shadow:0 18px 50px rgba(0,0,0,.4)}
+.modal .sheet .mh{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.modal .sheet .mh h3{margin:0;font-size:17px}
+.modal .sheet .mb{padding:20px}
+.modal .x{margin-left:auto;background:none;border:0;font-size:22px;cursor:pointer;color:#6b6052}
+
+.sectionhead{display:flex;align-items:center;gap:12px;margin:0 0 16px}
+.sectionhead h2{margin:0;font-size:22px}
+.sectionhead .line{flex:1;height:2px;background:var(--ink);opacity:.15}
+.sectionhead .add{margin-left:auto}
+.kicker{font:700 11px/1 sans-serif;letter-spacing:.24em;text-transform:uppercase;color:var(--oxblood);margin-bottom:3px}
+
+/* config gate */
+#gate{max-width:520px;margin:60px auto;padding:0 20px}
+#gate .card{padding:26px}
+small.hint{color:#8a7f70;font-size:12px;display:block;margin-top:6px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg class="shield" viewBox="0 0 84 96" xmlns="http://www.w3.org/2000/svg" aria-label="Chance Classics">
+      <!-- shield body -->
+      <path d="M42 3 L79 14 V46 C79 70 63 84 42 93 C21 84 5 70 5 46 V14 Z"
+            fill="#6e1d1a" stroke="#c79a4b" stroke-width="3"/>
+      <!-- inner hairline -->
+      <path d="M42 11 L72 19 V46 C72 66 59 78 42 86 C25 78 12 66 12 46 V19 Z"
+            fill="none" stroke="#c79a4b" stroke-width="1" opacity=".6"/>
+      <!-- top banner -->
+      <rect x="16" y="26" width="52" height="13" rx="2" fill="#21130f" stroke="#c79a4b" stroke-width="1"/>
+      <text x="42" y="35.5" text-anchor="middle" font-family="Georgia,serif" font-style="italic"
+            font-size="9" fill="#e8d9b5" letter-spacing="1">CHANCE</text>
+      <!-- classic car silhouette -->
+      <g fill="#e8d9b5" transform="translate(0,2)">
+        <path d="M22 60 q4 -9 11 -9 h16 q7 0 11 9 h3 q3 0 3 3 v4 h-50 v-4 q0 -3 3 -3 z"/>
+        <circle cx="31" cy="68" r="5" fill="#21130f" stroke="#c79a4b" stroke-width="1.5"/>
+        <circle cx="53" cy="68" r="5" fill="#21130f" stroke="#c79a4b" stroke-width="1.5"/>
+      </g>
+      <text x="42" y="83" text-anchor="middle" font-family="Georgia,serif" font-weight="bold"
+            font-size="9" fill="#c79a4b" letter-spacing="3">LA</text>
+    </svg>
+    <div class="words">
+      <div class="mark">Chance <em>Classics</em></div>
+      <div class="sub">Garage Board · Scheduling</div>
+    </div>
+  </div>
+  <div class="roles" id="roleSwitch">
+    <button data-role="admin" class="active">Owner</button>
+    <button data-role="driver">Drivers</button>
+    <button data-role="mechanic">Shop</button>
+  </div>
+</header>
+
+<!-- Config gate (first run) -->
+<div id="gate" style="display:none">
+  <div class="kicker">One-time setup</div>
+  <h2 class="display" style="margin:4px 0 14px">Connect your Supabase</h2>
+  <div class="card"><div style="padding:24px">
+    <label>Supabase URL</label>
+    <input id="cfgUrl" placeholder="https://xxxx.supabase.co" />
+    <label>Supabase anon key</label>
+    <input id="cfgKey" placeholder="eyJ..." />
+    <small class="hint">Stored on this device only. Find these in Supabase → Project Settings → API.</small>
+    <div style="margin-top:16px"><button class="act" onclick="saveCfg()">Connect</button></div>
+  </div></div>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+  <nav class="tabs" id="tabs">
+    <button data-tab="schedule" class="active">Schedule</button>
+    <button data-tab="prep">Prep Board</button>
+    <button data-tab="cars">Cars</button>
+    <button data-tab="staff">Crew</button>
+  </nav>
+
+  <div class="panel active" id="panel-schedule"></div>
+  <div class="panel" id="panel-prep"></div>
+  <div class="panel" id="panel-cars"></div>
+  <div class="panel" id="panel-staff"></div>
+</div>
+
+<div class="modal" id="modal"><div class="sheet">
+  <div class="mh"><h3 id="modalTitle">—</h3><button class="x" onclick="closeModal()">×</button></div>
+  <div class="mb" id="modalBody"></div>
+</div></div>
+
+<div id="toast"></div>
+
+<script>
+// ---------- config ----------
+let SB=null;
+let ROLE='admin';
+let CFG={url:localStorage.getItem('cc_url'),key:localStorage.getItem('cc_key')};
+let DATA={cars:[],staff:[],bookings:[],prep:[],templates:[]};
+
+const STATUSES=['new','confirmed','prepping','ready','out','completed','cancelled'];
+const CAR_STATUSES=['available','prep','out','maintenance'];
+const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+function esc(s){return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function saveCfg(){
+  const u=document.getElementById('cfgUrl').value.trim();
+  const k=document.getElementById('cfgKey').value.trim();
+  if(!u||!k){toast('Enter both fields');return}
+  localStorage.setItem('cc_url',u);localStorage.setItem('cc_key',k);
+  CFG={url:u,key:k};init();
+}
+
+async function init(){
+  if(!CFG.url||!CFG.key){document.getElementById('gate').style.display='block';return}
+  document.getElementById('gate').style.display='none';
+  document.getElementById('app').style.display='block';
+  SB=supabase.createClient(CFG.url,CFG.key,{db:{schema:'rental'}});
+  await loadAll();
+}
+
+async function loadAll(){
+  try{
+    const [c,s,b,p,t]=await Promise.all([
+      SB.from('cars').select('*').order('name'),
+      SB.from('staff').select('*').order('name'),
+      SB.from('bookings').select('*').order('event_date'),
+      SB.from('booking_prep_tasks').select('*').order('sort_order'),
+      SB.from('car_prep_templates').select('*').order('sort_order'),
+    ]);
+    for(const r of [c,s,b,p,t]) if(r.error) throw r.error;
+    DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data};
+    renderAll();
+  }catch(e){const msg=e?.message||e?.error_description||e?.hint||JSON.stringify(e);toast('Load error: '+msg);console.error('Load error detail:',e)}
+}
+
+// ---------- helpers ----------
+const carById=id=>DATA.cars.find(x=>x.id===id);
+const staffById=id=>DATA.staff.find(x=>x.id===id);
+const hasRole=(s,r)=>(s.role||'').split(',').map(x=>x.trim()).includes(r);
+const drivers=()=>DATA.staff.filter(s=>hasRole(s,'driver')&&s.active);
+const mechanics=()=>DATA.staff.filter(s=>hasRole(s,'mechanic')&&s.active);
+const roleLabel=s=>(s.role||'').split(',').map(x=>x.trim()).filter(Boolean).map(r=>r[0].toUpperCase()+r.slice(1)).join(' · ')||'—';
+const prepFor=bid=>DATA.prep.filter(t=>t.booking_id===bid);
+function prepPct(bid){const t=prepFor(bid);if(!t.length)return null;return Math.round(100*t.filter(x=>x.done).length/t.length)}
+function fmtDate(d){if(!d)return{d:'—',m:''};const dt=new Date(d+'T00:00:00');return{d:dt.getDate(),m:MONTHS[dt.getMonth()]}}
+function fmtTime(t){if(!t)return'';const[h,m]=t.split(':');let hh=+h;const ap=hh>=12?'PM':'AM';hh=hh%12||12;return hh+':'+m+ap}
+
+// ---------- renderers ----------
+function renderAll(){renderSchedule();renderPrep();renderCars();renderStaff()}
+
+// SCHEDULE
+function renderSchedule(){
+  const el=document.getElementById('panel-schedule');
+  let list=[...DATA.bookings].filter(b=>b.status!=='cancelled');
+  if(ROLE==='driver') list=list.filter(b=>b.driver_id); // drivers see assigned-only feel
+  list.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
+
+  const addBtn = ROLE==='admin'?`<button class="act add" onclick="bookingModal()">+ New Booking</button>`:'';
+  let h=`<div class="sectionhead"><div><div class="kicker">${ROLE==='driver'?'Your runs':'Upcoming'}</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
+
+  if(!list.length){h+=`<div class="empty"><div class="big">No bookings yet</div>${ROLE==='admin'?'Add one manually, or sync from Wix.':'Nothing assigned to you right now.'}</div>`;el.innerHTML=h;return}
+
+  h+='<div class="grid cols">';
+  for(const b of list){
+    const car=carById(b.car_id), drv=staffById(b.driver_id);
+    const dc=fmtDate(b.event_date), pct=prepPct(b.id);
+    h+=`<div class="card">
+      <div class="hd">
+        <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
+        <div style="min-width:0">
+          <div class="ttl">${esc(b.customer_name||'Unnamed')}</div>
+          <div class="meta">${esc(b.event_type||'—')} ${b.start_time?'· '+fmtTime(b.start_time):''}</div>
+        </div>
+        <span class="pill s-${b.status}" style="margin-left:auto">${b.status}</span>
+      </div>
+      <div class="bd">
+        <div class="meta" style="margin-bottom:8px">
+          🚗 ${car?esc(car.name):'<em>no car</em>'} &nbsp; 👤 ${drv?esc(drv.name):'<em>no driver</em>'}
+        </div>
+        ${pct!==null?`<div class="prog"><i style="width:${pct}%"></i></div><div class="meta" style="margin-top:4px">${pct}% prepped</div>`:''}
+        ${b.source==='wix'?'<div class="meta" style="margin-top:6px">↳ from Wix</div>':''}
+        ${ROLE==='admin'?`<div style="margin-top:12px;display:flex;gap:6px"><button class="ghost tinybtn" onclick="bookingModal('${b.id}')">Edit</button><button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep list</button></div>`:
+          ROLE==='mechanic'?`<div style="margin-top:12px"><button class="ghost tinybtn" onclick="openPrep('${b.id}')">Open prep list</button></div>`:''}
+      </div></div>`;
+  }
+  h+='</div>';el.innerHTML=h;
+}
+
+// PREP BOARD (mechanic-centric)
+function renderPrep(){
+  const el=document.getElementById('panel-prep');
+  const active=DATA.bookings.filter(b=>!['completed','cancelled'].includes(b.status));
+  active.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
+  let h=`<div class="sectionhead"><div><div class="kicker">Get 'em ready</div><h2 class="display">Prep Board</h2></div><span class="line"></span></div>`;
+  const withTasks=active.filter(b=>prepFor(b.id).length);
+  if(!withTasks.length){h+=`<div class="empty"><div class="big">Nothing in the queue</div>Prep lists appear here once a booking has a car assigned.</div>`;el.innerHTML=h;return}
+  h+='<div class="grid cols">';
+  for(const b of withTasks){
+    const car=carById(b.car_id),dc=fmtDate(b.event_date),pct=prepPct(b.id);
+    h+=`<div class="card">
+      <div class="hd"><div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
+        <div><div class="ttl">${car?esc(car.name):'—'}</div><div class="meta">${esc(b.customer_name||'')} · ${esc(b.event_type||'')}</div></div>
+        <span class="pill ${pct===100?'s-ready':'s-prepping'}" style="margin-left:auto">${pct}%</span></div>
+      <div class="bd" id="prepbody-${b.id}">${prepTaskHtml(b.id)}</div></div>`;
+  }
+  h+='</div>';el.innerHTML=h;
+}
+
+function prepTaskHtml(bid){
+  const tasks=prepFor(bid);
+  let h='';
+  for(const t of tasks){
+    const who=staffById(t.assigned_to);
+    h+=`<div class="task ${t.done?'done':''}">
+      <input type="checkbox" ${t.done?'checked':''} onchange="toggleTask('${t.id}',this.checked)">
+      <span class="tname">${esc(t.task)}</span>
+      <span class="who">${who?esc(who.name):''}</span>
+    </div>`;
+  }
+  return h||'<div class="meta">No tasks.</div>';
+}
+
+// CARS
+function renderCars(){
+  const el=document.getElementById('panel-cars');
+  const addBtn=ROLE==='admin'?`<button class="act add" onclick="carModal()">+ Add Car</button>`:'';
+  let h=`<div class="sectionhead"><div><div class="kicker">The fleet</div><h2 class="display">Cars</h2></div><span class="line"></span>${addBtn}</div>`;
+  if(!DATA.cars.length){h+=`<div class="empty"><div class="big">No cars yet</div>Add your first classic to start scheduling.</div>`;el.innerHTML=h;return}
+  h+='<div class="grid cols">';
+  for(const c of DATA.cars){
+    const tpl=DATA.templates.filter(t=>t.car_id===c.id);
+    h+=`<div class="card">
+      ${c.photo_url?`<div style="height:150px;background:#000 url('${esc(c.photo_url)}') center/cover"></div>`:''}
+      <div class="hd"><div class="ttl">${esc(c.name)}</div><span class="pill s-${c.status}" style="margin-left:auto">${c.status}</span></div>
+      <div class="bd">
+        <div class="meta">${[c.year,c.make,c.model].filter(Boolean).join(' ')||'—'}${c.color?' · '+esc(c.color):''}</div>
+        <div class="meta" style="margin-top:8px">Prep template: ${tpl.length} task${tpl.length===1?'':'s'}</div>
+        ${ROLE==='admin'?`<div style="margin-top:12px;display:flex;gap:6px"><button class="ghost tinybtn" onclick="carModal('${c.id}')">Edit</button><button class="ghost tinybtn" onclick="templateModal('${c.id}')">Prep template</button></div>`:''}
+      </div></div>`;
+  }
+  h+='</div>';el.innerHTML=h;
+}
+
+// STAFF
+function renderStaff(){
+  const el=document.getElementById('panel-staff');
+  const addBtn=ROLE==='admin'?`<button class="act add" onclick="staffModal()">+ Add Crew</button>`:'';
+  let h=`<div class="sectionhead"><div><div class="kicker">Who's on</div><h2 class="display">Crew</h2></div><span class="line"></span>${addBtn}</div>`;
+  if(!DATA.staff.length){h+=`<div class="empty"><div class="big">No crew yet</div>Add drivers and shop staff.</div>`;el.innerHTML=h;return}
+  h+='<div class="grid cols">';
+  for(const s of DATA.staff){
+    const pills=(s.role||'').split(',').map(x=>x.trim()).filter(Boolean).map(r=>{
+      const cls=r==='driver'?'s-confirmed':r==='mechanic'?'s-prepping':'s-new';
+      return `<span class="pill ${cls}">${esc(r)}</span>`;}).join(' ');
+    h+=`<div class="card"><div class="hd"><div class="ttl">${esc(s.name)}</div>
+      <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">${pills}</span></div>
+      <div class="bd"><div class="meta">${esc(s.phone||'')} ${s.email?'· '+esc(s.email):''}</div>
+      ${!s.active?'<div class="meta">Inactive</div>':''}
+      ${ROLE==='admin'?`<div style="margin-top:10px"><button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button></div>`:''}</div></div>`;
+  }
+  h+='</div>';el.innerHTML=h;
+}
+
+// ---------- modals ----------
+function openModal(title,body){document.getElementById('modalTitle').textContent=title;document.getElementById('modalBody').innerHTML=body;document.getElementById('modal').classList.add('show')}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+
+// BOOKING
+function bookingModal(id){
+  const b=id?DATA.bookings.find(x=>x.id===id):{};
+  const carOpts=DATA.cars.map(c=>`<option value="${c.id}" ${b.car_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
+  const drvOpts=drivers().map(s=>`<option value="${s.id}" ${b.driver_id===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
+  const stOpts=STATUSES.map(s=>`<option value="${s}" ${b.status===s?'selected':''}>${s}</option>`).join('');
+  openModal(id?'Edit booking':'New booking',`
+    <div class="row two">
+      <div><label>Customer</label><input id="f_cust" value="${esc(b.customer_name)}"></div>
+      <div><label>Event type</label><input id="f_evt" value="${esc(b.event_type)}" placeholder="wedding, parade..."></div>
+    </div>
+    <div class="row three">
+      <div><label>Date</label><input id="f_date" type="date" value="${esc(b.event_date)}"></div>
+      <div><label>Start</label><input id="f_start" type="time" value="${esc(b.start_time)}"></div>
+      <div><label>End</label><input id="f_end" type="time" value="${esc(b.end_time)}"></div>
+    </div>
+    <div class="row two">
+      <div><label>Phone</label><input id="f_phone" value="${esc(b.customer_phone)}"></div>
+      <div><label>Email</label><input id="f_email" value="${esc(b.customer_email)}"></div>
+    </div>
+    <div class="row two">
+      <div><label>Pickup</label><input id="f_pick" value="${esc(b.pickup_location)}"></div>
+      <div><label>Return</label><input id="f_ret" value="${esc(b.return_location)}"></div>
+    </div>
+    <div class="row three">
+      <div><label>Car</label><select id="f_car"><option value="">—</option>${carOpts}</select></div>
+      <div><label>Driver</label><select id="f_drv"><option value="">—</option>${drvOpts}</select></div>
+      <div><label>Status</label><select id="f_status">${stOpts}</select></div>
+    </div>
+    <div><label>Notes</label><textarea id="f_notes">${esc(b.notes)}</textarea></div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <button class="act" onclick="saveBooking('${id||''}')">Save</button>
+      ${id?`<button class="ghost" onclick="delBooking('${id}')">Delete</button>`:''}
+    </div>
+    ${!id?'<small class="hint">A car\'s prep template is copied into this booking when you save.</small>':''}
+  `);
+}
+async function saveBooking(id){
+  const v=x=>document.getElementById(x).value||null;
+  const rec={customer_name:v('f_cust'),event_type:v('f_evt'),event_date:v('f_date'),
+    start_time:v('f_start'),end_time:v('f_end'),customer_phone:v('f_phone'),customer_email:v('f_email'),
+    pickup_location:v('f_pick'),return_location:v('f_ret'),car_id:v('f_car'),driver_id:v('f_drv'),
+    status:v('f_status')||'new',notes:v('f_notes')};
+  try{
+    if(id){
+      const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
+    }else{
+      const {data,error}=await SB.from('bookings').insert(rec).select().single();if(error)throw error;
+      // copy car prep template into booking
+      if(rec.car_id){
+        const tpl=DATA.templates.filter(t=>t.car_id===rec.car_id);
+        if(tpl.length){
+          await SB.from('booking_prep_tasks').insert(tpl.map(t=>({booking_id:data.id,task:t.task,sort_order:t.sort_order})));
+        }
+      }
+    }
+    closeModal();toast('Booking saved');await loadAll();
+  }catch(e){toast('Error: '+(e.message||e))}
+}
+async function delBooking(id){if(!confirm('Delete this booking?'))return;const {error}=await SB.from('bookings').delete().eq('id',id);if(error){toast(error.message);return}closeModal();toast('Deleted');await loadAll()}
+
+// PREP list for a single booking (admin/mechanic)
+function openPrep(bid){
+  const b=DATA.bookings.find(x=>x.id===bid);const car=carById(b.car_id);
+  const mechOpts=mechanics();
+  const tasks=prepFor(bid);
+  let rows=tasks.map(t=>{
+    const who=mechOpts.map(m=>`<option value="${m.id}" ${t.assigned_to===m.id?'selected':''}>${esc(m.name)}</option>`).join('');
+    return `<div class="task ${t.done?'done':''}">
+      <input type="checkbox" ${t.done?'checked':''} onchange="toggleTask('${t.id}',this.checked)">
+      <span class="tname">${esc(t.task)}</span>
+      <select style="width:auto;margin-left:auto;font-size:12px;padding:4px 6px" onchange="assignTask('${t.id}',this.value)"><option value="">unassigned</option>${who}</select>
+      <button class="ghost tinybtn" onclick="delTask('${t.id}')">✕</button>
+    </div>`;}).join('');
+  openModal('Prep — '+(car?car.name:''),`
+    <div class="meta" style="margin-bottom:10px">${esc(b.customer_name||'')} · ${esc(b.event_type||'')}</div>
+    <div id="preplist">${rows||'<div class="meta">No tasks yet.</div>'}</div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <input id="newtask" placeholder="Add a task..." style="flex:1">
+      <button class="act" onclick="addTask('${bid}')">Add</button>
+    </div>`);
+}
+async function addTask(bid){const t=document.getElementById('newtask').value.trim();if(!t)return;const {error}=await SB.from('booking_prep_tasks').insert({booking_id:bid,task:t,sort_order:99});if(error){toast(error.message);return}await loadAll();openPrep(bid)}
+async function toggleTask(id,done){const {error}=await SB.from('booking_prep_tasks').update({done,done_at:done?new Date().toISOString():null}).eq('id',id);if(error){toast(error.message);return}await loadAll();renderPrep()}
+async function assignTask(id,who){await SB.from('booking_prep_tasks').update({assigned_to:who||null}).eq('id',id);await loadAll()}
+async function delTask(id){const t=DATA.prep.find(x=>x.id===id);await SB.from('booking_prep_tasks').delete().eq('id',id);await loadAll();if(t)openPrep(t.booking_id)}
+
+// CAR
+function carModal(id){
+  const c=id?carById(id):{};
+  const stOpts=CAR_STATUSES.map(s=>`<option value="${s}" ${c.status===s?'selected':''}>${s}</option>`).join('');
+  openModal(id?'Edit car':'Add car',`
+    <div><label>Display name</label><input id="c_name" value="${esc(c.name)}" placeholder="1967 Mustang Convertible"></div>
+    <div class="row three">
+      <div><label>Year</label><input id="c_year" type="number" value="${esc(c.year)}"></div>
+      <div><label>Make</label><input id="c_make" value="${esc(c.make)}"></div>
+      <div><label>Model</label><input id="c_model" value="${esc(c.model)}"></div>
+    </div>
+    <div class="row two">
+      <div><label>Color</label><input id="c_color" value="${esc(c.color)}"></div>
+      <div><label>Status</label><select id="c_status">${stOpts}</select></div>
+    </div>
+    <div><label>Photo URL</label><input id="c_photo" value="${esc(c.photo_url)}"></div>
+    <div><label>Notes</label><textarea id="c_notes">${esc(c.notes)}</textarea></div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <button class="act" onclick="saveCar('${id||''}')">Save</button>
+      ${id?`<button class="ghost" onclick="delCar('${id}')">Delete</button>`:''}
+    </div>`);
+}
+async function saveCar(id){
+  const v=x=>document.getElementById(x).value||null;
+  const rec={name:v('c_name'),year:v('c_year'),make:v('c_make'),model:v('c_model'),color:v('c_color'),status:v('c_status')||'available',photo_url:v('c_photo'),notes:v('c_notes')};
+  if(!rec.name){toast('Name required');return}
+  const q=id?SB.from('cars').update(rec).eq('id',id):SB.from('cars').insert(rec);
+  const {error}=await q;if(error){toast(error.message);return}
+  closeModal();toast('Car saved');await loadAll();
+}
+async function delCar(id){if(!confirm('Delete this car?'))return;const {error}=await SB.from('cars').delete().eq('id',id);if(error){toast(error.message);return}closeModal();toast('Deleted');await loadAll()}
+
+// PREP TEMPLATE per car
+function templateModal(carId){
+  const car=carById(carId);
+  const tpl=DATA.templates.filter(t=>t.car_id===carId);
+  let rows=tpl.map(t=>`<div class="task"><span class="tname">${esc(t.task)}</span><button class="ghost tinybtn" style="margin-left:auto" onclick="delTemplate('${t.id}','${carId}')">✕</button></div>`).join('');
+  openModal('Prep template — '+esc(car.name),`
+    <small class="hint">These tasks copy into every new booking for this car.</small>
+    <div style="margin-top:10px">${rows||'<div class="meta">No template tasks yet.</div>'}</div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <input id="tpltask" placeholder="e.g. Wash & detail, Check fluids, Full tank" style="flex:1">
+      <button class="act" onclick="addTemplate('${carId}')">Add</button>
+    </div>`);
+}
+async function addTemplate(carId){const t=document.getElementById('tpltask').value.trim();if(!t)return;const n=DATA.templates.filter(x=>x.car_id===carId).length;const {error}=await SB.from('car_prep_templates').insert({car_id:carId,task:t,sort_order:n});if(error){toast(error.message);return}await loadAll();templateModal(carId)}
+async function delTemplate(id,carId){await SB.from('car_prep_templates').delete().eq('id',id);await loadAll();templateModal(carId)}
+
+// STAFF
+function staffModal(id){
+  const s=id?staffById(id):{};
+  const has=r=>hasRole(s,r);
+  const rolebox=(r,lbl,desc)=>`<label class="rolepick">
+      <input type="checkbox" class="s_role_cb" value="${r}" ${has(r)?'checked':''}>
+      <div><b>${lbl}</b><small>${desc}</small></div></label>`;
+  openModal(id?'Edit crew':'Add crew',`
+    <div><label>Name</label><input id="s_name" value="${esc(s.name)}"></div>
+    <label>Roles <span style="font-weight:400;text-transform:none;letter-spacing:0">(pick all that apply)</span></label>
+    <div class="rolegrid">
+      ${rolebox('driver','Driver','Can be assigned to drive bookings')}
+      ${rolebox('mechanic','Mechanic','Shows up for prep-task assignment')}
+      ${rolebox('admin','Admin','Office / owner')}
+    </div>
+    <div class="row two">
+      <div><label>Phone</label><input id="s_phone" value="${esc(s.phone)}"></div>
+      <div><label>Email</label><input id="s_email" value="${esc(s.email)}"></div>
+    </div>
+    <div style="margin-top:6px"><label><input type="checkbox" id="s_active" ${s.active!==false?'checked':''} style="width:auto;margin-right:6px">Active</label></div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <button class="act" onclick="saveStaff('${id||''}')">Save</button>
+      ${id?`<button class="ghost" onclick="delStaff('${id}')">Delete</button>`:''}
+    </div>`);
+}
+async function saveStaff(id){
+  const roles=[...document.querySelectorAll('.s_role_cb:checked')].map(c=>c.value);
+  const rec={name:document.getElementById('s_name').value||null,role:roles.join(','),
+    phone:document.getElementById('s_phone').value||null,email:document.getElementById('s_email').value||null,
+    active:document.getElementById('s_active').checked};
+  if(!rec.name){toast('Name required');return}
+  if(!roles.length){toast('Pick at least one role');return}
+  const q=id?SB.from('staff').update(rec).eq('id',id):SB.from('staff').insert(rec);
+  const {error}=await q;if(error){toast(error.message);return}
+  closeModal();toast('Crew saved');await loadAll();
+}
+async function delStaff(id){if(!confirm('Delete?'))return;const {error}=await SB.from('staff').delete().eq('id',id);if(error){toast(error.message);return}closeModal();toast('Deleted');await loadAll()}
+
+// ---------- nav ----------
+document.getElementById('tabs').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');document.getElementById('panel-'+b.dataset.tab).classList.add('active');
+});
+document.getElementById('roleSwitch').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('#roleSwitch button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');ROLE=b.dataset.role;renderAll();
+});
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+
+init();
+</script>
+</body>
+</html>
