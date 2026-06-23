@@ -331,6 +331,8 @@ img,svg{max-width:100%}
 // remember it on that device.
 const SUPABASE_URL = 'https://ldhmwuhhejaabsvcyzdo.supabase.co';
 const SUPABASE_KEY_INLINE = 'PASTE_YOUR_ANON_OR_PUBLISHABLE_KEY_HERE';
+// Edge function that creates/links crew logins. Add ?secret= matching CREW_ADMIN_SECRET.
+const CREW_LOGIN_FN_URL = 'https://ldhmwuhhejaabsvcyzdo.supabase.co/functions/v1/create-crew-login?secret=Bmw52533';
 
 // Resolve the key: inline value wins; otherwise use a saved on-device value.
 function resolveKey(){
@@ -980,7 +982,24 @@ async function saveStaff(id){
   if(!roles.length){toast('Pick at least one role');return}
   const q=id?SB.from('staff').update(rec).eq('id',id):SB.from('staff').insert(rec);
   const {error}=await q;if(error){toast(error.message);return}
-  closeModal();toast('Crew saved');await loadAll();
+  // Create/link a login for this crew member (drivers & mechanics with an email).
+  if(rec.email && (roles.includes('driver')||roles.includes('mechanic')||roles.includes('admin'))){
+    try{
+      const r=await fetch(CREW_LOGIN_FN_URL,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({email:rec.email, full_name:rec.name, role:rec.role})
+      });
+      const out=await r.json().catch(()=>({}));
+      if(out.created) toast('Crew saved · login created ('+rec.email+')');
+      else if(out.linked) toast('Crew saved · existing login linked');
+      else if(out.error) toast('Crew saved, but login step: '+out.error);
+      else toast('Crew saved');
+    }catch(e){ toast('Crew saved (login step skipped: '+(e.message||e)+')'); }
+  } else {
+    toast('Crew saved');
+  }
+  closeModal();await loadAll();
 }
 async function delStaff(id){if(!confirm('Delete?'))return;const {error}=await SB.from('staff').delete().eq('id',id);if(error){toast(error.message);return}closeModal();toast('Deleted');await loadAll()}
 
