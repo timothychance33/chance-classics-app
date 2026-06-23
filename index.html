@@ -412,14 +412,50 @@ async function doLogin(){
 }
 
 async function afterLogin(user){
-  // Load this user's profile (role + name)
-  let role='driver',name=user.email;
+  // Load this user's profile (role + name + must_change_pw)
+  let role='driver',name=user.email,mustChange=false;
   try{
-    const {data,error}=await SB.from('profiles').select('role,full_name').eq('id',user.id).single();
-    if(!error&&data){role=data.role||'driver';name=data.full_name||user.email;}
+    const {data,error}=await SB.from('profiles').select('role,full_name,must_change_pw').eq('id',user.id).single();
+    if(!error&&data){role=data.role||'driver';name=data.full_name||user.email;mustChange=!!data.must_change_pw;}
   }catch(e){/* profile may not exist yet; default to driver */}
   ME={id:user.id,email:user.email,full_name:name,role};
   MYROLE=role; ROLE=role.includes('admin')?'admin':(role.split(',')[0]||'driver');
+  if(mustChange){ showChangePw(); return; }   // block app until they set their own password
+  showApp();
+  setupRoleUI();
+  await loadAll();
+}
+
+function showChangePw(){
+  document.querySelector('header').style.display='none';
+  document.getElementById('app').style.display='none';
+  const g=document.getElementById('gate');
+  g.style.display='block';
+  g.innerHTML=`<div class="logincard">
+    <div class="kicker" style="text-align:center">Welcome — one quick step</div>
+    <h2 class="display" style="margin:6px 0 14px;text-align:center">Set your password</h2>
+    <div class="card"><div style="padding:24px">
+      <p class="meta" style="margin:0 0 14px">For security, please replace the temporary password with your own before continuing.</p>
+      <label>New password</label>
+      <input id="np1" type="password" autocomplete="new-password" placeholder="At least 6 characters" />
+      <label>Confirm new password</label>
+      <input id="np2" type="password" autocomplete="new-password" onkeydown="if(event.key==='Enter')saveNewPw()" />
+      <div style="margin-top:16px"><button class="act" style="width:100%" onclick="saveNewPw()" id="npBtn">Save & continue</button></div>
+      <div id="npErr" style="color:var(--oxblood);font-size:13px;margin-top:12px;display:none"></div>
+    </div></div></div>`;
+}
+async function saveNewPw(){
+  const p1=document.getElementById('np1').value, p2=document.getElementById('np2').value;
+  const err=document.getElementById('npErr'), btn=document.getElementById('npBtn');
+  err.style.display='none';
+  if(p1.length<6){err.textContent='Password must be at least 6 characters.';err.style.display='block';return;}
+  if(p1!==p2){err.textContent='Passwords do not match.';err.style.display='block';return;}
+  if(p1==='ChanceClassics1'){err.textContent='Please choose a password different from the temporary one.';err.style.display='block';return;}
+  btn.textContent='Saving…';btn.disabled=true;
+  const {error}=await SB.auth.updateUser({password:p1});
+  if(error){err.textContent=error.message;err.style.display='block';btn.textContent='Save & continue';btn.disabled=false;return;}
+  await SB.from('profiles').update({must_change_pw:false}).eq('id',ME.id);
+  toast('Password set — welcome!');
   showApp();
   setupRoleUI();
   await loadAll();
