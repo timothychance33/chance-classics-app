@@ -44,7 +44,11 @@ h1,h2,h3,.display{font-family:"Playfair Display",Georgia,serif;letter-spacing:-.
 header{
   background:var(--ink);color:var(--paper);
   border-bottom:4px solid var(--oxblood);
-  padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:14px 20px;
+  padding-top:max(14px, calc(env(safe-area-inset-top) + 8px));
+  padding-left:max(20px, env(safe-area-inset-left));
+  padding-right:max(20px, env(safe-area-inset-right));
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
   position:sticky;top:0;z-index:50;
 }
 .brand{display:flex;align-items:center;gap:14px;line-height:1}
@@ -225,7 +229,7 @@ img,svg{max-width:100%}
 
 /* ===== Phone layout (<=600px) ===== */
 @media(max-width:600px){
-  header{padding:10px 12px;gap:8px;flex-wrap:wrap}
+  header{padding:10px 12px;padding-top:max(10px, calc(env(safe-area-inset-top) + 6px));gap:8px;flex-wrap:wrap}
   .brand{gap:8px;flex:1 1 auto;min-width:0}
   .brand .logo-img{height:34px;padding:5px 9px}
   .roles{margin-left:0;gap:2px;padding:3px;flex:0 0 auto}
@@ -516,13 +520,27 @@ function renderSchedule(){
 }
 
 // PREP BOARD (mechanic-centric)
+function weekBounds(){
+  const now=new Date();
+  const day=now.getDay();              // 0=Sun..6=Sat
+  const diffToMon=(day===0?-6:1-day);  // shift back to Monday
+  const mon=new Date(now); mon.setHours(0,0,0,0); mon.setDate(now.getDate()+diffToMon);
+  const sun=new Date(mon); sun.setDate(mon.getDate()+6); sun.setHours(23,59,59,999);
+  const fmt=d=>d.toISOString().slice(0,10);
+  return {start:fmt(mon), end:fmt(sun), monLabel:`${MONTHS[mon.getMonth()]} ${mon.getDate()}`, sunLabel:`${MONTHS[sun.getMonth()]} ${sun.getDate()}`};
+}
+
 function renderPrep(){
   const el=document.getElementById('panel-prep');
-  const active=DATA.bookings.filter(b=>!['completed','cancelled'].includes(b.status));
+  const wk=weekBounds();
+  const active=DATA.bookings.filter(b=>
+    !['completed','cancelled'].includes(b.status) &&
+    b.event_date && b.event_date>=wk.start && b.event_date<=wk.end
+  );
   active.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
-  let h=`<div class="sectionhead"><div><div class="kicker">Get 'em ready</div><h2 class="display">Prep Board</h2></div><span class="line"></span></div>`;
+  let h=`<div class="sectionhead"><div><div class="kicker">This week · ${wk.monLabel} – ${wk.sunLabel}</div><h2 class="display">Prep Board</h2></div><span class="line"></span></div>`;
   const withTasks=active.filter(b=>prepFor(b.id).length);
-  if(!withTasks.length){h+=`<div class="empty"><div class="big">Nothing in the queue</div>Prep lists appear here once a booking has a car assigned.</div>`;el.innerHTML=h;return}
+  if(!withTasks.length){h+=`<div class="empty"><div class="big">Nothing to prep this week</div>Bookings with a car assigned for ${wk.monLabel}–${wk.sunLabel} show up here.</div>`;el.innerHTML=h;return}
   h+='<div class="grid cols">';
   for(const b of withTasks){
     const car=carById(b.car_id),dc=fmtDate(b.event_date),pct=prepPct(b.id);
