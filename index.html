@@ -90,6 +90,10 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
   background:var(--green);color:#fff;padding:4px 7px;border-radius:20px}
 .opentag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;
   background:var(--amber);color:#fff;padding:4px 7px;border-radius:20px}
+.paytag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:20px}
+.pay-paid{background:var(--green);color:#fff}
+.pay-deposit{background:var(--amber);color:#fff}
+.pay-unpaid{background:#e0d6c8;color:#7a6a55}
 .lactions{display:flex;gap:6px;flex:none}
 @media(max-width:600px){
   .lrow{gap:10px;padding:10px 11px;align-items:flex-start}
@@ -495,6 +499,7 @@ function renderSchedule(){
         <div class="ltop">
           <span class="ttl">${esc(b.customer_name||'Unnamed')}</span>
           <span class="pill s-${b.status}">${b.status}</span>
+          <span class="paytag pay-${b.payment_status||'unpaid'}">${b.payment_status==='paid'?'Paid':b.payment_status==='deposit'?'Deposit':'Unpaid'}</span>
           ${crewtag}
           ${b.source==='wix'?'<span class="srctag">Wix</span>':''}
         </div>
@@ -618,6 +623,11 @@ function bookingModal(id){
       <div><label>Driver</label><select id="f_drv"><option value="">—</option>${drvOpts}</select></div>
       <div><label>Status</label><select id="f_status">${stOpts}</select></div>
     </div>
+    <div><label>Payment</label><select id="f_pay">
+      <option value="unpaid" ${b.payment_status==='unpaid'||!b.payment_status?'selected':''}>Unpaid</option>
+      <option value="deposit" ${b.payment_status==='deposit'?'selected':''}>Deposit paid</option>
+      <option value="paid" ${b.payment_status==='paid'?'selected':''}>Paid in full</option>
+    </select></div>
     <div><label>Notes</label><textarea id="f_notes">${esc(b.notes)}</textarea></div>
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="act" onclick="saveBooking('${id||''}')">Save</button>
@@ -631,7 +641,7 @@ async function saveBooking(id){
   const rec={customer_name:v('f_cust'),event_type:v('f_evt'),event_date:v('f_date'),
     start_time:v('f_start'),end_time:v('f_end'),customer_phone:v('f_phone'),customer_email:v('f_email'),
     pickup_location:v('f_pick'),return_location:v('f_ret'),car_id:v('f_car'),driver_id:v('f_drv'),
-    status:v('f_status')||'new',notes:v('f_notes')};
+    status:v('f_status')||'new',payment_status:v('f_pay')||'unpaid',notes:v('f_notes')};
   try{
     if(id){
       const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
