@@ -98,6 +98,14 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .pay-paid{background:var(--green);color:#fff}
 .pay-deposit{background:var(--amber);color:#fff}
 .pay-unpaid{background:#e0d6c8;color:#7a6a55}
+.waittag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;
+  background:#cdd9e6;color:#4a5a6b;padding:4px 7px;border-radius:20px}
+.tiertag{font:800 9px/1 "Inter",sans-serif;letter-spacing:.05em;
+  background:var(--oxblood);color:#fff;padding:4px 7px;border-radius:20px}
+.paypill{display:inline-block;margin-top:8px;font:800 13px/1 "Inter",sans-serif;
+  background:var(--green);color:#fff;padding:7px 12px;border-radius:8px}
+.paypill.muted{background:var(--paper-2);color:#5a6b7d}
+.act.tinybtn{font-size:11px;padding:6px 11px}
 .lactions{display:flex;gap:6px;flex:none}
 @media(max-width:600px){
   .lrow{gap:10px;padding:10px 11px;align-items:flex-start}
@@ -468,6 +476,67 @@ function prepPct(bid){const t=prepFor(bid);if(!t.length)return null;return Math.
 function fmtDate(d){if(!d)return{d:'—',m:''};const dt=new Date(d+'T00:00:00');return{d:dt.getDate(),m:MONTHS[dt.getMonth()]}}
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':');let hh=+h;const ap=hh>=12?'PM':'AM';hh=hh%12||12;return hh+':'+m+ap}
 
+// ---------- marketplace helpers ----------
+function myStaff(){const id=myStaffId();return id?staffById(id):null;}
+// Is it this user's turn on a booking's waterfall? (their priority === current offer_rank, and not passed)
+function isMyTurn(b){
+  const me=myStaff();
+  if(!me||me.priority==null||b.offer_rank==null||b.driver_id)return false;
+  if((b.passed_by||[]).includes(me.id))return false;
+  return me.priority===b.offer_rank;
+}
+// Booking is offered but my turn hasn't come yet (a higher-priority driver is up)
+function isPendingAbove(b){
+  const me=myStaff();
+  if(!me||me.priority==null||b.offer_rank==null||b.driver_id)return false;
+  if((b.passed_by||[]).includes(me.id))return false;
+  return me.priority>b.offer_rank;
+}
+// My pay for a booking = tier × my rate
+function myPay(b){
+  const me=myStaff();
+  if(!me||!b.pay_tier||me.pay_rate==null)return null;
+  return b.pay_tier*me.pay_rate;
+}
+// Advance the waterfall to the next-ranked driver who hasn't passed; null if none left
+function nextRankAfter(currentRank, passedIds){
+  const ranks=drivers()
+    .filter(d=>d.priority!=null && !passedIds.includes(d.id) && d.priority>currentRank)
+    .map(d=>d.priority);
+  return ranks.length?Math.min(...ranks):null;
+}
+
+async function claimBooking(bid){
+  const me=myStaff();if(!me){toast('No crew record linked to your login');return}
+  const {error}=await SB.from('bookings').update({driver_id:me.id, offer_rank:null}).eq('id',bid);
+  if(error){toast(error.message);return}
+  toast('Claimed — it is yours');await loadAll();
+}
+async function passBooking(bid){
+  const me=myStaff();if(!me)return;
+  const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
+  const passed=[...(b.passed_by||[]), me.id];
+  const nxt=nextRankAfter(b.offer_rank, passed);
+  const {error}=await SB.from('bookings').update({passed_by:passed, offer_rank:nxt}).eq('id',bid);
+  if(error){toast(error.message);return}
+  toast(nxt?'Passed — offered to next driver':'Passed — no drivers left, back to owner');await loadAll();
+}
+async function requestRelease(bid){
+  const {error}=await SB.from('bookings').update({release_requested:true}).eq('id',bid);
+  if(error){toast(error.message);return}
+  toast('Release requested — owner will review');await loadAll();
+}
+async function approveRelease(bid){
+  // Owner approves: clear driver, restart waterfall from top.
+  const ranks=drivers().map(d=>d.priority).filter(p=>p!=null);
+  const {error}=await SB.from('bookings').update({
+    driver_id:null, release_requested:false,
+    offer_rank:ranks.length?Math.min(...ranks):null, passed_by:[]
+  }).eq('id',bid);
+  if(error){toast(error.message);return}
+  toast('Released and re-offered');await loadAll();
+}
+
 // ---------- renderers ----------
 function renderAll(){renderSchedule();renderPrep();renderCars();renderStaff()}
 
@@ -476,44 +545,70 @@ function renderSchedule(){
   const el=document.getElementById('panel-schedule');
   let list=[...DATA.bookings].filter(b=>b.status!=='cancelled');
   if(!isAdmin()){
-    // Crew see: bookings assigned to them, PLUS all unassigned bookings.
     const mine=myStaffId();
-    list=list.filter(b=>!b.driver_id || (mine && b.driver_id===mine));
+    // Crew see: their assignments, jobs offered to them (their turn or pending above), and untiered-unassigned stays hidden.
+    list=list.filter(b=>{
+      if(mine && b.driver_id===mine) return true;        // mine
+      if(b.driver_id) return false;                       // someone else's
+      if(b.offer_rank!=null) return isMyTurn(b)||isPendingAbove(b); // in the waterfall, visible to those at/below current
+      return false;                                       // unassigned but not yet offered (no tier) -> hidden from crew
+    });
   }
   list.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
 
   const addBtn = (isAdmin()&&ROLE==='admin')?`<button class="act add" onclick="bookingModal()">+ New Booking</button>`:'';
-  let h=`<div class="sectionhead"><div><div class="kicker">${!isAdmin()?'Your runs & open bookings':'Upcoming'}</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
+  let h=`<div class="sectionhead"><div><div class="kicker">${!isAdmin()?'Your runs & open jobs':'Upcoming'}</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
 
-  if(!list.length){h+=`<div class="empty"><div class="big">No bookings yet</div>${isAdmin()?'Add one manually, or sync from Wix.':'Nothing assigned or open right now.'}</div>`;el.innerHTML=h;return}
+  if(!list.length){h+=`<div class="empty"><div class="big">${isAdmin()?'No bookings yet':'No jobs right now'}</div>${isAdmin()?'Add one manually, or sync from Wix.':'Nothing assigned or offered to you yet.'}</div>`;el.innerHTML=h;return}
 
   h+='<div class="rowlist">';
   const mineId=myStaffId();
   for(const b of list){
     const car=carById(b.car_id), drv=staffById(b.driver_id);
     const dc=fmtDate(b.event_date), pct=prepPct(b.id);
-    let crewtag='';
-    if(!isAdmin()){
-      if(b.driver_id && b.driver_id===mineId) crewtag='<span class="minetag">Mine</span>';
-      else if(!b.driver_id) crewtag='<span class="opentag">Open</span>';
+    let crewtag='', payline='', actions='';
+
+    if(isAdmin()&&ROLE==='admin'){
+      actions=`<button class="ghost tinybtn" onclick="bookingModal('${b.id}')">Edit</button><button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep</button>`;
+      if(b.release_requested) actions=`<button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood)" onclick="approveRelease('${b.id}')">Approve release</button>`+actions;
+    } else if(ROLE==='mechanic' && !myStaff()?.priority){
+      actions=`<button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep</button>`;
+    } else {
+      // driver view
+      const pay=myPay(b);
+      if(b.driver_id===mineId){
+        crewtag='<span class="minetag">Mine</span>';
+        actions= b.release_requested
+          ? `<span class="meta" style="font-size:11px">Release pending</span>`
+          : `<button class="ghost tinybtn" onclick="requestRelease('${b.id}')">Request release</button>`;
+        if(pay!=null) payline=`<div class="paypill">You earn $${pay}</div>`;
+      } else if(isMyTurn(b)){
+        crewtag='<span class="opentag">Your turn</span>';
+        if(pay!=null) payline=`<div class="paypill">You earn $${pay}</div>`;
+        actions=`<button class="act tinybtn" onclick="claimBooking('${b.id}')">Claim</button><button class="ghost tinybtn" onclick="passBooking('${b.id}')">Pass</button>`;
+      } else if(isPendingAbove(b)){
+        crewtag='<span class="waittag">Pending</span>';
+        if(pay!=null) payline=`<div class="paypill muted">Would earn $${pay}</div>`;
+        actions=`<span class="meta" style="font-size:11px">Higher-priority driver first</span>`;
+      }
     }
+
     h+=`<div class="lrow">
       <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
       <div class="lmain">
         <div class="ltop">
           <span class="ttl">${esc(b.customer_name||'Unnamed')}</span>
           <span class="pill s-${b.status}">${b.status}</span>
-          <span class="paytag pay-${b.payment_status||'unpaid'}">${b.payment_status==='paid'?'Paid':b.payment_status==='deposit'?'Deposit':'Unpaid'}</span>
+          ${isAdmin()?`<span class="paytag pay-${b.payment_status||'unpaid'}">${b.payment_status==='paid'?'Paid':b.payment_status==='deposit'?'Deposit':'Unpaid'}</span>`:''}
+          ${isAdmin()&&b.pay_tier?`<span class="tiertag">T${b.pay_tier}</span>`:''}
           ${crewtag}
           ${b.source==='wix'?'<span class="srctag">Wix</span>':''}
         </div>
         <div class="meta">${esc(b.event_type||'—')}${b.start_time?' · '+fmtTime(b.start_time):''}</div>
         <div class="meta lcar">🚗 ${car?esc(car.name):'<em>no car</em>'} &nbsp;·&nbsp; 👤 ${drv?esc(drv.name):'<em>no driver</em>'}${pct!==null?` &nbsp;·&nbsp; ${pct}% prepped`:''}</div>
+        ${payline}
       </div>
-      <div class="lactions">
-        ${(isAdmin()&&ROLE==='admin')?`<button class="ghost tinybtn" onclick="bookingModal('${b.id}')">Edit</button><button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep</button>`:
-          ROLE==='mechanic'?`<button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep</button>`:''}
-      </div>
+      <div class="lactions">${actions}</div>
     </div>`;
   }
   h+='</div>';el.innerHTML=h;
@@ -602,6 +697,7 @@ function renderStaff(){
     h+=`<div class="card"><div class="hd"><div class="ttl">${esc(s.name)}</div>
       <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">${pills}</span></div>
       <div class="bd"><div class="meta">${esc(s.phone||'')} ${s.email?'· '+esc(s.email):''}</div>
+      ${hasRole(s,'driver')?`<div class="meta" style="margin-top:6px">${s.priority!=null?`Priority #${s.priority}`:'<em>not in rotation</em>'} · $${s.pay_rate??0}/tier</div>`:''}
       ${!s.active?'<div class="meta">Inactive</div>':''}
       ${(isAdmin()&&ROLE==='admin')?`<div style="margin-top:10px"><button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button></div>`:''}</div></div>`;
   }
@@ -641,11 +737,20 @@ function bookingModal(id){
       <div><label>Driver</label><select id="f_drv"><option value="">—</option>${drvOpts}</select></div>
       <div><label>Status</label><select id="f_status">${stOpts}</select></div>
     </div>
-    <div><label>Payment</label><select id="f_pay">
-      <option value="unpaid" ${b.payment_status==='unpaid'||!b.payment_status?'selected':''}>Unpaid</option>
-      <option value="deposit" ${b.payment_status==='deposit'?'selected':''}>Deposit paid</option>
-      <option value="paid" ${b.payment_status==='paid'?'selected':''}>Paid in full</option>
-    </select></div>
+    <div class="row two">
+      <div><label>Payment</label><select id="f_pay">
+        <option value="unpaid" ${b.payment_status==='unpaid'||!b.payment_status?'selected':''}>Unpaid</option>
+        <option value="deposit" ${b.payment_status==='deposit'?'selected':''}>Deposit paid</option>
+        <option value="paid" ${b.payment_status==='paid'?'selected':''}>Paid in full</option>
+      </select></div>
+      <div><label>Pay tier (driver offer)</label><select id="f_tier">
+        <option value="" ${!b.pay_tier?'selected':''}>— not offered yet —</option>
+        <option value="1" ${b.pay_tier==1?'selected':''}>Tier 1 (easy)</option>
+        <option value="2" ${b.pay_tier==2?'selected':''}>Tier 2 (medium)</option>
+        <option value="3" ${b.pay_tier==3?'selected':''}>Tier 3 (hard)</option>
+      </select></div>
+    </div>
+    <small class="hint">Setting a tier offers this job to drivers, starting with priority #1.</small>
     <div><label>Notes</label><textarea id="f_notes">${esc(b.notes)}</textarea></div>
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="act" onclick="saveBooking('${id||''}')">Save</button>
@@ -656,10 +761,22 @@ function bookingModal(id){
 }
 async function saveBooking(id){
   const v=x=>document.getElementById(x).value||null;
+  const tier=document.getElementById('f_tier').value?parseInt(document.getElementById('f_tier').value):null;
   const rec={customer_name:v('f_cust'),event_type:v('f_evt'),event_date:v('f_date'),
     start_time:v('f_start'),end_time:v('f_end'),customer_phone:v('f_phone'),customer_email:v('f_email'),
     pickup_location:v('f_pick'),return_location:v('f_ret'),car_id:v('f_car'),driver_id:v('f_drv'),
-    status:v('f_status')||'new',payment_status:v('f_pay')||'unpaid',notes:v('f_notes')};
+    status:v('f_status')||'new',payment_status:v('f_pay')||'unpaid',pay_tier:tier,notes:v('f_notes')};
+  // If a tier is set, no driver yet, and the waterfall hasn't started, launch it at rank 1.
+  const existing=id?DATA.bookings.find(x=>x.id===id):null;
+  if(tier && !rec.driver_id){
+    const startedBefore=existing && existing.offer_rank;
+    if(!startedBefore){
+      const ranks=drivers().map(d=>d.priority).filter(p=>p!=null);
+      rec.offer_rank = ranks.length?Math.min(...ranks):null;
+      rec.passed_by = [];
+    }
+  }
+  if(rec.driver_id){ rec.offer_rank=null; } // claimed/assigned -> no longer in rotation
   try{
     if(id){
       const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
@@ -805,6 +922,11 @@ function staffModal(id){
       <div><label>Phone</label><input id="s_phone" value="${esc(s.phone)}"></div>
       <div><label>Email</label><input id="s_email" value="${esc(s.email)}"></div>
     </div>
+    <div class="row two">
+      <div><label>Pay rate ($ per tier)</label><input id="s_rate" type="number" step="1" value="${s.pay_rate??50}"></div>
+      <div><label>Priority rank</label><input id="s_priority" type="number" step="1" value="${s.priority??''}" placeholder="1 = first offered"></div>
+    </div>
+    <small class="hint">Pay rate × a booking's tier = what this driver earns. Priority 1 is offered jobs first; leave blank to keep them out of the rotation.</small>
     <div style="margin-top:6px"><label><input type="checkbox" id="s_active" ${s.active!==false?'checked':''} style="width:auto;margin-right:6px">Active</label></div>
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="act" onclick="saveStaff('${id||''}')">Save</button>
@@ -815,6 +937,8 @@ async function saveStaff(id){
   const roles=[...document.querySelectorAll('.s_role_cb:checked')].map(c=>c.value);
   const rec={name:document.getElementById('s_name').value||null,role:roles.join(','),
     phone:document.getElementById('s_phone').value||null,email:document.getElementById('s_email').value||null,
+    pay_rate:parseFloat(document.getElementById('s_rate').value)||0,
+    priority:document.getElementById('s_priority').value!==''?parseInt(document.getElementById('s_priority').value):null,
     active:document.getElementById('s_active').checked};
   if(!rec.name){toast('Name required');return}
   if(!roles.length){toast('Pick at least one role');return}
