@@ -86,6 +86,10 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .lcar{margin-top:4px}
 .srctag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;
   background:var(--paper-2);color:#5a6b7d;padding:4px 7px;border-radius:20px}
+.minetag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;
+  background:var(--green);color:#fff;padding:4px 7px;border-radius:20px}
+.opentag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;
+  background:var(--amber);color:#fff;padding:4px 7px;border-radius:20px}
 .lactions{display:flex;gap:6px;flex:none}
 @media(max-width:600px){
   .lrow{gap:10px;padding:10px 11px;align-items:flex-start}
@@ -136,9 +140,11 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 /* forms */
 label{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052;margin:10px 0 4px}
 input,select,textarea{
-  width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;
-  background:#fff;font-size:14px;font-family:inherit;color:var(--ink)
+  width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
+  background:#fff;font-size:15px;font-family:inherit;color:var(--ink);line-height:1.3;
+  -webkit-appearance:none;appearance:none
 }
+select{background-image:url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%236b6052' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
 textarea{min-height:70px;resize:vertical}
 .row{display:grid;gap:12px}
 @media(min-width:620px){.row.two{grid-template-columns:1fr 1fr}.row.three{grid-template-columns:1fr 1fr 1fr}}
@@ -177,13 +183,16 @@ button.ghost:hover{background:var(--paper-2)}
 
 /* modal */
 .modal{position:fixed;inset:0;background:rgba(26,20,16,.55);display:none;align-items:flex-start;
-  justify-content:center;padding:30px 16px;z-index:80;overflow:auto}
+  justify-content:center;padding:30px 16px;z-index:80;overflow:auto;
+  padding-top:max(30px,env(safe-area-inset-top));padding-bottom:max(30px,env(safe-area-inset-bottom))}
 .modal.show{display:flex}
 .modal .sheet{background:var(--paper);border-radius:14px;max-width:640px;width:100%;
-  border-top:5px solid var(--oxblood);box-shadow:0 18px 50px rgba(0,0,0,.4)}
-.modal .sheet .mh{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+  border-top:5px solid var(--oxblood);box-shadow:0 18px 50px rgba(0,0,0,.4);
+  display:flex;flex-direction:column;max-height:calc(100vh - 60px);max-height:calc(100dvh - 60px)}
+.modal .sheet .mh{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line);flex:none;
+  background:var(--paper);border-radius:14px 14px 0 0;position:sticky;top:0}
 .modal .sheet .mh h3{margin:0;font-size:17px}
-.modal .sheet .mb{padding:20px}
+.modal .sheet .mb{padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .modal .x{margin-left:auto;background:none;border:0;font-size:22px;cursor:pointer;color:#6b6052}
 
 .sectionhead{display:flex;align-items:center;gap:12px;margin:0 0 16px}
@@ -233,7 +242,7 @@ img,svg{max-width:100%}
   .rolegrid{grid-template-columns:1fr}
   .datechip{min-width:46px;padding:5px 8px}
   .datechip .d{font-size:17px}
-  input,select,textarea{font-size:16px} /* prevents iOS zoom-on-focus */
+  input,select,textarea{font-size:16px;padding:9px 12px} /* 16px prevents iOS zoom-on-focus */
   .login-logo{width:90%;max-width:260px;padding:14px 18px}
   #gate{padding:0 14px;margin:36px auto}
 }
@@ -436,6 +445,12 @@ async function loadAll(){
 // ---------- helpers ----------
 const carById=id=>DATA.cars.find(x=>x.id===id);
 const staffById=id=>DATA.staff.find(x=>x.id===id);
+// Match the logged-in user to their crew record by email, so we can show "their" bookings.
+function myStaffId(){
+  if(!ME||!ME.email) return null;
+  const me=DATA.staff.find(s=>s.email && s.email.toLowerCase().trim()===ME.email.toLowerCase().trim());
+  return me?me.id:null;
+}
 const hasRole=(s,r)=>(s.role||'').split(',').map(x=>x.trim()).includes(r);
 const drivers=()=>DATA.staff.filter(s=>hasRole(s,'driver')&&s.active);
 const mechanics=()=>DATA.staff.filter(s=>hasRole(s,'mechanic')&&s.active);
@@ -452,24 +467,35 @@ function renderAll(){renderSchedule();renderPrep();renderCars();renderStaff()}
 function renderSchedule(){
   const el=document.getElementById('panel-schedule');
   let list=[...DATA.bookings].filter(b=>b.status!=='cancelled');
-  if(ROLE==='driver') list=list.filter(b=>b.driver_id); // drivers see assigned-only feel
+  if(!isAdmin()){
+    // Crew see: bookings assigned to them, PLUS all unassigned bookings.
+    const mine=myStaffId();
+    list=list.filter(b=>!b.driver_id || (mine && b.driver_id===mine));
+  }
   list.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
 
   const addBtn = (isAdmin()&&ROLE==='admin')?`<button class="act add" onclick="bookingModal()">+ New Booking</button>`:'';
-  let h=`<div class="sectionhead"><div><div class="kicker">${ROLE==='driver'?'Your runs':'Upcoming'}</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
+  let h=`<div class="sectionhead"><div><div class="kicker">${!isAdmin()?'Your runs & open bookings':'Upcoming'}</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
 
-  if(!list.length){h+=`<div class="empty"><div class="big">No bookings yet</div>${ROLE==='admin'?'Add one manually, or sync from Wix.':'Nothing assigned to you right now.'}</div>`;el.innerHTML=h;return}
+  if(!list.length){h+=`<div class="empty"><div class="big">No bookings yet</div>${isAdmin()?'Add one manually, or sync from Wix.':'Nothing assigned or open right now.'}</div>`;el.innerHTML=h;return}
 
   h+='<div class="rowlist">';
+  const mineId=myStaffId();
   for(const b of list){
     const car=carById(b.car_id), drv=staffById(b.driver_id);
     const dc=fmtDate(b.event_date), pct=prepPct(b.id);
+    let crewtag='';
+    if(!isAdmin()){
+      if(b.driver_id && b.driver_id===mineId) crewtag='<span class="minetag">Mine</span>';
+      else if(!b.driver_id) crewtag='<span class="opentag">Open</span>';
+    }
     h+=`<div class="lrow">
       <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
       <div class="lmain">
         <div class="ltop">
           <span class="ttl">${esc(b.customer_name||'Unnamed')}</span>
           <span class="pill s-${b.status}">${b.status}</span>
+          ${crewtag}
           ${b.source==='wix'?'<span class="srctag">Wix</span>':''}
         </div>
         <div class="meta">${esc(b.event_type||'—')}${b.start_time?' · '+fmtTime(b.start_time):''}</div>
@@ -665,12 +691,46 @@ function carModal(id){
       <div><label>Color</label><input id="c_color" value="${esc(c.color)}"></div>
       <div><label>Status</label><select id="c_status">${stOpts}</select></div>
     </div>
-    <div><label>Photo URL</label><input id="c_photo" value="${esc(c.photo_url)}"></div>
+    <div><label>Photo</label>
+      <input type="hidden" id="c_photo" value="${esc(c.photo_url)}">
+      <div id="c_photo_prev" style="margin-bottom:8px">${c.photo_url?`<img src="${esc(c.photo_url)}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">`:''}</div>
+      <input type="file" id="c_photo_file" accept="image/*" onchange="handleCarPhoto(this)">
+      <small class="hint">Pick a photo from your device — it's resized automatically. ${c.photo_url?'<a href="#" onclick="clearCarPhoto();return false">Remove current photo</a>':''}</small>
+    </div>
     <div><label>Notes</label><textarea id="c_notes">${esc(c.notes)}</textarea></div>
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="act" onclick="saveCar('${id||''}')">Save</button>
       ${id?`<button class="ghost" onclick="delCar('${id}')">Delete</button>`:''}
     </div>`);
+}
+function clearCarPhoto(){
+  document.getElementById('c_photo').value='';
+  document.getElementById('c_photo_prev').innerHTML='';
+}
+function handleCarPhoto(input){
+  const file=input.files&&input.files[0];
+  if(!file)return;
+  if(!file.type.startsWith('image/')){toast('Please pick an image');return}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      // Resize so the longest side is <=800px, then compress to JPEG.
+      const MAX=800;
+      let {width:w,height:h}=img;
+      if(w>h && w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+      else if(h>=w && h>MAX){w=Math.round(w*MAX/h);h=MAX;}
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const dataUrl=canvas.toDataURL('image/jpeg',0.78);
+      document.getElementById('c_photo').value=dataUrl;
+      document.getElementById('c_photo_prev').innerHTML=`<img src="${dataUrl}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">`;
+      toast('Photo ready — click Save');
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 async function saveCar(id){
   const v=x=>document.getElementById(x).value||null;
