@@ -330,7 +330,7 @@ img,svg{max-width:100%}
 // the placeholder and the app will ask for it once on first load and
 // remember it on that device.
 const SUPABASE_URL = 'https://ldhmwuhhejaabsvcyzdo.supabase.co';
-const SUPABASE_KEY_INLINE = 'PASTE_YOUR_ANON_OR_PUBLISHABLE_KEY_HERE';
+const SUPABASE_KEY_INLINE = 'sb_publishable_G1LkmrTPhy0rKAJpV-rwjw_Ulo1bKOj';
 // Edge function that creates/links crew logins. Add ?secret= matching CREW_ADMIN_SECRET.
 const CREW_LOGIN_FN_URL = 'https://ldhmwuhhejaabsvcyzdo.supabase.co/functions/v1/create-crew-login?secret=Bmw52533';
 
@@ -724,20 +724,26 @@ function renderCars(){
 // STAFF
 function renderStaff(){
   const el=document.getElementById('panel-staff');
-  const addBtn=(isAdmin()&&ROLE==='admin')?`<button class="act add" onclick="staffModal()">+ Add Crew</button>`:'';
-  let h=`<div class="sectionhead"><div><div class="kicker">Who's on</div><h2 class="display">Crew</h2></div><span class="line"></span>${addBtn}</div>`;
-  if(!DATA.staff.length){h+=`<div class="empty"><div class="big">No crew yet</div>Add drivers and shop staff.</div>`;el.innerHTML=h;return}
+  const admin=isAdmin();
+  const addBtn=(admin&&ROLE==='admin')?`<button class="act add" onclick="staffModal()">+ Add Crew</button>`:'';
+  let h=`<div class="sectionhead"><div><div class="kicker">${admin?"Who's on":'Your profile'}</div><h2 class="display">Crew</h2></div><span class="line"></span>${addBtn}</div>`;
+  // Non-admins only see their own record.
+  const mineId=myStaffId();
+  const visible = admin ? DATA.staff : DATA.staff.filter(s=>s.id===mineId);
+  if(!visible.length){h+=`<div class="empty"><div class="big">${admin?'No crew yet':'No profile linked'}</div>${admin?'Add drivers and shop staff.':'Ask the owner to check your email matches your login.'}</div>`;el.innerHTML=h;return}
   h+='<div class="grid cols">';
-  for(const s of DATA.staff){
+  for(const s of visible){
     const pills=(s.role||'').split(',').map(x=>x.trim()).filter(Boolean).map(r=>{
       const cls=r==='driver'?'s-confirmed':r==='mechanic'?'s-prepping':'s-new';
       return `<span class="pill ${cls}">${esc(r)}</span>`;}).join(' ');
+    // Pay/priority visible to admins always; to a driver only on their OWN card.
+    const showPay = admin || s.id===mineId;
     h+=`<div class="card"><div class="hd"><div class="ttl">${esc(s.name)}</div>
       <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">${pills}</span></div>
       <div class="bd"><div class="meta">${esc(s.phone||'')} ${s.email?'· '+esc(s.email):''}</div>
-      ${hasRole(s,'driver')?`<div class="meta" style="margin-top:6px">${s.priority!=null?`Priority #${s.priority}`:'<em>not in rotation</em>'} · $${s.pay_rate??0}/tier</div>`:''}
+      ${(hasRole(s,'driver')&&showPay)?`<div class="meta" style="margin-top:6px">${s.priority!=null?`Priority #${s.priority}`:'<em>not in rotation</em>'} · $${s.pay_rate??0}/tier</div>`:''}
       ${!s.active?'<div class="meta">Inactive</div>':''}
-      ${(isAdmin()&&ROLE==='admin')?`<div style="margin-top:10px"><button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button></div>`:''}</div></div>`;
+      ${(admin&&ROLE==='admin')?`<div style="margin-top:10px"><button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button></div>`:''}</div></div>`;
   }
   h+='</div>';el.innerHTML=h;
 }
