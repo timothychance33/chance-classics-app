@@ -546,8 +546,8 @@ function nextRankAfter(currentRank, passedIds){
 
 async function claimBooking(bid){
   const me=myStaff();if(!me){toast('No crew record linked to your login');return}
-  const {error}=await SB.from('bookings').update({driver_id:me.id, offer_rank:null}).eq('id',bid);
-  if(error){toast(error.message);return}
+  const {error}=await SB.from('bookings').update({driver_id:me.id, offer_rank:null, assigned_by:'claim'}).eq('id',bid);
+  if(error){toast('Could not claim: '+error.message);return}
   toast('Claimed — it is yours');await loadAll();
 }
 async function passBooking(bid){
@@ -633,7 +633,7 @@ function renderSchedule(){
 
     h+=`<div class="lrow">
       <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
-      <div class="lmain">
+      <div class="lmain" onclick="bookingDetail('${b.id}')" style="cursor:pointer">
         <div class="ltop">
           <span class="ttl">${esc(b.customer_name||'Unnamed')}</span>
           <span class="pill s-${b.status}">${b.status}</span>
@@ -820,7 +820,7 @@ async function saveBooking(id){
       rec.passed_by = [];
     }
   }
-  if(rec.driver_id){ rec.offer_rank=null; } // claimed/assigned -> no longer in rotation
+  if(rec.driver_id){ rec.offer_rank=null; rec.assigned_by='owner'; } // admin-assigned
   try{
     if(id){
       const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
@@ -840,6 +840,35 @@ async function saveBooking(id){
 async function delBooking(id){if(!confirm('Delete this booking?'))return;const {error}=await SB.from('bookings').delete().eq('id',id);if(error){toast(error.message);return}closeModal();toast('Deleted');await loadAll()}
 
 // PREP list for a single booking (admin/mechanic)
+function bookingDetail(bid){
+  const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
+  const car=carById(b.car_id), drv=staffById(b.driver_id);
+  const pay=myPay(b);
+  const row=(label,val)=>val?`<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052">${label}</div><div style="font-size:15px;margin-top:2px">${esc(val)}</div></div>`:'';
+  let claimBtns='';
+  if(!isAdmin() && isMyTurn(b)){
+    claimBtns=`<div style="display:flex;gap:8px;margin-top:18px">
+      <button class="act" style="flex:1" onclick="claimBooking('${b.id}');closeModal()">Claim this job</button>
+      <button class="ghost" onclick="passBooking('${b.id}');closeModal()">Pass</button>
+    </div>`;
+  }
+  openModal('Booking details',`
+    ${pay!=null?`<div class="paypill" style="margin-bottom:14px">You earn $${pay}</div>`:''}
+    ${row('Customer', b.customer_name)}
+    ${row('Event', b.event_type)}
+    ${row('Date', b.event_date)}
+    ${row('Time', (b.start_time?fmtTime(b.start_time):'')+(b.end_time?' – '+fmtTime(b.end_time):''))}
+    ${row('Car', car?car.name:'—')}
+    ${row('Pickup', b.pickup_location)}
+    ${row('Return / Drop-off', b.return_location)}
+    ${row('Phone', b.customer_phone)}
+    ${row('Email', b.customer_email)}
+    ${row('Notes', b.notes)}
+    ${isAdmin()?row('Driver', drv?drv.name:'—')+row('How assigned', b.assigned_by==='claim'?'Claimed by driver':b.assigned_by==='owner'?'Assigned by owner':'—'):''}
+    ${claimBtns}
+  `);
+}
+
 function openPrep(bid){
   const b=DATA.bookings.find(x=>x.id===bid);const car=carById(b.car_id);
   const mechOpts=mechanics();
