@@ -113,6 +113,14 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .reorder{display:flex;gap:4px;margin-left:auto}
 .reorder button{padding:4px 9px;font-size:13px;line-height:1}
 .reorder button:disabled{opacity:.3}
+.wfbox{margin-top:16px;border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff}
+.wfhd{font:700 11px/1 "Inter",sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#6b6052;margin-bottom:8px}
+.wfrow{display:flex;justify-content:space-between;align-items:center;padding:7px 0;font-size:14px;border-bottom:1px solid var(--paper-2)}
+.wfrow:last-child{border-bottom:0}
+.wf-passed{color:#9aa7b4}
+.wf-current{color:var(--oxblood);font-weight:700}
+.wf-waiting{color:#6b6052}
+.wf-claimed{color:var(--green);font-weight:700}
 .lrow .datechip{flex:none}
 .lmain{flex:1;min-width:0}
 .ltop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
@@ -569,9 +577,12 @@ async function notify(type, booking, extra){
 async function notifyOfferTo(booking){
   if(booking.offer_rank==null) return;
   const d=drivers().find(x=>x.priority===booking.offer_rank);
-  if(!d||!d.email) return;
+  if(!d){ console.warn('No driver at rank',booking.offer_rank); return; }
+  if(!d.email){ toast(`Note: ${d.name} has no email — can't send offer`); return; }
   const pay=booking.pay_tier&&d.pay_rate?booking.pay_tier*d.pay_rate:null;
-  await notify('offer',booking,{driver_name:d.name,driver_email:d.email,pay});
+  try{
+    await notify('offer',booking,{driver_name:d.name,driver_email:d.email,pay});
+  }catch(e){ toast('Offer email failed: '+(e.message||e)); }
 }
 
 function myStaff(){const id=myStaffId();return id?staffById(id):null;}
@@ -1132,6 +1143,30 @@ async function saveBooking(id){
 async function delBooking(id){if(!confirm('Delete this booking?'))return;const {error}=await SB.from('bookings').delete().eq('id',id);if(error){toast(error.message);return}closeModal();toast('Deleted');await loadAll()}
 
 // PREP list for a single booking (admin/mechanic)
+function waterfallStatusHtml(b){
+  // Only meaningful for unassigned bookings in the waterfall.
+  if(b.driver_id){
+    const d=staffById(b.driver_id);
+    return `<div class="wfbox"><div class="wfhd">Claim status</div>
+      <div class="wfrow wf-claimed">✓ Claimed by ${d?esc(d.name):'driver'}${b.assigned_by==='owner'?' (assigned by you)':''}</div></div>`;
+  }
+  if(b.pay_tier==null) return `<div class="wfbox"><div class="wfhd">Offer status</div><div class="meta">Not offered yet — set a pay tier to start the waterfall.</div></div>`;
+  const ranked=drivers().filter(d=>d.priority!=null).sort((a,b)=>a.priority-b.priority);
+  const passed=b.passed_by||[];
+  let rows='';
+  for(const d of ranked){
+    let state, cls;
+    if(passed.includes(d.id)){ state='Passed'; cls='wf-passed'; }
+    else if(b.offer_rank!=null && d.priority===b.offer_rank){ state='⏳ Their turn now'; cls='wf-current'; }
+    else if(b.offer_rank!=null && d.priority>b.offer_rank){ state='Waiting'; cls='wf-waiting'; }
+    else if(b.offer_rank==null){ state='—'; cls=''; }
+    else { state='—'; cls=''; }
+    rows+=`<div class="wfrow ${cls}"><span>#${d.priority} ${esc(d.name)}</span><span>${state}</span></div>`;
+  }
+  if(b.offer_rank==null && passed.length) rows+=`<div class="wfrow wf-passed"><span>All drivers passed</span><span>back to you</span></div>`;
+  return `<div class="wfbox"><div class="wfhd">Offer pipeline</div>${rows}</div>`;
+}
+
 function bookingDetail(bid){
   const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
   const car=carById(b.car_id), drv=staffById(b.driver_id);
@@ -1156,7 +1191,7 @@ function bookingDetail(bid){
     ${row('Phone', b.customer_phone)}
     ${row('Email', b.customer_email)}
     ${row('Notes', b.notes)}
-    ${isAdmin()?row('Driver', drv?drv.name:'—')+row('How assigned', b.assigned_by==='claim'?'Claimed by driver':b.assigned_by==='owner'?'Assigned by owner':'—'):''}
+    ${isAdmin()?waterfallStatusHtml(b):''}
     ${claimBtns}
   `);
 }
