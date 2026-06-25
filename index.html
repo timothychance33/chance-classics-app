@@ -584,12 +584,15 @@ function renderSchedule(){
   let list=[...DATA.bookings].filter(b=>b.status!=='cancelled');
   if(!isAdmin()){
     const mine=myStaffId();
-    // Crew see: their assignments, jobs offered to them (their turn or pending above), and untiered-unassigned stays hidden.
+    const me=myStaff();
+    const iAmMechanic = me && hasRole(me,'mechanic');
+    // Crew see: their assignments, jobs offered to them (waterfall). Mechanics ALSO
+    // see other assigned jobs (so they can prep them). Untiered-unassigned stays hidden.
     list=list.filter(b=>{
-      if(mine && b.driver_id===mine) return true;        // mine
-      if(b.driver_id) return false;                       // someone else's
-      if(b.offer_rank!=null) return isMyTurn(b)||isPendingAbove(b); // in the waterfall, visible to those at/below current
-      return false;                                       // unassigned but not yet offered (no tier) -> hidden from crew
+      if(mine && b.driver_id===mine) return true;         // mine
+      if(b.driver_id) return iAmMechanic;                  // someone else's: mechanics can prep, drivers no
+      if(b.offer_rank!=null) return isMyTurn(b)||isPendingAbove(b); // in the waterfall
+      return iAmMechanic && b.car_id;                      // unassigned-but-has-car: mechanic can prep
     });
   }
   list.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
@@ -609,26 +612,36 @@ function renderSchedule(){
     if(isAdmin()&&ROLE==='admin'){
       actions=`<button class="ghost tinybtn" onclick="bookingModal('${b.id}')">Edit</button><button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep</button>`;
       if(b.release_requested) actions=`<button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood)" onclick="approveRelease('${b.id}')">Approve release</button>`+actions;
-    } else if(ROLE==='mechanic' && !myStaff()?.priority){
-      actions=`<button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep</button>`;
     } else {
-      // driver view
+      // Crew view — actions are ADDITIVE based on the person's roles + this booking.
+      const me=myStaff();
+      const iAmDriver = me && hasRole(me,'driver');
+      const iAmMechanic = me && hasRole(me,'mechanic');
       const pay=myPay(b);
+      let btns=[];
+
       if(b.driver_id===mineId){
+        // It's my claimed job
         crewtag='<span class="minetag">Mine</span>';
-        actions= b.release_requested
+        btns.push(`<button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep</button>`);
+        btns.push(b.release_requested
           ? `<span class="meta" style="font-size:11px">Release pending</span>`
-          : `<button class="ghost tinybtn" onclick="requestRelease('${b.id}')">Request release</button>`;
+          : `<button class="ghost tinybtn" onclick="requestRelease('${b.id}')">Release</button>`);
         if(pay!=null) payline=`<div class="paypill">You earn $${pay}</div>`;
-      } else if(isMyTurn(b)){
+      } else if(iAmDriver && isMyTurn(b)){
         crewtag='<span class="opentag">Your turn</span>';
         if(pay!=null) payline=`<div class="paypill">You earn $${pay}</div>`;
-        actions=`<button class="act tinybtn" onclick="claimBooking('${b.id}')">Claim</button><button class="ghost tinybtn" onclick="passBooking('${b.id}')">Pass</button>`;
-      } else if(isPendingAbove(b)){
+        btns.push(`<button class="act tinybtn" onclick="claimBooking('${b.id}')">Claim</button>`);
+        btns.push(`<button class="ghost tinybtn" onclick="passBooking('${b.id}')">Pass</button>`);
+      } else if(iAmDriver && isPendingAbove(b)){
         crewtag='<span class="waittag">Pending</span>';
         if(pay!=null) payline=`<div class="paypill muted">Would earn $${pay}</div>`;
-        actions=`<span class="meta" style="font-size:11px">Higher-priority driver first</span>`;
+        btns.push(`<span class="meta" style="font-size:11px">Higher-priority driver first</span>`);
+      } else if(iAmMechanic){
+        // Mechanic can prep any booking that has a car/job, even if not the driver
+        btns.push(`<button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep</button>`);
       }
+      actions=btns.join('');
     }
 
     h+=`<div class="lrow">
