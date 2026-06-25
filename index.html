@@ -83,6 +83,29 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .rowlist{display:flex;flex-direction:column;gap:8px}
 .lrow{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);
   border-radius:10px;padding:12px 14px;box-shadow:0 1px 0 var(--shadow)}
+.lrow.cat-mine{border-left:5px solid var(--green)}
+.lrow.cat-open{border-left:5px solid var(--amber)}
+.lrow.cat-other{border-left:5px solid #9aa7b4}
+.callegend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:12px}
+.callegend span{display:flex;align-items:center;gap:6px}
+.callegend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.calmonth{font:800 17px/1 "Playfair Display",serif}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.caldow{text-align:center;font:700 10px/1 "Inter",sans-serif;color:#6b6052;padding:4px 0;text-transform:uppercase}
+.calcell{min-height:54px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:3px}
+.calcell.empty{background:transparent;border:0}
+.calcell.has{cursor:pointer}
+.calcell.today{border-color:var(--oxblood);box-shadow:0 0 0 1px var(--oxblood) inset}
+.calnum{font:700 12px/1 "Inter",sans-serif;color:var(--ink)}
+.caldots{display:flex;flex-wrap:wrap;gap:2px;align-items:center}
+.caldot{width:7px;height:7px;border-radius:50%}
+.caldot.cat-mine{background:var(--green)}
+.caldot.cat-open{background:var(--amber)}
+.caldot.cat-other{background:#9aa7b4}
+.calmore{font:700 8px/1 "Inter",sans-serif;color:#6b6052}
+.caldaylist{margin-top:18px}
+.caldayhd{font:800 15px/1 "Playfair Display",serif;margin-bottom:10px}
 .lrow .datechip{flex:none}
 .lmain{flex:1;min-width:0}
 .ltop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
@@ -304,12 +327,14 @@ img,svg{max-width:100%}
 <div class="wrap" id="app" style="display:none">
   <nav class="tabs" id="tabs">
     <button data-tab="schedule" class="active">Schedule</button>
+    <button data-tab="calendar">Calendar</button>
     <button data-tab="prep">Prep Board</button>
     <button data-tab="cars">Cars</button>
     <button data-tab="staff">Crew</button>
   </nav>
 
   <div class="panel active" id="panel-schedule"></div>
+  <div class="panel" id="panel-calendar"></div>
   <div class="panel" id="panel-prep"></div>
   <div class="panel" id="panel-cars"></div>
   <div class="panel" id="panel-staff"></div>
@@ -516,6 +541,13 @@ function fmtTime(t){if(!t)return'';const[h,m]=t.split(':');let hh=+h;const ap=hh
 
 // ---------- marketplace helpers ----------
 function myStaff(){const id=myStaffId();return id?staffById(id):null;}
+// Classify a booking for color-coding: mine | open | other
+function bookingCategory(b){
+  const mine=myStaffId();
+  if(mine && b.driver_id===mine) return 'mine';
+  if(!b.driver_id) return 'open';      // unassigned / claimable
+  return 'other';                      // assigned to someone else
+}
 // Is it this user's turn on a booking's waterfall? (their priority === current offer_rank, and not passed)
 function isMyTurn(b){
   const me=myStaff();
@@ -576,7 +608,8 @@ async function approveRelease(bid){
 }
 
 // ---------- renderers ----------
-function renderAll(){renderSchedule();renderPrep();renderCars();renderStaff()}
+let calView=new Date(); // currently displayed month in the calendar tab
+function renderAll(){renderSchedule();renderCalendar();renderPrep();renderCars();renderStaff()}
 
 // SCHEDULE
 function renderSchedule(){
@@ -601,6 +634,8 @@ function renderSchedule(){
   let h=`<div class="sectionhead"><div><div class="kicker">${!isAdmin()?'Your runs & open jobs':'Upcoming'}</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
 
   if(!list.length){h+=`<div class="empty"><div class="big">${isAdmin()?'No bookings yet':'No jobs right now'}</div>${isAdmin()?'Add one manually, or sync from Wix.':'Nothing assigned or offered to you yet.'}</div>`;el.innerHTML=h;return}
+
+  if(!isAdmin()) h+=`<div class="callegend"><span><i style="background:var(--green)"></i>Mine</span><span><i style="background:var(--amber)"></i>Open to claim</span><span><i style="background:#9aa7b4"></i>Other</span></div>`;
 
   h+='<div class="rowlist">';
   const mineId=myStaffId();
@@ -644,7 +679,8 @@ function renderSchedule(){
       actions=btns.join('');
     }
 
-    h+=`<div class="lrow">
+    const cat=bookingCategory(b);
+    h+=`<div class="lrow cat-${cat}">
       <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
       <div class="lmain" onclick="bookingDetail('${b.id}')" style="cursor:pointer">
         <div class="ltop">
@@ -663,6 +699,74 @@ function renderSchedule(){
     </div>`;
   }
   h+='</div>';el.innerHTML=h;
+}
+
+// CALENDAR (month grid)
+function calShift(n){ calView=new Date(calView.getFullYear(), calView.getMonth()+n, 1); renderCalendar(); }
+function renderCalendar(){
+  const el=document.getElementById('panel-calendar');
+  if(!el) return;
+  const y=calView.getFullYear(), m=calView.getMonth();
+  const first=new Date(y,m,1), startDow=first.getDay();
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const monthName=['January','February','March','April','May','June','July','August','September','October','November','December'][m];
+
+  // Map bookings to their day-of-month for this month
+  const byDay={};
+  for(const b of DATA.bookings){
+    if(b.status==='cancelled' || !b.event_date) continue;
+    const d=new Date(b.event_date+'T00:00:00');
+    if(d.getFullYear()!==y || d.getMonth()!==m) continue;
+    (byDay[d.getDate()]=byDay[d.getDate()]||[]).push(b);
+  }
+
+  let h=`<div class="sectionhead"><div><div class="kicker">Month view</div><h2 class="display">Calendar</h2></div><span class="line"></span></div>`;
+  h+=`<div class="calhead">
+    <button class="ghost tinybtn" onclick="calShift(-1)">‹ Prev</button>
+    <div class="calmonth">${monthName} ${y}</div>
+    <button class="ghost tinybtn" onclick="calShift(1)">Next ›</button>
+  </div>`;
+  if(!isAdmin()) h+=`<div class="callegend"><span><i style="background:var(--green)"></i>Mine</span><span><i style="background:var(--amber)"></i>Open</span><span><i style="background:#9aa7b4"></i>Other</span></div>`;
+
+  h+='<div class="calgrid">';
+  for(const d of ['S','M','T','W','T','F','S']) h+=`<div class="caldow">${d}</div>`;
+  for(let i=0;i<startDow;i++) h+=`<div class="calcell empty"></div>`;
+  const today=new Date(); const isToday=(dd)=>today.getFullYear()===y&&today.getMonth()===m&&today.getDate()===dd;
+  for(let day=1;day<=daysInMonth;day++){
+    const items=byDay[day]||[];
+    let dots='';
+    for(const b of items.slice(0,4)){
+      const cat=bookingCategory(b);
+      dots+=`<span class="caldot cat-${cat}"></span>`;
+    }
+    h+=`<div class="calcell${isToday(day)?' today':''}${items.length?' has':''}" ${items.length?`onclick="calDay(${day})"`:''}>
+      <div class="calnum">${day}</div>
+      <div class="caldots">${dots}${items.length>4?`<span class="calmore">+${items.length-4}</span>`:''}</div>
+    </div>`;
+  }
+  h+='</div>';
+  h+=`<div id="calday"></div>`;
+  el.innerHTML=h;
+}
+function calDay(day){
+  const y=calView.getFullYear(), m=calView.getMonth();
+  const items=DATA.bookings.filter(b=>{
+    if(b.status==='cancelled'||!b.event_date) return false;
+    const d=new Date(b.event_date+'T00:00:00');
+    return d.getFullYear()===y && d.getMonth()===m && d.getDate()===day;
+  }).sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||''));
+  const monthName=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
+  let h=`<div class="caldaylist"><div class="caldayhd">${monthName} ${day}, ${y}</div>`;
+  for(const b of items){
+    const car=carById(b.car_id), cat=bookingCategory(b);
+    h+=`<div class="lrow cat-${cat}" style="margin-bottom:8px" onclick="bookingDetail('${b.id}')">
+      <div class="lmain">
+        <div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}</div>
+        <div class="meta lcar">🚗 ${car?esc(car.name):'<em>no car</em>'}${b.event_type?' · '+esc(b.event_type):''}</div>
+      </div></div>`;
+  }
+  h+='</div>';
+  document.getElementById('calday').innerHTML=h;
 }
 
 // PREP BOARD (mechanic-centric)
