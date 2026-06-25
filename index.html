@@ -109,6 +109,10 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .schsec{margin-bottom:26px}
 .schsechd{font:800 16px/1 "Playfair Display",serif;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .schcount{font:700 11px/1 "Inter",sans-serif;background:var(--oxblood);color:#fff;padding:3px 8px;border-radius:20px}
+.rankbadge{font:800 13px/1 "Inter",sans-serif;background:var(--oxblood);color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-right:8px;flex:none}
+.reorder{display:flex;gap:4px;margin-left:auto}
+.reorder button{padding:4px 9px;font-size:13px;line-height:1}
+.reorder button:disabled{opacity:.3}
 .lrow .datechip{flex:none}
 .lmain{flex:1;min-width:0}
 .ltop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
@@ -908,25 +912,81 @@ function renderStaff(){
   const admin=isAdmin();
   const addBtn=(admin&&ROLE==='admin')?`<button class="act add" onclick="staffModal()">+ Add Crew</button>`:'';
   let h=`<div class="sectionhead"><div><div class="kicker">${admin?"Who's on":'Your profile'}</div><h2 class="display">Crew</h2></div><span class="line"></span>${addBtn}</div>`;
-  // Non-admins only see their own record.
   const mineId=myStaffId();
-  const visible = admin ? DATA.staff : DATA.staff.filter(s=>s.id===mineId);
-  if(!visible.length){h+=`<div class="empty"><div class="big">${admin?'No crew yet':'No profile linked'}</div>${admin?'Add drivers and shop staff.':'Ask the owner to check your email matches your login.'}</div>`;el.innerHTML=h;return}
-  h+='<div class="grid cols">';
-  for(const s of visible){
-    const pills=(s.role||'').split(',').map(x=>x.trim()).filter(Boolean).map(r=>{
-      const cls=r==='driver'?'s-confirmed':r==='mechanic'?'s-prepping':'s-new';
-      return `<span class="pill ${cls}">${esc(r)}</span>`;}).join(' ');
-    // Pay/priority visible to admins always; to a driver only on their OWN card.
-    const showPay = admin || s.id===mineId;
-    h+=`<div class="card"><div class="hd"><div class="ttl">${esc(s.name)}</div>
-      <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">${pills}</span></div>
-      <div class="bd"><div class="meta">${esc(s.phone||'')} ${s.email?'· '+esc(s.email):''}</div>
-      ${(hasRole(s,'driver')&&showPay)?`<div class="meta" style="margin-top:6px">${s.priority!=null?`Priority #${s.priority}`:'<em>not in rotation</em>'} · $${s.pay_rate??0}/tier</div>`:''}
-      ${!s.active?'<div class="meta">Inactive</div>':''}
-      ${(admin&&ROLE==='admin')?`<div style="margin-top:10px"><button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button></div>`:''}</div></div>`;
+
+  // ---- Non-admin: just their own card ----
+  if(!admin){
+    const me=DATA.staff.find(s=>s.id===mineId);
+    if(!me){h+=`<div class="empty"><div class="big">No profile linked</div>Ask the owner to check your email matches your login.</div>`;el.innerHTML=h;return}
+    h+='<div class="grid cols">'+staffCardHtml(me,true,false,false)+'</div>';
+    el.innerHTML=h;return;
   }
-  h+='</div>';el.innerHTML=h;
+
+  // ---- Admin: drivers first (by priority, reorderable), then everyone else ----
+  const drv=DATA.staff.filter(s=>hasRole(s,'driver'))
+    .sort((a,b)=>{
+      if(a.priority==null&&b.priority==null) return (a.name||'').localeCompare(b.name||'');
+      if(a.priority==null) return 1; if(b.priority==null) return -1;
+      return a.priority-b.priority;
+    });
+  const others=DATA.staff.filter(s=>!hasRole(s,'driver'))
+    .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+
+  if(drv.length){
+    h+=`<div class="schsec"><div class="schsechd">Drivers <span class="meta" style="font-weight:400;font-size:12px">· priority order</span></div>`;
+    h+='<div class="grid cols">';
+    drv.forEach((s,i)=>{ h+=staffCardHtml(s,true,i>0,i<drv.length-1,drv); });
+    h+='</div></div>';
+  }
+  if(others.length){
+    h+=`<div class="schsec"><div class="schsechd">Shop & other crew</div><div class="grid cols">`;
+    for(const s of others) h+=staffCardHtml(s,true,false,false);
+    h+='</div></div>';
+  }
+  if(!drv.length&&!others.length){h+=`<div class="empty"><div class="big">No crew yet</div>Add drivers and shop staff.</div>`;}
+  el.innerHTML=h;
+}
+
+function staffCardHtml(s, showPay, canUp, canDown, drvList){
+  const admin=isAdmin();
+  const pills=(s.role||'').split(',').map(x=>x.trim()).filter(Boolean).map(r=>{
+    const cls=r==='driver'?'s-confirmed':r==='mechanic'?'s-prepping':'s-new';
+    return `<span class="pill ${cls}">${esc(r)}</span>`;}).join(' ');
+  const rankBadge=(hasRole(s,'driver')&&s.priority!=null)?`<span class="rankbadge">#${s.priority}</span>`:'';
+  let reorder='';
+  if((canUp||canDown)&&admin&&ROLE==='admin'){
+    reorder=`<div class="reorder">
+      <button class="ghost tinybtn" ${canUp?'':'disabled'} onclick="moveDriver('${s.id}',-1)">▲</button>
+      <button class="ghost tinybtn" ${canDown?'':'disabled'} onclick="moveDriver('${s.id}',1)">▼</button>
+    </div>`;
+  }
+  return `<div class="card"><div class="hd">${rankBadge}<div class="ttl">${esc(s.name)}</div>
+    <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">${pills}</span></div>
+    <div class="bd"><div class="meta">${esc(s.phone||'')} ${s.email?'· '+esc(s.email):''}</div>
+    ${(hasRole(s,'driver')&&showPay)?`<div class="meta" style="margin-top:6px">${s.priority!=null?`Priority #${s.priority}`:'<em>not in rotation</em>'} · $${s.pay_rate??0}/tier</div>`:''}
+    ${!s.active?'<div class="meta">Inactive</div>':''}
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+      ${(admin&&ROLE==='admin')?`<button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button>`:''}
+      ${reorder}
+    </div></div></div>`;
+}
+
+// Swap a driver's priority with its neighbor in the sorted list.
+async function moveDriver(id, dir){
+  const drv=DATA.staff.filter(s=>hasRole(s,'driver') && s.priority!=null)
+    .sort((a,b)=>a.priority-b.priority);
+  const idx=drv.findIndex(s=>s.id===id);
+  if(idx<0) return;
+  const swapWith=idx+dir;
+  if(swapWith<0||swapWith>=drv.length) return;
+  const a=drv[idx], b=drv[swapWith];
+  // Swap their priority values
+  const ap=a.priority, bp=b.priority;
+  try{
+    await SB.from('staff').update({priority:bp}).eq('id',a.id);
+    await SB.from('staff').update({priority:ap}).eq('id',b.id);
+    await loadAll();
+  }catch(e){ toast('Could not reorder: '+(e.message||e)); }
 }
 
 // ---------- modals ----------
