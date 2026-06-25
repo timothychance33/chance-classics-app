@@ -361,6 +361,7 @@ const SUPABASE_URL = 'https://ldhmwuhhejaabsvcyzdo.supabase.co';
 const SUPABASE_KEY_INLINE = 'sb_publishable_G1LkmrTPhy0rKAJpV-rwjw_Ulo1bKOj';
 // Edge function that creates/links crew logins. Add ?secret= matching CREW_ADMIN_SECRET.
 const CREW_LOGIN_FN_URL = 'https://ldhmwuhhejaabsvcyzdo.supabase.co/functions/v1/create-crew-login?secret=Bmw52533';
+const NOTIFY_FN_URL = 'https://ldhmwuhhejaabsvcyzdo.supabase.co/functions/v1/send-notification?secret=Bmw52533';
 
 // Resolve the key: inline value wins; otherwise use a saved on-device value.
 function resolveKey(){
@@ -543,6 +544,32 @@ function fmtDate(d){if(!d)return{d:'—',m:''};const dt=new Date(d+'T00:00:00');
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':');let hh=+h;const ap=hh>=12?'PM':'AM';hh=hh%12||12;return hh+':'+m+ap}
 
 // ---------- marketplace helpers ----------
+// Send an email notification (offer / claimed / passed). Fire-and-forget.
+async function notify(type, booking, extra){
+  try{
+    const car=carById(booking.car_id);
+    const payload={
+      type,
+      booking:{
+        customer_name:booking.customer_name, event_type:booking.event_type,
+        event_date:booking.event_date, start_time:booking.start_time?fmtTime(booking.start_time):'',
+        car_id:booking.car_id, car_name:car?car.name:'',
+        pickup_location:booking.pickup_location, return_location:booking.return_location
+      },
+      ...extra
+    };
+    await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  }catch(e){ console.error('notify failed',e); }
+}
+// Email the driver who currently has the offer (by offer_rank)
+async function notifyOfferTo(booking){
+  if(booking.offer_rank==null) return;
+  const d=drivers().find(x=>x.priority===booking.offer_rank);
+  if(!d||!d.email) return;
+  const pay=booking.pay_tier&&d.pay_rate?booking.pay_tier*d.pay_rate:null;
+  await notify('offer',booking,{driver_name:d.name,driver_email:d.email,pay});
+}
+
 function myStaff(){const id=myStaffId();return id?staffById(id):null;}
 // Classify a booking for color-coding: mine | open | other
 function bookingCategory(b){
@@ -581,8 +608,10 @@ function nextRankAfter(currentRank, passedIds){
 
 async function claimBooking(bid){
   const me=myStaff();if(!me){toast('No crew record linked to your login');return}
+  const b=DATA.bookings.find(x=>x.id===bid);
   const {error}=await SB.from('bookings').update({driver_id:me.id, offer_rank:null, assigned_by:'claim'}).eq('id',bid);
   if(error){toast('Could not claim: '+error.message);return}
+  if(b) notify('claimed',b,{driver_name:me.name});
   toast('Claimed — it is yours');await loadAll();
 }
 async function passBooking(bid){
@@ -592,6 +621,8 @@ async function passBooking(bid){
   const nxt=nextRankAfter(b.offer_rank, passed);
   const {error}=await SB.from('bookings').update({passed_by:passed, offer_rank:nxt}).eq('id',bid);
   if(error){toast(error.message);return}
+  notify('passed',b,{driver_name:me.name});
+  if(nxt!=null) notifyOfferTo({...b, offer_rank:nxt});  // email the next driver in line
   toast(nxt?'Passed — offered to next driver':'Passed — no drivers left, back to owner');await loadAll();
 }
 async function requestRelease(bid){
@@ -600,13 +631,15 @@ async function requestRelease(bid){
   toast('Release requested — owner will review');await loadAll();
 }
 async function approveRelease(bid){
-  // Owner approves: clear driver, restart waterfall from top.
+  const b=DATA.bookings.find(x=>x.id===bid);
   const ranks=drivers().map(d=>d.priority).filter(p=>p!=null);
+  const newRank=ranks.length?Math.min(...ranks):null;
   const {error}=await SB.from('bookings').update({
     driver_id:null, release_requested:false,
-    offer_rank:ranks.length?Math.min(...ranks):null, passed_by:[]
+    offer_rank:newRank, passed_by:[]
   }).eq('id',bid);
   if(error){toast(error.message);return}
+  if(b && newRank!=null) notifyOfferTo({...b, driver_id:null, offer_rank:newRank});
   toast('Released and re-offered');await loadAll();
 }
 
@@ -950,12 +983,14 @@ async function saveBooking(id){
     status:v('f_status')||'new',payment_status:v('f_pay')||'unpaid',pay_tier:tier,notes:v('f_notes')};
   // If a tier is set, no driver yet, and the waterfall hasn't started, launch it at rank 1.
   const existing=id?DATA.bookings.find(x=>x.id===id):null;
+  let justOffered=false;
   if(tier && !rec.driver_id){
     const startedBefore=existing && existing.offer_rank;
     if(!startedBefore){
       const ranks=drivers().map(d=>d.priority).filter(p=>p!=null);
       rec.offer_rank = ranks.length?Math.min(...ranks):null;
       rec.passed_by = [];
+      if(rec.offer_rank!=null) justOffered=true;
     }
   }
   if(rec.driver_id){ rec.offer_rank=null; rec.assigned_by='owner'; } // admin-assigned
@@ -972,6 +1007,7 @@ async function saveBooking(id){
         }
       }
     }
+    if(justOffered) notifyOfferTo(rec);  // email the #1 driver that a job awaits
     closeModal();toast('Booking saved');await loadAll();
   }catch(e){toast('Error: '+(e.message||e))}
 }
