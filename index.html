@@ -943,7 +943,7 @@ function bookingModal(id){
     </div>
     <div class="row two">
       <div><label>Pickup</label><input id="f_pick" value="${esc(b.pickup_location)}"></div>
-      <div><label>Return</label><input id="f_ret" value="${esc(b.return_location)}"></div>
+      <div><label>Drop-off</label><input id="f_ret" value="${esc(b.return_location)}"></div>
     </div>
     <div class="row three">
       <div><label>Car</label><select id="f_car"><option value="">—</option>${carOpts}</select></div>
@@ -1034,7 +1034,7 @@ function bookingDetail(bid){
     ${row('Time', (b.start_time?fmtTime(b.start_time):'')+(b.end_time?' – '+fmtTime(b.end_time):''))}
     ${row('Car', car?car.name:'—')}
     ${row('Pickup', b.pickup_location)}
-    ${row('Return / Drop-off', b.return_location)}
+    ${row('Drop-off', b.return_location)}
     ${row('Phone', b.customer_phone)}
     ${row('Email', b.customer_email)}
     ${row('Notes', b.notes)}
