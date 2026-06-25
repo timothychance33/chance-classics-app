@@ -609,6 +609,18 @@ function nextRankAfter(currentRank, passedIds){
 async function claimBooking(bid){
   const me=myStaff();if(!me){toast('No crew record linked to your login');return}
   const b=DATA.bookings.find(x=>x.id===bid);
+  // Same-day conflict check: warn (but allow) if this driver already has a booking that day.
+  if(b && b.event_date){
+    const clash=DATA.bookings.find(x=>x.id!==bid && x.driver_id===me.id
+      && x.event_date===b.event_date && x.status!=='cancelled');
+    if(clash){
+      const car=carById(clash.car_id);
+      const ok=confirm(`Heads up — you already have a booking on ${b.event_date}:\n\n`
+        +`${clash.customer_name||'Booking'}${car?' · '+car.name:''}${clash.start_time?' · '+fmtTime(clash.start_time):''}\n\n`
+        +`Claim this one too?`);
+      if(!ok) return;
+    }
+  }
   const {error}=await SB.from('bookings').update({driver_id:me.id, offer_rank:null, assigned_by:'claim'}).eq('id',bid);
   if(error){toast('Could not claim: '+error.message);return}
   if(b) notify('claimed',b,{driver_name:me.name});
@@ -981,6 +993,17 @@ async function saveBooking(id){
     start_time:v('f_start'),end_time:v('f_end'),customer_phone:v('f_phone'),customer_email:v('f_email'),
     pickup_location:v('f_pick'),return_location:v('f_ret'),car_id:v('f_car'),driver_id:v('f_drv'),
     status:v('f_status')||'new',payment_status:v('f_pay')||'unpaid',pay_tier:tier,notes:v('f_notes')};
+  // Warn if assigning a driver who already has a booking that day (different booking).
+  if(rec.driver_id && rec.event_date){
+    const clash=DATA.bookings.find(x=>x.id!==id && x.driver_id===rec.driver_id
+      && x.event_date===rec.event_date && x.status!=='cancelled');
+    if(clash){
+      const drv=staffById(rec.driver_id), car=carById(clash.car_id);
+      if(!confirm(`${drv?drv.name:'This driver'} already has a booking on ${rec.event_date}:\n\n`
+        +`${clash.customer_name||'Booking'}${car?' · '+car.name:''}${clash.start_time?' · '+fmtTime(clash.start_time):''}\n\n`
+        +`Assign this one too?`)) return;
+    }
+  }
   // If a tier is set, no driver yet, and the waterfall hasn't started, launch it at rank 1.
   const existing=id?DATA.bookings.find(x=>x.id===id):null;
   let justOffered=false;
