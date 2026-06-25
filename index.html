@@ -894,16 +894,51 @@ function renderCars(){
   h+='<div class="grid cols">';
   for(const c of DATA.cars){
     const tpl=DATA.templates.filter(t=>t.car_id===c.id);
+    const cb=DATA.bookings.filter(b=>b.car_id===c.id && b.status!=='cancelled');
+    const today=new Date().toISOString().slice(0,10);
+    const upcoming=cb.filter(b=>b.event_date && b.event_date>=today).length;
     h+=`<div class="card">
+      <div onclick="carDetail('${c.id}')" style="cursor:pointer">
       ${c.photo_url?`<div style="height:150px;background:#000 url('${esc(c.photo_url)}') center/cover"></div>`:''}
       <div class="hd"><div class="ttl">${esc(c.name)}</div><span class="pill s-${c.status}" style="margin-left:auto">${c.status}</span></div>
       <div class="bd">
         <div class="meta">${[c.year,c.make,c.model].filter(Boolean).join(' ')||'—'}${c.color?' · '+esc(c.color):''}</div>
-        <div class="meta" style="margin-top:8px">Prep template: ${tpl.length} task${tpl.length===1?'':'s'}</div>
-        ${(isAdmin()&&ROLE==='admin')?`<div style="margin-top:12px;display:flex;gap:6px"><button class="ghost tinybtn" onclick="carModal('${c.id}')">Edit</button><button class="ghost tinybtn" onclick="templateModal('${c.id}')">Prep template</button></div>`:''}
-      </div></div>`;
+        <div class="meta" style="margin-top:8px">${cb.length} booking${cb.length===1?'':'s'} · ${upcoming} upcoming</div>
+        <div class="meta" style="margin-top:4px">Prep template: ${tpl.length} task${tpl.length===1?'':'s'}</div>
+      </div></div>
+      ${(isAdmin()&&ROLE==='admin')?`<div style="padding:0 16px 14px;display:flex;gap:6px"><button class="ghost tinybtn" onclick="carModal('${c.id}')">Edit</button><button class="ghost tinybtn" onclick="templateModal('${c.id}')">Prep template</button></div>`:''}
+      </div>`;
   }
   h+='</div>';el.innerHTML=h;
+}
+
+function carDetail(cid){
+  const c=DATA.cars.find(x=>x.id===cid);if(!c)return;
+  const today=new Date().toISOString().slice(0,10);
+  const cb=DATA.bookings.filter(b=>b.car_id===cid && b.status!=='cancelled');
+  const upcoming=cb.filter(b=>b.event_date && b.event_date>=today)
+    .sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
+  const past=cb.filter(b=>!b.event_date || b.event_date<today)
+    .sort((a,b)=>(b.event_date||'').localeCompare(a.event_date||''));
+  const line=(b)=>{
+    const drv=staffById(b.driver_id), dc=fmtDate(b.event_date);
+    return `<div class="lrow" style="margin-bottom:8px" onclick="bookingDetail('${b.id}')">
+      <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
+      <div class="lmain"><div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}</div>
+      <div class="meta">👤 ${drv?esc(drv.name):'<em>no driver</em>'}${b.event_type?' · '+esc(b.event_type):''}</div></div></div>`;
+  };
+  const pastShown=past.slice(0,15);
+  openModal(c.name, `
+    <div style="display:flex;gap:18px;margin-bottom:16px">
+      <div><div style="font:800 22px/1 'Playfair Display',serif">${cb.length}</div><div class="meta">total</div></div>
+      <div><div style="font:800 22px/1 'Playfair Display',serif">${upcoming.length}</div><div class="meta">upcoming</div></div>
+      <div><div style="font:800 22px/1 'Playfair Display',serif">${past.length}</div><div class="meta">past</div></div>
+    </div>
+    <div class="schsechd" style="font-size:15px">Upcoming</div>
+    ${upcoming.length?upcoming.map(line).join(''):'<div class="meta" style="padding:6px 0 14px">No upcoming bookings.</div>'}
+    <div class="schsechd" style="font-size:15px;margin-top:14px">Past${past.length>15?` <span class="meta" style="font-weight:400">(showing 15 of ${past.length})</span>`:''}</div>
+    ${pastShown.length?pastShown.map(line).join(''):'<div class="meta" style="padding:6px 0">No past bookings.</div>'}
+  `);
 }
 
 // STAFF
