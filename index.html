@@ -262,7 +262,7 @@ button.ghost:hover{background:var(--paper-2)}
   background:var(--paper);border-radius:14px 14px 0 0;position:sticky;top:0}
 .modal .sheet .mh h3{margin:0;font-size:17px}
 .modal .sheet .mb{padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch}
-.modal .x{margin-left:auto;background:none;border:0;font-size:22px;cursor:pointer;color:#6b6052}
+.modal .x{margin-left:auto;background:none;border:0;font-size:24px;cursor:pointer;color:#6b6052;padding:4px 8px;line-height:1;min-width:40px;min-height:40px}
 
 .sectionhead{display:flex;align-items:center;gap:12px;margin:0 0 16px}
 .sectionhead h2{margin:0;font-size:22px}
@@ -304,7 +304,7 @@ img,svg{max-width:100%}
   .sectionhead h2{font-size:19px}
   .sectionhead .add,.sectionhead button.act{margin-left:0;width:100%;order:3}
   .sectionhead .line{display:none}
-  .modal{padding:12px 8px}
+  .modal{padding:12px 8px;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
   .modal .sheet{border-radius:12px}
   .modal .sheet .mb{padding:14px}
   .row.two,.row.three{grid-template-columns:1fr}
@@ -675,7 +675,7 @@ async function passBooking(bid){
   const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
   const passed=[...(b.passed_by||[]), me.id];
   const nxt=nextRankAfter(b.offer_rank, passed);
-  const {error}=await SB.from('bookings').update({passed_by:passed, offer_rank:nxt}).eq('id',bid);
+  const {error}=await SB.from('bookings').update({passed_by:passed, offer_rank:nxt, offered_at:nxt!=null?new Date().toISOString():null}).eq('id',bid);
   if(error){toast(error.message);return}
   notify('passed',b,{driver_name:me.name});
   if(nxt!=null) notifyOfferTo({...b, offer_rank:nxt});  // email the next driver in line
@@ -692,7 +692,7 @@ async function approveRelease(bid){
   const newRank=ranks.length?Math.min(...ranks):null;
   const {error}=await SB.from('bookings').update({
     driver_id:null, release_requested:false,
-    offer_rank:newRank, passed_by:[]
+    offer_rank:newRank, passed_by:[], offered_at:newRank!=null?new Date().toISOString():null
   }).eq('id',bid);
   if(error){toast(error.message);return}
   if(b && newRank!=null) notifyOfferTo({...b, driver_id:null, offer_rank:newRank});
@@ -1208,6 +1208,7 @@ async function saveBooking(id){
       const ranks=drivers().map(d=>d.priority).filter(p=>p!=null);
       rec.offer_rank = ranks.length?Math.min(...ranks):null;
       rec.passed_by = [];
+      if(rec.offer_rank!=null) rec.offered_at = new Date().toISOString();
       if(rec.offer_rank!=null) justOffered=true;
     }
   }
