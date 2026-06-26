@@ -136,6 +136,13 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .dtname{font-weight:700;font-size:14px}
 .rowthumb{width:46px;height:46px;border-radius:8px;background-size:cover;background-position:center;flex:none;border:1px solid var(--line)}
 .earnpill{display:inline-block;margin-top:8px;font:700 12px/1 "Inter",sans-serif;background:#eef4ec;color:#2f5740;padding:7px 11px;border-radius:8px;cursor:pointer}
+.trailertag{font:700 10px/1 "Inter",sans-serif;letter-spacing:.04em;text-transform:uppercase;background:#3a4a5c;color:#fff;padding:4px 8px;border-radius:20px;white-space:nowrap}
+.toggle{display:flex;align-items:center;gap:10px;margin-top:14px;cursor:pointer;font-size:14px;font-weight:600;color:var(--ink)}
+.toggle input{display:none}
+.toggleslide{width:44px;height:26px;background:#c5d4e3;border-radius:20px;position:relative;transition:background .15s;flex:none}
+.toggleslide::after{content:"";position:absolute;width:20px;height:20px;background:#fff;border-radius:50%;top:3px;left:3px;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.toggle input:checked + .toggleslide{background:var(--green)}
+.toggle input:checked + .toggleslide::after{left:21px}
 .lrow .datechip{flex:none}
 .lmain{flex:1;min-width:0}
 .ltop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
@@ -753,6 +760,7 @@ function bookingRowHtml(b){
         ${isAdmin()?`<span class="paytag pay-${b.payment_status||'unpaid'}">${b.payment_status==='paid'?'Paid':b.payment_status==='deposit'?'Deposit':'Unpaid'}</span>`:''}
         ${isAdmin()&&b.pay_tier?`<span class="tiertag">T${b.pay_tier}</span>`:''}
         ${crewtag}
+        ${b.needs_trailer?'<span class="trailertag">🚛 Trailer</span>':''}
         ${b.source==='wix'?'<span class="srctag">Wix</span>':''}
       </div>
       <div class="meta">${esc(b.event_type||'—')}${b.start_time?' · '+fmtTime(b.start_time):''}</div>
@@ -1174,6 +1182,7 @@ function bookingModal(id){
     </div>
     <small class="hint">Setting a tier offers this job to drivers, starting with priority #1.</small>
     <div><label>Notes</label><textarea id="f_notes">${esc(b.notes)}</textarea></div>
+    <label class="toggle"><input type="checkbox" id="f_trailer" ${b.needs_trailer?'checked':''}><span class="toggleslide"></span><span>🚛 Car needs to be trailered</span></label>
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="act" onclick="saveBooking('${id||''}')">Save</button>
       ${id?`<button class="ghost" onclick="delBooking('${id}')">Delete</button>`:''}
@@ -1187,7 +1196,8 @@ async function saveBooking(id){
   const rec={customer_name:v('f_cust'),event_type:v('f_evt'),event_date:v('f_date'),
     start_time:v('f_start'),end_time:v('f_end'),customer_phone:v('f_phone'),customer_email:v('f_email'),
     pickup_location:v('f_pick'),return_location:v('f_ret'),car_id:v('f_car'),driver_id:v('f_drv'),
-    status:v('f_status')||'new',payment_status:v('f_pay')||'unpaid',pay_tier:tier,notes:v('f_notes')};
+    status:v('f_status')||'new',payment_status:v('f_pay')||'unpaid',pay_tier:tier,
+    needs_trailer:document.getElementById('f_trailer').checked,notes:v('f_notes')};
   // Warn if assigning a driver who already has a booking that day (different booking).
   if(rec.driver_id && rec.event_date){
     const clash=DATA.bookings.find(x=>x.id!==id && x.driver_id===rec.driver_id
@@ -1280,6 +1290,7 @@ function bookingDetail(bid){
     ${row('Drop-off', b.return_location)}
     ${row('Phone', b.customer_phone)}
     ${row('Email', b.customer_email)}
+    ${b.needs_trailer?`<div style="margin-bottom:10px"><span class="trailertag">🚛 Car must be trailered</span></div>`:''}
     ${row('Notes', b.notes)}
     ${isAdmin()?waterfallStatusHtml(b):''}
     ${claimBtns}
