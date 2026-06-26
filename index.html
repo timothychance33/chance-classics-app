@@ -121,6 +121,21 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .wf-current{color:var(--oxblood);font-weight:700}
 .wf-waiting{color:#6b6052}
 .wf-claimed{color:var(--green);font-weight:700}
+.dash{margin-bottom:24px}
+.dashstats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.dstat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 8px;text-align:center}
+.dstat.alert{border-color:var(--amber);background:#fff8ec}
+.dstat.warn{border-color:var(--oxblood);background:#fcf0ef}
+.dnum{font:800 24px/1 "Playfair Display",serif;color:var(--ink)}
+.dlbl{font:600 10px/1 "Inter",sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#6b6052;margin-top:5px}
+.dashtoday{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
+.dashhd{font:800 14px/1 "Playfair Display",serif;margin-bottom:10px}
+.dtrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--paper-2);cursor:pointer;flex-wrap:wrap}
+.dtrow:last-child{border-bottom:0}
+.dttime{font:800 13px/1 "Inter",sans-serif;color:var(--oxblood);min-width:62px}
+.dtname{font-weight:700;font-size:14px}
+.rowthumb{width:46px;height:46px;border-radius:8px;background-size:cover;background-position:center;flex:none;border:1px solid var(--line)}
+.earnpill{display:inline-block;margin-top:8px;font:700 12px/1 "Inter",sans-serif;background:#eef4ec;color:#2f5740;padding:7px 11px;border-radius:8px;cursor:pointer}
 .lrow .datechip{flex:none}
 .lmain{flex:1;min-width:0}
 .ltop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px}
@@ -586,6 +601,20 @@ async function notifyOfferTo(booking){
 }
 
 function myStaff(){const id=myStaffId();return id?staffById(id):null;}
+// Driver earnings split: earned = past/completed jobs, upcoming = future claimed jobs.
+function driverEarnings(staffId){
+  const s=staffById(staffId); if(!s) return {earned:0,upcoming:0,total:0,jobs:[]};
+  const today=new Date().toISOString().slice(0,10);
+  const list=DATA.bookings.filter(b=>b.driver_id===staffId && b.status!=='cancelled');
+  let earned=0, upcoming=0;
+  const detail=list.map(b=>{
+    const amt=(b.pay_tier&&s.pay_rate)?b.pay_tier*s.pay_rate:0;
+    const isPast = b.status==='completed' || (b.event_date && b.event_date<today);
+    if(isPast) earned+=amt; else upcoming+=amt;
+    return {b,amt,isPast};
+  }).sort((a,b)=>(b.b.event_date||'').localeCompare(a.b.event_date||''));
+  return {earned,upcoming,total:earned+upcoming,jobs:detail};
+}
 // Classify a booking for color-coding: mine | open | other
 function bookingCategory(b){
   const mine=myStaffId();
@@ -713,7 +742,9 @@ function bookingRowHtml(b){
   }
 
   const cat=bookingCategory(b);
+  const thumb=car&&car.photo_url?`<div class="rowthumb" style="background-image:url('${esc(car.photo_url)}')"></div>`:'';
   return `<div class="lrow cat-${cat}">
+    ${thumb}
     <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
     <div class="lmain" onclick="bookingDetail('${b.id}')" style="cursor:pointer">
       <div class="ltop">
@@ -745,6 +776,37 @@ function renderSchedule(){
     const unclaimed=all.filter(b=>!b.driver_id);
 
     let h=`<div class="sectionhead"><div><div class="kicker">Owner view</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
+
+    // ----- Dashboard: this weekend + this week at a glance -----
+    const todayStr=new Date().toISOString().slice(0,10);
+    // This weekend = the Fri–Sun within the current week window
+    const wkStart=new Date(wk.start+'T00:00:00');
+    const fri=new Date(wkStart); fri.setDate(wkStart.getDate()+4); // Mon+4 = Fri
+    const sun=new Date(wkStart); sun.setDate(wkStart.getDate()+6);
+    const friStr=fri.toISOString().slice(0,10), sunStr=sun.toISOString().slice(0,10);
+    const weekend=all.filter(b=>b.event_date && b.event_date>=friStr && b.event_date<=sunStr);
+    const weekUnclaimed=thisWeek.filter(b=>!b.driver_id).length;
+    const weekPrepNeeded=thisWeek.filter(b=>{const p=prepPct(b.id);return p!==null&&p<100}).length;
+    h+=`<div class="dash">
+      <div class="dashstats">
+        <div class="dstat"><div class="dnum">${weekend.length}</div><div class="dlbl">this weekend</div></div>
+        <div class="dstat"><div class="dnum">${thisWeek.length}</div><div class="dlbl">this week</div></div>
+        <div class="dstat${weekUnclaimed?' alert':''}"><div class="dnum">${weekUnclaimed}</div><div class="dlbl">unclaimed</div></div>
+        <div class="dstat${weekPrepNeeded?' warn':''}"><div class="dnum">${weekPrepNeeded}</div><div class="dlbl">need prep</div></div>
+      </div>`;
+    if(weekend.length){
+      h+=`<div class="dashtoday"><div class="dashhd">This weekend</div>`;
+      for(const b of weekend.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||'')||(a.start_time||'').localeCompare(b.start_time||''))){
+        const car=carById(b.car_id), drv=staffById(b.driver_id), dc=fmtDate(b.event_date);
+        h+=`<div class="dtrow" onclick="bookingDetail('${b.id}')">
+          <span class="dttime">${dc.m} ${dc.d}${b.start_time?' · '+fmtTime(b.start_time):''}</span>
+          <span class="dtname">${esc(b.customer_name||'Booking')}</span>
+          <span class="meta">${car?esc(car.name):'no car'} · ${drv?esc(drv.name):'no driver'}</span>
+        </div>`;
+      }
+      h+=`</div>`;
+    }
+    h+=`</div>`;
     const section=(title,kicker,items,emptyMsg)=>{
       let s=`<div class="schsec"><div class="schsechd">${title}${items.length?` <span class="schcount">${items.length}</span>`:''}</div>`;
       if(kicker) s+=`<div class="meta" style="margin:-4px 0 10px">${kicker}</div>`;
@@ -1010,11 +1072,38 @@ function staffCardHtml(s, showPay, canUp, canDown, drvList){
     <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">${pills}</span></div>
     <div class="bd"><div class="meta">${esc(s.phone||'')} ${s.email?'· '+esc(s.email):''}</div>
     ${(hasRole(s,'driver')&&showPay)?`<div class="meta" style="margin-top:6px">${s.priority!=null?`Priority #${s.priority}`:'<em>not in rotation</em>'} · $${s.pay_rate??0}/tier</div>`:''}
+    ${(hasRole(s,'driver')&&showPay)?(()=>{const e=driverEarnings(s.id);return `<div class="earnpill" onclick="driverPayDetail('${s.id}');event.stopPropagation()">💰 $${e.earned} earned${e.upcoming?` · $${e.upcoming} upcoming`:''}</div>`;})():''}
     ${!s.active?'<div class="meta">Inactive</div>':''}
     <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
       ${(admin&&ROLE==='admin')?`<button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button>`:''}
       ${reorder}
     </div></div></div>`;
+}
+
+function driverPayDetail(sid){
+  const s=staffById(sid); if(!s) return;
+  const e=driverEarnings(sid);
+  const line=(x)=>{
+    const b=x.b, car=carById(b.car_id), dc=fmtDate(b.event_date);
+    return `<div class="wfrow" onclick="bookingDetail('${b.id}')" style="cursor:pointer">
+      <span>${dc.m} ${dc.d} · ${esc(b.customer_name||'Booking')}${car?' · '+esc(car.name):''}${b.pay_tier?` <span class="tiertag">T${b.pay_tier}</span>`:''}</span>
+      <span style="font-weight:700;color:var(--green)">$${x.amt}</span>
+    </div>`;
+  };
+  const earnedJobs=e.jobs.filter(x=>x.isPast);
+  const upcomingJobs=e.jobs.filter(x=>!x.isPast);
+  openModal(`${s.name} — pay`, `
+    <div style="display:flex;gap:18px;margin-bottom:16px">
+      <div><div style="font:800 24px/1 'Playfair Display',serif;color:var(--green)">$${e.earned}</div><div class="meta">earned</div></div>
+      <div><div style="font:800 24px/1 'Playfair Display',serif;color:var(--amber)">$${e.upcoming}</div><div class="meta">upcoming</div></div>
+      <div><div style="font:800 24px/1 'Playfair Display',serif">$${s.pay_rate??0}</div><div class="meta">per tier</div></div>
+    </div>
+    <div class="wfhd">Earned (completed)</div>
+    ${earnedJobs.length?earnedJobs.map(line).join(''):'<div class="meta" style="padding:4px 0 10px">No completed jobs yet.</div>'}
+    <div class="wfhd" style="margin-top:14px">Upcoming (claimed)</div>
+    ${upcomingJobs.length?upcomingJobs.map(line).join(''):'<div class="meta" style="padding:4px 0">No upcoming claimed jobs.</div>'}
+    <div class="meta" style="margin-top:12px;font-size:11px">Pay = each job's tier × $${s.pay_rate??0}. "Earned" = past or completed jobs.</div>
+  `);
 }
 
 // Swap a driver's priority with its neighbor in the sorted list.
