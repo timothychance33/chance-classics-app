@@ -636,14 +636,17 @@ function bookingCategory(b){
 // Is it this user's turn on a booking's waterfall? (their priority === current offer_rank, and not passed)
 function isMyTurn(b){
   const me=myStaff();
-  if(!me||me.priority==null||b.offer_rank==null||b.driver_id)return false;
+  if(!me||me.priority==null||b.driver_id)return false;
+  // Open-to-all re-offer: any active driver can claim, first-come.
+  if(b.open_to_all) return true;
+  if(b.offer_rank==null)return false;
   if((b.passed_by||[]).includes(me.id))return false;
   return me.priority===b.offer_rank;
 }
 // Booking is offered but my turn hasn't come yet (a higher-priority driver is up)
 function isPendingAbove(b){
   const me=myStaff();
-  if(!me||me.priority==null||b.offer_rank==null||b.driver_id)return false;
+  if(!me||me.priority==null||b.offer_rank==null||b.driver_id||b.open_to_all)return false;
   if((b.passed_by||[]).includes(me.id))return false;
   return me.priority>b.offer_rank;
 }
@@ -676,7 +679,7 @@ async function claimBooking(bid){
       if(!ok) return;
     }
   }
-  const {error}=await SB.from('bookings').update({driver_id:me.id, offer_rank:null, assigned_by:'claim'}).eq('id',bid);
+  const {error}=await SB.from('bookings').update({driver_id:me.id, offer_rank:null, open_to_all:false, assigned_by:'claim'}).eq('id',bid);
   if(error){toast('Could not claim: '+error.message);return}
   if(b) notify('claimed',b,{driver_name:me.name});
   toast('Claimed — it is yours');await loadAll();
@@ -696,6 +699,24 @@ async function requestRelease(bid){
   const {error}=await SB.from('bookings').update({release_requested:true}).eq('id',bid);
   if(error){toast(error.message);return}
   toast('Release requested — owner will review');await loadAll();
+}
+async function reofferToAll(bid){
+  const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
+  const cur=b.pay_tier||1;
+  const input=prompt(`Re-offer "${b.customer_name||'booking'}" to ALL drivers (first-come race).\n\nNew pay tier? (1-5, currently ${b.pay_tier||'none'})`, String(Math.min(5,cur+1)));
+  if(input===null)return;
+  const tier=parseInt(input);
+  if(!(tier>=1&&tier<=5)){toast('Enter a tier 1-5');return}
+  const {error}=await SB.from('bookings').update({
+    pay_tier:tier, open_to_all:true, offer_rank:null, passed_by:[], offered_at:new Date().toISOString(), offer_warned:false
+  }).eq('id',bid);
+  if(error){toast(error.message);return}
+  for(const d of drivers()){
+    if(!d.email) continue;
+    const pay=d.pay_rate?tier*d.pay_rate:null;
+    await notify('reoffer',{...b,pay_tier:tier},{driver_name:d.name,driver_email:d.email,pay});
+  }
+  toast('Re-offered to all drivers with new rate');closeModal();await loadAll();
 }
 async function approveRelease(bid){
   const b=DATA.bookings.find(x=>x.id===bid);
@@ -738,10 +759,10 @@ function bookingRowHtml(b){
         : `<button class="ghost tinybtn" onclick="requestRelease('${b.id}')">Release</button>`);
       if(pay!=null) payline=`<div class="paypill">You earn $${pay}</div>`;
     } else if(iAmDriver && isMyTurn(b)){
-      crewtag='<span class="opentag">Your turn</span>';
+      crewtag = b.open_to_all ? '<span class="opentag">🏁 Open — grab it!</span>' : '<span class="opentag">Your turn</span>';
       if(pay!=null) payline=`<div class="paypill">You earn $${pay}</div>`;
       btns.push(`<button class="act tinybtn" onclick="claimBooking('${b.id}')">Claim</button>`);
-      btns.push(`<button class="ghost tinybtn" onclick="passBooking('${b.id}')">Pass</button>`);
+      if(!b.open_to_all) btns.push(`<button class="ghost tinybtn" onclick="passBooking('${b.id}')">Pass</button>`);
     } else if(iAmDriver && isPendingAbove(b)){
       crewtag='<span class="waittag">Pending</span>';
       if(pay!=null) payline=`<div class="paypill muted">Would earn $${pay}</div>`;
@@ -859,6 +880,7 @@ function renderSchedule(){
   list=list.filter(b=>{
     if(mine && b.driver_id===mine) return true;
     if(b.driver_id) return iAmMechanic;
+    if(b.open_to_all) return true;   // re-offered to everyone, first-come
     if(b.offer_rank!=null) return isMyTurn(b)||isPendingAbove(b);
     return iAmMechanic && b.car_id;
   });
@@ -1266,13 +1288,19 @@ async function delBooking(id){if(!confirm('Delete this booking?'))return;const {
 
 // PREP list for a single booking (admin/mechanic)
 function waterfallStatusHtml(b){
-  // Only meaningful for unassigned bookings in the waterfall.
+  const reofferBtn=`<div style="margin-top:12px"><button class="ghost tinybtn" onclick="reofferToAll('${b.id}')">🏷️ Re-offer to all with new pay</button></div>`;
+  // Claimed
   if(b.driver_id){
     const d=staffById(b.driver_id);
     return `<div class="wfbox"><div class="wfhd">Claim status</div>
       <div class="wfrow wf-claimed">✓ Claimed by ${d?esc(d.name):'driver'}${b.assigned_by==='owner'?' (assigned by you)':''}</div></div>`;
   }
-  if(b.pay_tier==null) return `<div class="wfbox"><div class="wfhd">Offer status</div><div class="meta">Not offered yet — set a pay tier to start the waterfall.</div></div>`;
+  // Open-to-all re-offer mode
+  if(b.open_to_all){
+    return `<div class="wfbox"><div class="wfhd">Offer status</div>
+      <div class="wfrow wf-current">🏁 Open to ALL drivers — first to claim wins (T${b.pay_tier})</div>${reofferBtn}</div>`;
+  }
+  if(b.pay_tier==null) return `<div class="wfbox"><div class="wfhd">Offer status</div><div class="meta">Not offered yet — set a pay tier to start the waterfall.</div>${reofferBtn}</div>`;
   const ranked=drivers().filter(d=>d.priority!=null).sort((a,b)=>a.priority-b.priority);
   const passed=b.passed_by||[];
   let rows='';
@@ -1286,7 +1314,7 @@ function waterfallStatusHtml(b){
     rows+=`<div class="wfrow ${cls}"><span>#${d.priority} ${esc(d.name)}</span><span>${state}</span></div>`;
   }
   if(b.offer_rank==null && passed.length) rows+=`<div class="wfrow wf-passed"><span>All drivers passed</span><span>back to you</span></div>`;
-  return `<div class="wfbox"><div class="wfhd">Offer pipeline</div>${rows}</div>`;
+  return `<div class="wfbox"><div class="wfhd">Offer pipeline (T${b.pay_tier})</div>${rows}${reofferBtn}</div>`;
 }
 
 function bookingDetail(bid){
