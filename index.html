@@ -682,7 +682,7 @@ async function passBooking(bid){
   const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
   const passed=[...(b.passed_by||[]), me.id];
   const nxt=nextRankAfter(b.offer_rank, passed);
-  const {error}=await SB.from('bookings').update({passed_by:passed, offer_rank:nxt, offered_at:nxt!=null?new Date().toISOString():null}).eq('id',bid);
+  const {error}=await SB.from('bookings').update({passed_by:passed, offer_rank:nxt, offered_at:nxt!=null?new Date().toISOString():null, offer_warned:false}).eq('id',bid);
   if(error){toast(error.message);return}
   notify('passed',b,{driver_name:me.name});
   if(nxt!=null) notifyOfferTo({...b, offer_rank:nxt});  // email the next driver in line
@@ -699,7 +699,7 @@ async function approveRelease(bid){
   const newRank=ranks.length?Math.min(...ranks):null;
   const {error}=await SB.from('bookings').update({
     driver_id:null, release_requested:false,
-    offer_rank:newRank, passed_by:[], offered_at:newRank!=null?new Date().toISOString():null
+    offer_rank:newRank, passed_by:[], offered_at:newRank!=null?new Date().toISOString():null, offer_warned:false
   }).eq('id',bid);
   if(error){toast(error.message);return}
   if(b && newRank!=null) notifyOfferTo({...b, driver_id:null, offer_rank:newRank});
@@ -1218,7 +1218,7 @@ async function saveBooking(id){
       const ranks=drivers().map(d=>d.priority).filter(p=>p!=null);
       rec.offer_rank = ranks.length?Math.min(...ranks):null;
       rec.passed_by = [];
-      if(rec.offer_rank!=null) rec.offered_at = new Date().toISOString();
+      if(rec.offer_rank!=null){ rec.offered_at = new Date().toISOString(); rec.offer_warned=false; }
       if(rec.offer_rank!=null) justOffered=true;
     }
   }
