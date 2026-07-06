@@ -736,6 +736,26 @@ let calView=new Date(); // currently displayed month in the calendar tab
 function renderAll(){renderSchedule();renderCalendar();renderPrep();renderCars();renderStaff()}
 
 // SCHEDULE
+function showPast(){
+  const todayStr=new Date().toISOString().slice(0,10);
+  const past=DATA.bookings.filter(b=>b.status!=='cancelled' && b.event_date && b.event_date<todayStr)
+    .sort((a,b)=>(b.event_date||'').localeCompare(a.event_date||''));  // most recent first
+  let body='';
+  if(!past.length) body='<div class="meta">No past bookings.</div>';
+  else{
+    body='<div class="rowlist">';
+    for(const b of past){
+      const car=carById(b.car_id), drv=staffById(b.driver_id), dc=fmtDate(b.event_date);
+      body+=`<div class="lrow" style="margin-bottom:8px" onclick="bookingDetail('${b.id}')">
+        <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
+        <div class="lmain"><div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span></div>
+        <div class="meta lcar">🚗 ${car?esc(car.name):'—'} · 👤 ${drv?esc(drv.name):'no driver'}</div></div></div>`;
+    }
+    body+='</div>';
+  }
+  openModal('Past bookings', body);
+}
+
 function bookingRowHtml(b){
   const car=carById(b.car_id), drv=staffById(b.driver_id);
   const dc=fmtDate(b.event_date), pct=prepPct(b.id);
@@ -805,8 +825,11 @@ function renderSchedule(){
     const all=[...DATA.bookings].filter(b=>b.status!=='cancelled')
       .sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
     const wk=weekBounds();
+    const todayStr2=new Date().toISOString().slice(0,10);
     const thisWeek=all.filter(b=>b.event_date && b.event_date>=wk.start && b.event_date<=wk.end);
-    const unclaimed=all.filter(b=>!b.driver_id);
+    // Upcoming = today or later (or no date). Past goes to its own tab.
+    const upcoming=all.filter(b=>!b.event_date || b.event_date>=todayStr2);
+    const unclaimed=upcoming.filter(b=>!b.driver_id);
 
     let h=`<div class="sectionhead"><div><div class="kicker">Owner view</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
 
@@ -866,8 +889,10 @@ function renderSchedule(){
       return s+'</div>';
     };
     h+=section('This Week', `${wk.monLabel} – ${wk.sunLabel} · needs your attention`, thisWeek, 'Nothing booked this week.');
-    h+=section('Unclaimed', 'No driver yet — assign or set a tier to offer', unclaimed, 'Every booking has a driver. 🎉');
-    h+=section('All Bookings', '', all, 'No bookings yet.');
+    h+=section('Unclaimed', 'No driver yet — assign or set a tier to offer', unclaimed, 'Every upcoming booking has a driver. 🎉');
+    h+=section('Upcoming', 'All future bookings', upcoming, 'No upcoming bookings.');
+    const pastCount=all.length-upcoming.length;
+    if(pastCount>0) h+=`<div style="margin-top:6px"><button class="ghost tinybtn" onclick="showPast()">View ${pastCount} past booking${pastCount===1?'':'s'} →</button></div>`;
     el.innerHTML=h;
     return;
   }
