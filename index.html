@@ -574,6 +574,8 @@ function myStaffId(){
 }
 const hasRole=(s,r)=>(s.role||'').split(',').map(x=>x.trim()).includes(r);
 const drivers=()=>DATA.staff.filter(s=>hasRole(s,'driver')&&s.active);
+// Drivers eligible for a specific booking (excludes non-trailer drivers on trailer jobs).
+const eligibleDrivers=(b)=>drivers().filter(d=> !b.needs_trailer || d.pulls_trailer!==false );
 const mechanics=()=>DATA.staff.filter(s=>hasRole(s,'mechanic')&&s.active);
 const roleLabel=s=>(s.role||'').split(',').map(x=>x.trim()).filter(Boolean).map(r=>r[0].toUpperCase()+r.slice(1)).join(' · ')||'—';
 const prepFor=bid=>DATA.prep.filter(t=>t.booking_id===bid);
@@ -637,7 +639,9 @@ function bookingCategory(b){
 function isMyTurn(b){
   const me=myStaff();
   if(!me||me.priority==null||b.driver_id)return false;
-  // Open-to-all re-offer: any active driver can claim, first-come.
+  // Trailer jobs: only offered to drivers who pull trailers.
+  if(b.needs_trailer && me.pulls_trailer===false) return false;
+  // Open-to-all re-offer: any eligible active driver can claim, first-come.
   if(b.open_to_all) return true;
   if(b.offer_rank==null)return false;
   if((b.passed_by||[]).includes(me.id))return false;
@@ -647,6 +651,7 @@ function isMyTurn(b){
 function isPendingAbove(b){
   const me=myStaff();
   if(!me||me.priority==null||b.offer_rank==null||b.driver_id||b.open_to_all)return false;
+  if(b.needs_trailer && me.pulls_trailer===false) return false;
   if((b.passed_by||[]).includes(me.id))return false;
   return me.priority>b.offer_rank;
 }
@@ -656,9 +661,10 @@ function myPay(b){
   if(!me||!b.pay_tier||me.pay_rate==null)return null;
   return b.pay_tier*me.pay_rate;
 }
-// Advance the waterfall to the next-ranked driver who hasn't passed; null if none left
-function nextRankAfter(currentRank, passedIds){
-  const ranks=drivers()
+// Advance the waterfall to the next-ranked ELIGIBLE driver who hasn't passed; null if none left
+function nextRankAfter(currentRank, passedIds, booking){
+  const pool = booking ? eligibleDrivers(booking) : drivers();
+  const ranks=pool
     .filter(d=>d.priority!=null && !passedIds.includes(d.id) && d.priority>currentRank)
     .map(d=>d.priority);
   return ranks.length?Math.min(...ranks):null;
@@ -688,7 +694,7 @@ async function passBooking(bid){
   const me=myStaff();if(!me)return;
   const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
   const passed=[...(b.passed_by||[]), me.id];
-  const nxt=nextRankAfter(b.offer_rank, passed);
+  const nxt=nextRankAfter(b.offer_rank, passed, b);
   const {error}=await SB.from('bookings').update({passed_by:passed, offer_rank:nxt, offered_at:nxt!=null?new Date().toISOString():null, offer_warned:false}).eq('id',bid);
   if(error){toast(error.message);return}
   notify('passed',b,{driver_name:me.name});
@@ -711,7 +717,7 @@ async function reofferToAll(bid){
     pay_tier:tier, open_to_all:true, offer_rank:null, passed_by:[], offered_at:new Date().toISOString(), offer_warned:false
   }).eq('id',bid);
   if(error){toast(error.message);return}
-  for(const d of drivers()){
+  for(const d of eligibleDrivers(b)){
     if(!d.email) continue;
     const pay=d.pay_rate?tier*d.pay_rate:null;
     await notify('reoffer',{...b,pay_tier:tier},{driver_name:d.name,driver_email:d.email,pay});
@@ -720,7 +726,7 @@ async function reofferToAll(bid){
 }
 async function approveRelease(bid){
   const b=DATA.bookings.find(x=>x.id===bid);
-  const ranks=drivers().map(d=>d.priority).filter(p=>p!=null);
+  const ranks=eligibleDrivers(b||{}).map(d=>d.priority).filter(p=>p!=null);
   const newRank=ranks.length?Math.min(...ranks):null;
   const {error}=await SB.from('bookings').update({
     driver_id:null, release_requested:false,
@@ -1148,7 +1154,7 @@ function staffCardHtml(s, showPay, canUp, canDown, drvList){
   return `<div class="card"><div class="hd">${rankBadge}<div class="ttl">${esc(s.name)}</div>
     <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">${pills}</span></div>
     <div class="bd"><div class="meta">${esc(s.phone||'')} ${s.email?'· '+esc(s.email):''}</div>
-    ${(hasRole(s,'driver')&&showPay)?`<div class="meta" style="margin-top:6px">${s.priority!=null?`Priority #${s.priority}`:'<em>not in rotation</em>'} · $${s.pay_rate??0}/tier</div>`:''}
+    ${(hasRole(s,'driver')&&showPay)?`<div class="meta" style="margin-top:6px">${s.priority!=null?`Priority #${s.priority}`:'<em>not in rotation</em>'} · $${s.pay_rate??0}/tier${s.pulls_trailer===false?' · <span style="color:#b8862c">no trailer</span>':' · 🚛 trailer ok'}</div>`:''}
     ${(hasRole(s,'driver')&&showPay)?(()=>{const e=driverEarnings(s.id);return `<div class="earnpill" onclick="driverPayDetail('${s.id}');event.stopPropagation()">💰 $${e.earned} earned${e.upcoming?` · $${e.upcoming} upcoming`:''}</div>`;})():''}
     ${!s.active?'<div class="meta">Inactive</div>':''}
     <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
@@ -1284,7 +1290,7 @@ async function saveBooking(id){
   if(tier && !rec.driver_id){
     const startedBefore=existing && existing.offer_rank;
     if(!startedBefore){
-      const ranks=drivers().map(d=>d.priority).filter(p=>p!=null);
+      const ranks=eligibleDrivers(rec).map(d=>d.priority).filter(p=>p!=null);
       rec.offer_rank = ranks.length?Math.min(...ranks):null;
       rec.passed_by = [];
       if(rec.offer_rank!=null){ rec.offered_at = new Date().toISOString(); rec.offer_warned=false; }
@@ -1326,7 +1332,7 @@ function waterfallStatusHtml(b){
       <div class="wfrow wf-current">🏁 Open to ALL drivers — first to claim wins (T${b.pay_tier})</div>${reofferBtn}</div>`;
   }
   if(b.pay_tier==null) return `<div class="wfbox"><div class="wfhd">Offer status</div><div class="meta">Not offered yet — set a pay tier to start the waterfall.</div>${reofferBtn}</div>`;
-  const ranked=drivers().filter(d=>d.priority!=null).sort((a,b)=>a.priority-b.priority);
+  const ranked=eligibleDrivers(b).filter(d=>d.priority!=null).sort((a,b)=>a.priority-b.priority);
   const passed=b.passed_by||[];
   let rows='';
   for(const d of ranked){
@@ -1504,6 +1510,8 @@ function staffModal(id){
     </div>
     <small class="hint">Pay rate × a booking's tier = what this driver earns. Priority 1 is offered jobs first; leave blank to keep them out of the rotation.</small>
     <div style="margin-top:6px"><label><input type="checkbox" id="s_active" ${s.active!==false?'checked':''} style="width:auto;margin-right:6px">Active</label></div>
+    <label class="toggle" style="margin-top:12px"><input type="checkbox" id="s_trailer" ${s.pulls_trailer!==false?'checked':''}><span class="toggleslide"></span><span>🚛 Willing to pull a trailer</span></label>
+    <small class="hint">If off, this driver won't be offered bookings that require trailering.</small>
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="act" onclick="saveStaff('${id||''}')">Save</button>
       ${id?`<button class="ghost" onclick="delStaff('${id}')">Delete</button>`:''}
@@ -1515,6 +1523,7 @@ async function saveStaff(id){
     phone:document.getElementById('s_phone').value||null,email:document.getElementById('s_email').value||null,
     pay_rate:parseFloat(document.getElementById('s_rate').value)||0,
     priority:document.getElementById('s_priority').value!==''?parseInt(document.getElementById('s_priority').value):null,
+    pulls_trailer:document.getElementById('s_trailer').checked,
     active:document.getElementById('s_active').checked};
   if(!rec.name){toast('Name required');return}
   if(!roles.length){toast('Pick at least one role');return}
