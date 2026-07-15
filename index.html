@@ -195,6 +195,7 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 }
 .datechip .d{font:900 20px/1 "Arial Black";}
 .datechip .m{font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-top:3px;color:var(--brass)}
+.datechip .y{font-size:9px;letter-spacing:.08em;margin-top:2px;color:var(--brass);opacity:.85}
 
 /* status pills */
 .pill{display:inline-block;font:700 10.5px/1 sans-serif;letter-spacing:.07em;
@@ -580,7 +581,7 @@ const mechanics=()=>DATA.staff.filter(s=>hasRole(s,'mechanic')&&s.active);
 const roleLabel=s=>(s.role||'').split(',').map(x=>x.trim()).filter(Boolean).map(r=>r[0].toUpperCase()+r.slice(1)).join(' · ')||'—';
 const prepFor=bid=>DATA.prep.filter(t=>t.booking_id===bid);
 function prepPct(bid){const t=prepFor(bid);if(!t.length)return null;return Math.round(100*t.filter(x=>x.done).length/t.length)}
-function fmtDate(d){if(!d)return{d:'—',m:''};const dt=new Date(d+'T00:00:00');return{d:dt.getDate(),m:MONTHS[dt.getMonth()]}}
+function fmtDate(d){if(!d)return{d:'—',m:'',y:''};const dt=new Date(d+'T00:00:00');return{d:dt.getDate(),m:MONTHS[dt.getMonth()],y:dt.getFullYear()}}
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':');let hh=+h;const ap=hh>=12?'PM':'AM';hh=hh%12||12;return hh+':'+m+ap}
 
 // ---------- marketplace helpers ----------
@@ -753,7 +754,7 @@ function showPast(){
     for(const b of past){
       const car=carById(b.car_id), drv=staffById(b.driver_id), dc=fmtDate(b.event_date);
       body+=`<div class="lrow" style="margin-bottom:8px" onclick="bookingDetail('${b.id}')">
-        <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
+        <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div><div class="y">${dc.y}</div></div>
         <div class="lmain"><div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span></div>
         <div class="meta lcar">🚗 ${car?esc(car.name):'—'} · 👤 ${drv?esc(drv.name):'no driver'}</div></div></div>`;
     }
@@ -803,7 +804,7 @@ function bookingRowHtml(b){
   const thumb=car&&car.photo_url?`<div class="rowthumb" style="background-image:url('${esc(car.photo_url)}')"></div>`:'';
   return `<div class="lrow cat-${cat}">
     ${thumb}
-    <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
+    <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div><div class="y">${dc.y}</div></div>
     <div class="lmain" onclick="bookingDetail('${b.id}')" style="cursor:pointer">
       <div class="ltop">
         <span class="ttl">${esc(b.customer_name||'Unnamed')}</span>
@@ -861,7 +862,7 @@ function renderSchedule(){
       for(const b of weekend.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||'')||(a.start_time||'').localeCompare(b.start_time||''))){
         const car=carById(b.car_id), drv=staffById(b.driver_id), dc=fmtDate(b.event_date);
         h+=`<div class="dtrow" onclick="bookingDetail('${b.id}')">
-          <span class="dttime">${dc.m} ${dc.d}${b.start_time?' · '+fmtTime(b.start_time):''}</span>
+          <span class="dttime">${dc.m} ${dc.d}, ${dc.y}${b.start_time?' · '+fmtTime(b.start_time):''}</span>
           <span class="dtname">${esc(b.customer_name||'Booking')}</span>
           <span class="meta">${car?esc(car.name):'no car'} · ${drv?esc(drv.name):'no driver'}</span>
         </div>`;
@@ -879,7 +880,7 @@ function renderSchedule(){
       for(const b of readyToRelease){
         const car=carById(b.car_id), dc=fmtDate(b.event_date);
         h+=`<div class="dtrow" onclick="bookingModal('${b.id}')">
-          <span class="dttime">${dc.m} ${dc.d}</span>
+          <span class="dttime">${dc.m} ${dc.d}, ${dc.y}</span>
           <span class="dtname">${esc(b.customer_name||'Booking')}</span>
           <span class="meta">${car?esc(car.name):'no car'}</span>
         </div>`;
@@ -1019,7 +1020,7 @@ function renderPrep(){
   for(const b of withTasks){
     const car=carById(b.car_id),dc=fmtDate(b.event_date),pct=prepPct(b.id);
     h+=`<div class="card">
-      <div class="hd"><div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
+      <div class="hd"><div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div><div class="y">${dc.y}</div></div>
         <div><div class="ttl">${car?esc(car.name):'—'}</div><div class="meta">${esc(b.customer_name||'')} · ${esc(b.event_type||'')}</div></div>
         <span class="pill ${pct===100?'s-ready':'s-prepping'}" style="margin-left:auto">${pct}%</span></div>
       <div class="bd" id="prepbody-${b.id}">${prepTaskHtml(b.id)}</div></div>`;
@@ -1079,7 +1080,7 @@ function carDetail(cid){
   const line=(b)=>{
     const drv=staffById(b.driver_id), dc=fmtDate(b.event_date);
     return `<div class="lrow" style="margin-bottom:8px" onclick="bookingDetail('${b.id}')">
-      <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div></div>
+      <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div><div class="y">${dc.y}</div></div>
       <div class="lmain"><div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}</div>
       <div class="meta">👤 ${drv?esc(drv.name):'<em>no driver</em>'}${b.event_type?' · '+esc(b.event_type):''}</div></div></div>`;
   };
@@ -1169,7 +1170,7 @@ function driverPayDetail(sid){
   const line=(x)=>{
     const b=x.b, car=carById(b.car_id), dc=fmtDate(b.event_date);
     return `<div class="wfrow" onclick="bookingDetail('${b.id}')" style="cursor:pointer">
-      <span>${dc.m} ${dc.d} · ${esc(b.customer_name||'Booking')}${car?' · '+esc(car.name):''}${b.pay_tier?` <span class="tiertag">T${b.pay_tier}</span>`:''}</span>
+      <span>${dc.m} ${dc.d}, ${dc.y} · ${esc(b.customer_name||'Booking')}${car?' · '+esc(car.name):''}${b.pay_tier?` <span class="tiertag">T${b.pay_tier}</span>`:''}</span>
       <span style="font-weight:700;color:var(--green)">$${x.amt}</span>
     </div>`;
   };
