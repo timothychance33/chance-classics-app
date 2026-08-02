@@ -130,6 +130,12 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .dlbl{font:600 10px/1 "Inter",sans-serif;text-transform:uppercase;letter-spacing:.05em;color:#6b6052;margin-top:5px}
 .dashtoday{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
 .dashrelease{background:#fff8ec;border:1px solid var(--amber);border-radius:10px;padding:14px;margin-top:12px}
+.qreq{background:var(--paper-2);border-radius:10px;padding:12px}
+.qbreak{margin:14px 0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px}
+.qline{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--paper-2)}
+.qline:last-child{border-bottom:0}
+.qline.muted{color:#9aa7b4}
+.qline.qtotal{font-weight:800;font-size:17px;border-top:2px solid var(--line);margin-top:4px;padding-top:10px}
 .dashhd{font:800 14px/1 "Playfair Display",serif;margin-bottom:10px}
 .dtrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--paper-2);cursor:pointer;flex-wrap:wrap}
 .dtrow:last-child{border-bottom:0}
@@ -367,6 +373,7 @@ img,svg{max-width:100%}
   <nav class="tabs" id="tabs">
     <button data-tab="schedule" class="active">Schedule</button>
     <button data-tab="calendar">Calendar</button>
+    <button data-tab="quotes">Quotes</button>
     <button data-tab="prep">Prep Board</button>
     <button data-tab="cars">Cars</button>
     <button data-tab="staff">Crew</button>
@@ -374,6 +381,7 @@ img,svg{max-width:100%}
 
   <div class="panel active" id="panel-schedule"></div>
   <div class="panel" id="panel-calendar"></div>
+  <div class="panel" id="panel-quotes"></div>
   <div class="panel" id="panel-prep"></div>
   <div class="panel" id="panel-cars"></div>
   <div class="panel" id="panel-staff"></div>
@@ -410,7 +418,7 @@ let SB=null;
 let ROLE='driver';        // set from the logged-in user's profile
 let MYROLE='driver';      // the user's real role (ROLE may change via admin preview)
 let ME=null;              // {id, email, full_name, role}
-let DATA={cars:[],staff:[],bookings:[],prep:[],templates:[]};
+let DATA={cars:[],staff:[],bookings:[],prep:[],templates:[],quotes:[]};
 
 const STATUSES=['new','confirmed','prepping','ready','out','completed','cancelled'];
 // How many days before an event a booking enters the "ready to release to drivers" window.
@@ -551,15 +559,16 @@ function setupRoleUI(){
 
 async function loadAll(){
   try{
-    const [c,s,b,p,t]=await Promise.all([
+    const [c,s,b,p,t,q]=await Promise.all([
       SB.from('cars').select('*').order('name'),
       SB.from('staff').select('*').order('name'),
       SB.from('bookings').select('*').order('event_date'),
       SB.from('booking_prep_tasks').select('*').order('sort_order'),
       SB.from('car_prep_templates').select('*').order('sort_order'),
+      SB.from('quote_requests').select('*').order('created_at',{ascending:false}),
     ]);
     for(const r of [c,s,b,p,t]) if(r.error) throw r.error;
-    DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data};
+    DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data,quotes:(q&&!q.error)?q.data:[]};
     renderAll();
   }catch(e){const msg=e?.message||e?.error_description||e?.hint||JSON.stringify(e);toast('Load error: '+msg);console.error('Load error detail:',e)}
 }
@@ -740,7 +749,135 @@ async function approveRelease(bid){
 
 // ---------- renderers ----------
 let calView=new Date(); // currently displayed month in the calendar tab
-function renderAll(){renderSchedule();renderCalendar();renderPrep();renderCars();renderStaff()}
+function renderAll(){renderSchedule();renderCalendar();renderPrep();renderCars();renderStaff();renderQuotes()}
+
+// ---------- QUOTES ----------
+const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.10;
+function renderQuotes(){
+  const el=document.getElementById('panel-quotes');
+  if(!el) return;
+  if(!isAdmin()){ el.innerHTML=`<div class="empty"><div class="big">Quotes</div>Owner only.</div>`; return; }
+  const qs=DATA.quotes||[];
+  let h=`<div class="sectionhead"><div><div class="kicker">Price quotes</div><h2 class="display">Quotes</h2></div><span class="line"></span></div>`;
+  const pending=qs.filter(q=>q.status!=='sent');
+  const sent=qs.filter(q=>q.status==='sent');
+  if(!qs.length){ h+=`<div class="empty"><div class="big">No quote requests yet</div>They'll appear here when someone submits the Price Quote form on your site.</div>`; el.innerHTML=h; return; }
+  const row=(q)=>{
+    const car=q.car_id?carById(q.car_id):null;
+    const tag=q.status==='sent'?'<span class="pill s-completed">Sent</span>':q.status==='quoted'?'<span class="pill s-ready">Quoted</span>':'<span class="pill s-new">New</span>';
+    return `<div class="lrow" style="margin-bottom:8px" onclick="quoteBuilder('${q.id}')">
+      <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}</div>
+      <div class="meta">${car?esc(car.name):esc(q.service_name||'—')}${q.event_date?' · '+q.event_date:''}${q.total?` · $${Number(q.total).toFixed(2)}`:''}</div>
+      <div class="meta">${esc(q.event_location||'')}</div></div>
+      <div class="lactions"><button class="ghost tinybtn" onclick="event.stopPropagation();quoteBuilder('${q.id}')">${q.status==='sent'?'View':'Build'}</button></div>
+    </div>`;
+  };
+  if(pending.length){ h+=`<div class="schsec"><div class="schsechd">Needs a quote <span class="schcount">${pending.length}</span></div><div class="rowlist">${pending.map(row).join('')}</div></div>`; }
+  if(sent.length){ h+=`<div class="schsec"><div class="schsechd">Sent</div><div class="rowlist">${sent.map(row).join('')}</div></div>`; }
+  el.innerHTML=h;
+}
+
+function calcQuote(carId, hours, miles){
+  const car=carById(carId);
+  const base=car?Number(car.base_rate||0):0;
+  const extraH=Math.max(0,(Number(hours)||0)-INCLUDED_HOURS);
+  const overage=extraH*OVERAGE_RATE;
+  const mi=Number(miles)||0;
+  const travel=mi>FREE_MILES?mi*PER_MILE:0;
+  const subtotal=base+overage+travel;
+  const tax=subtotal*TAX_RATE;
+  const total=subtotal+tax;
+  return {base,extraH,overage,mi,travel,subtotal,tax,total};
+}
+
+function quoteBuilder(qid){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q) return;
+  const carOpts=DATA.cars.map(c=>`<option value="${c.id}" ${q.car_id===c.id?'selected':''}>${esc(c.name)} ($${c.base_rate||0})</option>`).join('');
+  const initHours=q.hours||INCLUDED_HOURS;
+  const initMiles=q.miles||0;
+  openModal('Build quote', `
+    <div class="qreq">
+      <div class="meta"><b>${esc(q.customer_name||'')}</b> · ${esc(q.customer_email||'no email')} · ${esc(q.customer_phone||'')}</div>
+      ${q.event_type?`<div class="meta">Event: ${esc(q.event_type)}</div>`:''}
+      ${q.event_date?`<div class="meta">Date: ${esc(q.event_date)} ${esc(q.event_time||'')}</div>`:''}
+      ${q.event_location?`<div class="meta">Location: ${esc(q.event_location)}</div>`:''}
+      ${q.details?`<div class="meta" style="margin-top:6px;padding:8px;background:var(--paper-2);border-radius:8px">${esc(q.details)}</div>`:''}
+    </div>
+    <div class="row two" style="margin-top:12px">
+      <div><label>Car</label><select id="q_car" onchange="quoteRecalc()">${carOpts}</select></div>
+      <div><label>Total hours</label><input id="q_hours" type="number" step="0.5" min="2" value="${initHours}" oninput="quoteRecalc()"></div>
+    </div>
+    <div><label>One-way miles from Benton (0 if within 30)</label><input id="q_miles" type="number" step="1" min="0" value="${initMiles}" oninput="quoteRecalc()"></div>
+    <div id="q_breakdown" class="qbreak"></div>
+    <div><label>Note to customer (optional)</label><textarea id="q_note" placeholder="e.g. Suggested arrival 45 min before ceremony...">${esc(q.quote_notes||'')}</textarea></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="act" onclick="sendQuote('${q.id}')" ${q.customer_email?'':'disabled title="No email on file"'}>${q.status==='sent'?'Re-send to customer':'Send to customer'}</button>
+      <button class="ghost" onclick="saveQuoteDraft('${q.id}')">Save draft</button>
+    </div>
+    ${q.customer_email?'':'<div class="meta" style="color:var(--oxblood);margin-top:8px">No customer email on file — add one to send.</div>'}
+  `);
+  quoteRecalc();
+}
+
+function quoteRecalc(){
+  const carId=document.getElementById('q_car').value;
+  const hours=document.getElementById('q_hours').value;
+  const miles=document.getElementById('q_miles').value;
+  const c=calcQuote(carId,hours,miles);
+  const m=n=>`$${n.toFixed(2)}`;
+  document.getElementById('q_breakdown').innerHTML=`
+    <div class="qline"><span>Base (up to ${INCLUDED_HOURS} hrs)</span><span>${m(c.base)}</span></div>
+    ${c.overage>0?`<div class="qline"><span>+${c.extraH} extra hr × $${OVERAGE_RATE}</span><span>${m(c.overage)}</span></div>`:''}
+    ${c.travel>0?`<div class="qline"><span>Travel ${c.mi} mi × $${PER_MILE} (trailered)</span><span>${m(c.travel)}</span></div>`:`<div class="qline muted"><span>Travel (within ${FREE_MILES} mi)</span><span>$0.00</span></div>`}
+    <div class="qline"><span>Subtotal</span><span>${m(c.subtotal)}</span></div>
+    <div class="qline"><span>Tax (${(TAX_RATE*100).toFixed(0)}%)</span><span>${m(c.tax)}</span></div>
+    <div class="qline qtotal"><span>Total</span><span>${m(c.total)}</span></div>`;
+}
+
+function quoteFields(qid){
+  const carId=document.getElementById('q_car').value;
+  const hours=parseFloat(document.getElementById('q_hours').value)||INCLUDED_HOURS;
+  const miles=parseFloat(document.getElementById('q_miles').value)||0;
+  const note=document.getElementById('q_note').value||null;
+  const c=calcQuote(carId,hours,miles);
+  return {car_id:carId,hours,miles,base_rate:c.base,overage:c.overage,travel:c.travel,
+    subtotal:c.subtotal,tax:c.tax,total:c.total,quote_notes:note,extra_hours:c.extraH};
+}
+
+async function saveQuoteDraft(qid){
+  const f=quoteFields(qid);
+  const {error}=await SB.from('quote_requests').update({
+    car_id:f.car_id,hours:f.hours,miles:f.miles,base_rate:f.base_rate,overage:f.overage,
+    travel:f.travel,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
+    status:'quoted'
+  }).eq('id',qid);
+  if(error){toast(error.message);return}
+  toast('Draft saved');closeModal();await loadAll();
+}
+
+async function sendQuote(qid){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q) return;
+  if(!q.customer_email){toast('No customer email on file');return}
+  const f=quoteFields(qid);
+  const car=carById(f.car_id);
+  if(!confirm(`Send this $${f.total.toFixed(2)} quote to ${q.customer_email}?`)) return;
+  // save first
+  await SB.from('quote_requests').update({
+    car_id:f.car_id,hours:f.hours,miles:f.miles,base_rate:f.base_rate,overage:f.overage,
+    travel:f.travel,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,status:'sent'
+  }).eq('id',qid);
+  // send email
+  try{
+    await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'quote', to:q.customer_email,
+      quote:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:q.event_date,
+        event_location:q.event_location, base_rate:f.base_rate, overage:f.overage, extra_hours:f.extra_hours,
+        travel:f.travel, miles:f.miles, subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes}
+    })});
+    toast('Quote sent to customer');
+  }catch(e){ toast('Saved, but email failed: '+(e.message||e)); }
+  closeModal();await loadAll();
+}
 
 // SCHEDULE
 function showPast(){
