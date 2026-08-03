@@ -569,8 +569,29 @@ async function loadAll(){
     ]);
     for(const r of [c,s,b,p,t]) if(r.error) throw r.error;
     DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data,quotes:(q&&!q.error)?q.data:[]};
+    if(isAdmin()) await autoMatchQuotes();
     renderAll();
   }catch(e){const msg=e?.message||e?.error_description||e?.hint||JSON.stringify(e);toast('Load error: '+msg);console.error('Load error detail:',e)}
+}
+
+// If a sent quote's customer email matches a real booking, mark it booked.
+async function autoMatchQuotes(){
+  const sent=(DATA.quotes||[]).filter(q=>q.status==='sent' && q.customer_email);
+  if(!sent.length) return;
+  let anyChanged=false;
+  for(const q of sent){
+    const email=q.customer_email.toLowerCase().trim();
+    const match=DATA.bookings.find(b=>b.customer_email && b.customer_email.toLowerCase().trim()===email);
+    if(match){
+      await SB.from('quote_requests').update({status:'booked'}).eq('id',q.id);
+      q.status='booked'; // update in-memory copy too, avoids a second full reload
+      anyChanged=true;
+    }
+  }
+  if(anyChanged){
+    const {data}=await SB.from('quote_requests').select('*').order('created_at',{ascending:false});
+    if(data) DATA.quotes=data;
+  }
 }
 
 // ---------- helpers ----------
@@ -753,27 +774,46 @@ function renderAll(){renderSchedule();renderCalendar();renderPrep();renderCars()
 
 // ---------- QUOTES ----------
 const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.10;
+const FOLLOWUP_DAYS=3, QUOTE_VALID_DAYS=7;
 function renderQuotes(){
   const el=document.getElementById('panel-quotes');
   if(!el) return;
   if(!isAdmin()){ el.innerHTML=`<div class="empty"><div class="big">Quotes</div>Owner only.</div>`; return; }
   const qs=DATA.quotes||[];
   let h=`<div class="sectionhead"><div><div class="kicker">Price quotes</div><h2 class="display">Quotes</h2></div><span class="line"></span></div>`;
-  const pending=qs.filter(q=>q.status!=='sent');
-  const sent=qs.filter(q=>q.status==='sent');
   if(!qs.length){ h+=`<div class="empty"><div class="big">No quote requests yet</div>They'll appear here when someone submits the Price Quote form on your site.</div>`; el.innerHTML=h; return; }
-  const row=(q)=>{
+
+  const now=Date.now();
+  const daysSince=(iso)=>iso?(now-new Date(iso).getTime())/86400000:null;
+  const pending=qs.filter(q=>q.status!=='sent' && q.status!=='booked');
+  const sentAll=qs.filter(q=>q.status==='sent');
+  const followUp=sentAll.filter(q=>{const d=daysSince(q.sent_at||q.created_at);return d!=null&&d>=FOLLOWUP_DAYS;});
+  const recentlySent=sentAll.filter(q=>!followUp.includes(q));
+  const booked=qs.filter(q=>q.status==='booked');
+
+  const row=(q,opts)=>{
+    opts=opts||{};
     const car=q.car_id?carById(q.car_id):null;
-    const tag=q.status==='sent'?'<span class="pill s-completed">Sent</span>':q.status==='quoted'?'<span class="pill s-ready">Quoted</span>':'<span class="pill s-new">New</span>';
-    return `<div class="lrow" style="margin-bottom:8px" onclick="quoteBuilder('${q.id}')">
-      <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}</div>
+    let tag=q.status==='booked'?'<span class="pill s-completed">🎉 Booked</span>'
+      :q.status==='sent'?'<span class="pill s-ready">Sent</span>'
+      :q.status==='quoted'?'<span class="pill s-prepping">Quoted</span>'
+      :'<span class="pill s-new">New</span>';
+    let expTag='';
+    if(q.status==='sent' && !opts.noExpiry){
+      const d=daysSince(q.sent_at||q.created_at);
+      if(d!=null && d>=QUOTE_VALID_DAYS) expTag='<span class="waittag">Expired</span>';
+    }
+    return `<div class="lrow${opts.followUp?' cat-open':''}" style="margin-bottom:8px" onclick="quoteBuilder('${q.id}')">
+      <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}${expTag}</div>
       <div class="meta">${car?esc(car.name):esc(q.service_name||'—')}${q.event_date?' · '+q.event_date:''}${q.total?` · $${Number(q.total).toFixed(2)}`:''}</div>
-      <div class="meta">${esc(q.event_location||'')}</div></div>
-      <div class="lactions"><button class="ghost tinybtn" onclick="event.stopPropagation();quoteBuilder('${q.id}')">${q.status==='sent'?'View':'Build'}</button></div>
+      <div class="meta">${esc(q.event_location||'')}${opts.followUp?` · sent ${Math.floor(daysSince(q.sent_at||q.created_at))}d ago, no booking yet`:''}</div></div>
+      <div class="lactions"><button class="ghost tinybtn" onclick="event.stopPropagation();quoteBuilder('${q.id}')">${q.status==='sent'||q.status==='booked'?'View':'Build'}</button></div>
     </div>`;
   };
-  if(pending.length){ h+=`<div class="schsec"><div class="schsechd">Needs a quote <span class="schcount">${pending.length}</span></div><div class="rowlist">${pending.map(row).join('')}</div></div>`; }
-  if(sent.length){ h+=`<div class="schsec"><div class="schsechd">Sent</div><div class="rowlist">${sent.map(row).join('')}</div></div>`; }
+  if(pending.length) h+=`<div class="schsec"><div class="schsechd">Needs a quote <span class="schcount">${pending.length}</span></div><div class="rowlist">${pending.map(q=>row(q)).join('')}</div></div>`;
+  if(followUp.length) h+=`<div class="schsec"><div class="schsechd">📞 Follow up <span class="schcount">${followUp.length}</span></div><div class="meta" style="margin:-4px 0 10px">Sent ${FOLLOWUP_DAYS}+ days ago, no booking yet — worth a nudge.</div><div class="rowlist">${followUp.map(q=>row(q,{followUp:true})).join('')}</div></div>`;
+  if(recentlySent.length) h+=`<div class="schsec"><div class="schsechd">Sent — awaiting booking</div><div class="rowlist">${recentlySent.map(q=>row(q)).join('')}</div></div>`;
+  if(booked.length) h+=`<div class="schsec"><div class="schsechd">Booked 🎉</div><div class="rowlist">${booked.map(q=>row(q,{noExpiry:true})).join('')}</div></div>`;
   el.innerHTML=h;
 }
 
@@ -795,6 +835,21 @@ function quoteBuilder(qid){
   const carOpts=DATA.cars.map(c=>`<option value="${c.id}" ${q.car_id===c.id?'selected':''}>${esc(c.name)} ($${c.base_rate||0})</option>`).join('');
   const initHours=q.hours||INCLUDED_HOURS;
   const initMiles=q.miles||0;
+  let statusLine='';
+  if(q.status==='sent'){
+    const sentDate=q.sent_at||q.created_at;
+    const daysAgo=sentDate?Math.floor((Date.now()-new Date(sentDate).getTime())/86400000):null;
+    const expDate=sentDate?new Date(new Date(sentDate).getTime()+QUOTE_VALID_DAYS*86400000).toLocaleDateString():null;
+    statusLine=`<div class="wfbox"><div class="wfhd">Status</div>
+      <div class="wfrow"><span>Sent</span><span>${daysAgo!=null?daysAgo+'d ago':''}</span></div>
+      <div class="wfrow"><span>Valid until</span><span>${expDate||'—'}</span></div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="ghost tinybtn" onclick="markQuoteBooked('${q.id}')">✓ Mark booked</button>
+        <button class="ghost tinybtn" onclick="logDecline('${q.id}')">Log decline reason</button>
+      </div></div>`;
+  } else if(q.status==='booked'){
+    statusLine=`<div class="wfbox"><div class="wfrow wf-claimed">🎉 Booked${q.decline_reason?'':''}</div></div>`;
+  }
   openModal('Build quote', `
     <div class="qreq">
       <div class="meta"><b>${esc(q.customer_name||'')}</b> · ${esc(q.customer_email||'no email')} · ${esc(q.customer_phone||'')}</div>
@@ -811,12 +866,27 @@ function quoteBuilder(qid){
     <div id="q_breakdown" class="qbreak"></div>
     <div><label>Note to customer (optional)</label><textarea id="q_note" placeholder="e.g. Suggested arrival 45 min before ceremony...">${esc(q.quote_notes||'')}</textarea></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="act" onclick="sendQuote('${q.id}')" ${q.customer_email?'':'disabled title="No email on file"'}>${q.status==='sent'?'Re-send to customer':'Send to customer'}</button>
+      <button class="act" onclick="sendQuote('${q.id}')" ${q.customer_email?'':'disabled title="No email on file"'}>${q.status==='sent'||q.status==='booked'?'Re-send to customer':'Send to customer'}</button>
       <button class="ghost" onclick="saveQuoteDraft('${q.id}')">Save draft</button>
     </div>
     ${q.customer_email?'':'<div class="meta" style="color:var(--oxblood);margin-top:8px">No customer email on file — add one to send.</div>'}
+    ${statusLine}
+    ${q.decline_reason?`<div class="meta" style="margin-top:10px">Decline reason: ${esc(q.decline_reason)}</div>`:''}
   `);
   quoteRecalc();
+}
+
+async function markQuoteBooked(qid){
+  const {error}=await SB.from('quote_requests').update({status:'booked'}).eq('id',qid);
+  if(error){toast(error.message);return}
+  toast('Marked as booked 🎉');closeModal();await loadAll();
+}
+async function logDecline(qid){
+  const reason=prompt('Why did this one not book? (e.g. "too expensive", "went with competitor", "date unavailable")');
+  if(reason===null) return;
+  const {error}=await SB.from('quote_requests').update({decline_reason:reason||null}).eq('id',qid);
+  if(error){toast(error.message);return}
+  toast('Noted');closeModal();await loadAll();
 }
 
 function quoteRecalc(){
@@ -861,10 +931,13 @@ async function sendQuote(qid){
   const f=quoteFields(qid);
   const car=carById(f.car_id);
   if(!confirm(`Send this $${f.total.toFixed(2)} quote to ${q.customer_email}?`)) return;
+  const nowIso=new Date().toISOString();
+  const expiresStr=new Date(Date.now()+QUOTE_VALID_DAYS*86400000).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   // save first
   await SB.from('quote_requests').update({
     car_id:f.car_id,hours:f.hours,miles:f.miles,base_rate:f.base_rate,overage:f.overage,
-    travel:f.travel,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,status:'sent'
+    travel:f.travel,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
+    status:'sent', sent_at:nowIso
   }).eq('id',qid);
   // send email
   try{
@@ -873,7 +946,8 @@ async function sendQuote(qid){
       book_url:(car&&car.book_url)?car.book_url:'https://www.chanceclassics.com/book-online?referral=quote_email',
       quote:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:q.event_date,
         event_location:q.event_location, base_rate:f.base_rate, overage:f.overage, extra_hours:f.extra_hours,
-        travel:f.travel, miles:f.miles, subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes}
+        travel:f.travel, miles:f.miles, subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes,
+        expires:expiresStr}
     })});
     toast('Quote sent to customer');
   }catch(e){ toast('Saved, but email failed: '+(e.message||e)); }
