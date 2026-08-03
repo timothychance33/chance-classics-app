@@ -870,6 +870,7 @@ async function sendQuote(qid){
   try{
     await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       type:'quote', to:q.customer_email,
+      book_url:(car&&car.book_url)?car.book_url:'https://www.chanceclassics.com/book-online?referral=quote_email',
       quote:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:q.event_date,
         event_location:q.event_location, base_rate:f.base_rate, overage:f.overage, extra_hours:f.extra_hours,
         travel:f.travel, miles:f.miles, subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes}
