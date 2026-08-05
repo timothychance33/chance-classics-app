@@ -872,8 +872,19 @@ function quoteBuilder(qid){
     ${q.customer_email?'':'<div class="meta" style="color:var(--oxblood);margin-top:8px">No customer email on file — add one to send.</div>'}
     ${statusLine}
     ${q.decline_reason?`<div class="meta" style="margin-top:10px">Decline reason: ${esc(q.decline_reason)}</div>`:''}
+    <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--line)">
+      <button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood)" onclick="deleteQuote('${q.id}')">🗑️ Delete this quote request</button>
+    </div>
   `);
   quoteRecalc();
+}
+
+async function deleteQuote(qid){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid);
+  if(!confirm(`Delete the quote request from ${q?q.customer_name||'this customer':'this customer'}? This can't be undone.`)) return;
+  const {error}=await SB.from('quote_requests').delete().eq('id',qid);
+  if(error){toast(error.message);return}
+  toast('Quote request deleted');closeModal();await loadAll();
 }
 
 async function markQuoteBooked(qid){
