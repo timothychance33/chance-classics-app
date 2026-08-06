@@ -555,6 +555,9 @@ function setupRoleUI(){
   }else{
     rs.style.display='none';
   }
+  // Quotes tab is owner-only — hide the button entirely for crew.
+  const qtab=document.querySelector('#tabs button[data-tab="quotes"]');
+  if(qtab) qtab.style.display=isAdmin()?'':'none';
 }
 
 async function loadAll(){
@@ -1128,7 +1131,8 @@ function renderSchedule(){
   }
 
   // ----- CREW: filtered flat list -----
-  let list=[...DATA.bookings].filter(b=>b.status!=='cancelled');
+  const todayStr3=new Date().toISOString().slice(0,10);
+  let list=[...DATA.bookings].filter(b=>b.status!=='cancelled' && (!b.event_date || b.event_date>=todayStr3));
   const mine=myStaffId();
   const me=myStaff();
   const iAmMechanic = me && hasRole(me,'mechanic');
