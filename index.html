@@ -132,6 +132,8 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .dashrelease{background:#fff8ec;border:1px solid var(--amber);border-radius:10px;padding:14px;margin-top:12px}
 .qreq{background:var(--paper-2);border-radius:10px;padding:12px}
 .qbreak{margin:14px 0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px}
+.qwarn{margin-top:10px;background:#fcf0ef;border:1px solid var(--oxblood);color:var(--oxblood);border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600}
+.qok{margin-top:10px;background:#eef4ec;border:1px solid var(--green);color:#2f5740;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600}
 .qline{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--paper-2)}
 .qline:last-child{border-bottom:0}
 .qline.muted{color:#9aa7b4}
@@ -865,6 +867,7 @@ function quoteBuilder(qid){
       <div><label>Car</label><select id="q_car" onchange="quoteRecalc()">${carOpts}</select></div>
       <div><label>Total hours</label><input id="q_hours" type="number" step="0.5" min="2" value="${initHours}" oninput="quoteRecalc()"></div>
     </div>
+    <div id="q_avail"></div>
     <div><label>One-way miles from Benton (0 if within 30)</label><input id="q_miles" type="number" step="1" min="0" value="${initMiles}" oninput="quoteRecalc()"></div>
     <div id="q_breakdown" class="qbreak"></div>
     <div><label>Note to customer (optional)</label><textarea id="q_note" placeholder="e.g. Suggested arrival 45 min before ceremony...">${esc(q.quote_notes||'')}</textarea></div>
@@ -879,6 +882,7 @@ function quoteBuilder(qid){
       <button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood)" onclick="deleteQuote('${q.id}')">🗑️ Delete this quote request</button>
     </div>
   `);
+  window._quoteEventDate=q.event_date||null;
   quoteRecalc();
 }
 
@@ -909,6 +913,24 @@ function quoteRecalc(){
   const miles=document.getElementById('q_miles').value;
   const c=calcQuote(carId,hours,miles);
   const m=n=>`$${n.toFixed(2)}`;
+
+  // Availability check: does the selected car already have a booking that day?
+  const avail=document.getElementById('q_avail');
+  const evDate=window._quoteEventDate;
+  if(avail){
+    if(!evDate){
+      avail.innerHTML='';
+    } else {
+      const clash=DATA.bookings.find(b=>b.car_id===carId && b.event_date===evDate && b.status!=='cancelled');
+      if(clash){
+        const drv=staffById(clash.driver_id);
+        avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} is already booked on ${esc(evDate)} — ${esc(clash.customer_name||'another customer')}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}</div>`;
+      } else {
+        avail.innerHTML=`<div class="qok">✓ ${esc(carById(carId)?.name||'This car')} is open on ${esc(evDate)}</div>`;
+      }
+    }
+  }
+
   document.getElementById('q_breakdown').innerHTML=`
     <div class="qline"><span>Base (up to ${INCLUDED_HOURS} hrs)</span><span>${m(c.base)}</span></div>
     ${c.overage>0?`<div class="qline"><span>+${c.extraH} extra hr × $${OVERAGE_RATE}</span><span>${m(c.overage)}</span></div>`:''}
