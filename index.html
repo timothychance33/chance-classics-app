@@ -791,43 +791,75 @@ function renderQuotes(){
 
   const now=Date.now();
   const daysSince=(iso)=>iso?(now-new Date(iso).getTime())/86400000:null;
-  const pending=qs.filter(q=>q.status!=='sent' && q.status!=='booked');
-  const sentAll=qs.filter(q=>q.status==='sent');
-  const followUp=sentAll.filter(q=>{const d=daysSince(q.sent_at||q.created_at);return d!=null&&d>=FOLLOWUP_DAYS;});
-  const recentlySent=sentAll.filter(q=>!followUp.includes(q));
-  const booked=qs.filter(q=>q.status==='booked');
+  // Last time we actually reached out — a reminder counts as fresh contact,
+  // so a reminded quote drops out of "needs reminder" until it's quiet again.
+  const lastContact=(q)=>q.reminder_sent_at||q.sent_at||q.created_at;
 
-  const row=(q,opts)=>{
-    opts=opts||{};
+  const needsQuote=qs.filter(q=>q.status!=='sent' && q.status!=='booked');
+  const needsReminder=qs.filter(q=>{
+    if(q.status!=='sent') return false;
+    const d=daysSince(lastContact(q));
+    return d!=null && d>=FOLLOWUP_DAYS;
+  });
+  const actionIds=new Set([...needsQuote,...needsReminder].map(q=>q.id));
+  const other=qs.filter(q=>!actionIds.has(q.id));  // booked, or sent-and-not-due-yet
+
+  const row=(q)=>{
     const car=q.car_id?carById(q.car_id):null;
+    const age=daysSince(lastContact(q));
+    const due=q.status==='sent' && age!=null && age>=FOLLOWUP_DAYS;
     let tag=q.status==='booked'?'<span class="pill s-completed">🎉 Booked</span>'
       :q.status==='sent'?'<span class="pill s-ready">Sent</span>'
       :q.status==='quoted'?'<span class="pill s-prepping">Quoted</span>'
       :'<span class="pill s-new">New</span>';
     let expTag='';
-    if(q.status==='sent' && !opts.noExpiry){
-      const d=daysSince(q.sent_at||q.created_at);
-      if(d!=null && d>=QUOTE_VALID_DAYS) expTag='<span class="waittag">Expired</span>';
-    }
+    if(q.status==='sent'){ const d=daysSince(q.sent_at||q.created_at); if(d!=null&&d>=QUOTE_VALID_DAYS) expTag='<span class="waittag">Expired</span>'; }
     const sentDateStr=(q.status==='sent'||q.status==='booked')&&(q.sent_at||q.created_at)
       ?new Date(q.sent_at||q.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):null;
     const reminderTag=q.reminder_sent_at
       ?`<span class="remindertag">🔔 Reminded ${Math.floor(daysSince(q.reminder_sent_at))}d ago</span>`:'';
-    return `<div class="lrow${opts.followUp?' cat-open':''}" style="margin-bottom:8px" onclick="quoteBuilder('${q.id}')">
+    return `<div class="lrow${due?' cat-open':''}" style="margin-bottom:8px" onclick="quoteBuilder('${q.id}')">
       <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}${expTag}${reminderTag}</div>
       <div class="meta">${car?esc(car.name):esc(q.service_name||'—')}${q.event_date?' · '+q.event_date:''}${q.total?` · $${Number(q.total).toFixed(2)}`:''}</div>
-      <div class="meta">${esc(q.event_location||'')}${sentDateStr?` · sent ${sentDateStr}`:''}${opts.followUp?` · no booking yet`:''}</div></div>
+      <div class="meta">${esc(q.event_location||'')}${sentDateStr?` · sent ${sentDateStr}`:''}</div></div>
       <div class="lactions">
-        ${opts.followUp&&q.customer_email?`<button class="act tinybtn" onclick="event.stopPropagation();sendReminderEmail('${q.id}')">🔔 Remind</button>`:''}
+        ${due&&q.customer_email?`<button class="act tinybtn" onclick="event.stopPropagation();sendReminderEmail('${q.id}')">🔔 Remind</button>`:''}
         <button class="ghost tinybtn" onclick="event.stopPropagation();quoteBuilder('${q.id}')">${q.status==='sent'||q.status==='booked'?'View':'Build'}</button>
       </div>
     </div>`;
   };
-  if(pending.length) h+=`<div class="schsec"><div class="schsechd">Needs a quote <span class="schcount">${pending.length}</span></div><div class="rowlist">${pending.map(q=>row(q)).join('')}</div></div>`;
-  if(followUp.length) h+=`<div class="schsec"><div class="schsechd">📞 Follow up <span class="schcount">${followUp.length}</span></div><div class="meta" style="margin:-4px 0 10px">Sent ${FOLLOWUP_DAYS}+ days ago, no booking yet — worth a nudge.</div><div class="rowlist">${followUp.map(q=>row(q,{followUp:true})).join('')}</div></div>`;
-  if(recentlySent.length) h+=`<div class="schsec"><div class="schsechd">Sent — awaiting booking</div><div class="rowlist">${recentlySent.map(q=>row(q)).join('')}</div></div>`;
-  if(booked.length) h+=`<div class="schsec"><div class="schsechd">Booked 🎉</div><div class="rowlist">${booked.map(q=>row(q,{noExpiry:true})).join('')}</div></div>`;
+  if(needsQuote.length) h+=`<div class="schsec"><div class="schsechd">Needs a quote <span class="schcount">${needsQuote.length}</span></div><div class="rowlist">${needsQuote.map(row).join('')}</div></div>`;
+  if(needsReminder.length) h+=`<div class="schsec"><div class="schsechd">📞 Needs a reminder <span class="schcount">${needsReminder.length}</span></div><div class="rowlist">${needsReminder.map(row).join('')}</div></div>`;
+  if(!needsQuote.length && !needsReminder.length) h+=`<div class="empty"><div class="big">You're all caught up 🎉</div>Nothing needs a quote or a reminder right now.</div>`;
+  if(other.length) h+=`<div style="margin-top:6px"><button class="ghost tinybtn" onclick="showOtherQuotes()">View ${other.length} other quote${other.length===1?'':'s'} (booked or recently sent) →</button></div>`;
   el.innerHTML=h;
+}
+
+function showOtherQuotes(){
+  const qs=DATA.quotes||[];
+  const now=Date.now();
+  const daysSince=(iso)=>iso?(now-new Date(iso).getTime())/86400000:null;
+  const lastContact=(q)=>q.reminder_sent_at||q.sent_at||q.created_at;
+  const needsQuote=qs.filter(q=>q.status!=='sent' && q.status!=='booked');
+  const needsReminder=qs.filter(q=>q.status==='sent' && (()=>{const d=daysSince(lastContact(q));return d!=null&&d>=FOLLOWUP_DAYS;})());
+  const actionIds=new Set([...needsQuote,...needsReminder].map(q=>q.id));
+  const other=qs.filter(q=>!actionIds.has(q.id)).sort((a,b)=>(b.sent_at||b.created_at||'').localeCompare(a.sent_at||a.created_at||''));
+  let body='';
+  if(!other.length) body='<div class="meta">Nothing here.</div>';
+  else{
+    body='<div class="rowlist">';
+    for(const q of other){
+      const car=q.car_id?carById(q.car_id):null;
+      const tag=q.status==='booked'?'<span class="pill s-completed">🎉 Booked</span>':'<span class="pill s-ready">Sent</span>';
+      const sentDateStr=(q.sent_at||q.created_at)?new Date(q.sent_at||q.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):null;
+      body+=`<div class="lrow" style="margin-bottom:8px" onclick="closeModal();quoteBuilder('${q.id}')">
+        <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}</div>
+        <div class="meta">${car?esc(car.name):esc(q.service_name||'—')}${q.event_date?' · '+q.event_date:''}${q.total?` · $${Number(q.total).toFixed(2)}`:''}</div>
+        <div class="meta">${sentDateStr?`sent ${sentDateStr}`:''}</div></div></div>`;
+    }
+    body+='</div>';
+  }
+  openModal('Other quotes', body);
 }
 
 function calcQuote(carId, hours, miles){
