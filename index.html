@@ -134,6 +134,7 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .qbreak{margin:14px 0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px}
 .qwarn{margin-top:10px;background:#fcf0ef;border:1px solid var(--oxblood);color:var(--oxblood);border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600}
 .qok{margin-top:10px;background:#eef4ec;border:1px solid var(--green);color:#2f5740;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600}
+.remindertag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.04em;text-transform:uppercase;background:#cdd9e6;color:#4a5a6b;padding:4px 8px;border-radius:20px;white-space:nowrap}
 .qline{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--paper-2)}
 .qline:last-child{border-bottom:0}
 .qline.muted{color:#9aa7b4}
@@ -808,11 +809,18 @@ function renderQuotes(){
       const d=daysSince(q.sent_at||q.created_at);
       if(d!=null && d>=QUOTE_VALID_DAYS) expTag='<span class="waittag">Expired</span>';
     }
+    const sentDateStr=(q.status==='sent'||q.status==='booked')&&(q.sent_at||q.created_at)
+      ?new Date(q.sent_at||q.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):null;
+    const reminderTag=q.reminder_sent_at
+      ?`<span class="remindertag">🔔 Reminded ${Math.floor(daysSince(q.reminder_sent_at))}d ago</span>`:'';
     return `<div class="lrow${opts.followUp?' cat-open':''}" style="margin-bottom:8px" onclick="quoteBuilder('${q.id}')">
-      <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}${expTag}</div>
+      <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}${expTag}${reminderTag}</div>
       <div class="meta">${car?esc(car.name):esc(q.service_name||'—')}${q.event_date?' · '+q.event_date:''}${q.total?` · $${Number(q.total).toFixed(2)}`:''}</div>
-      <div class="meta">${esc(q.event_location||'')}${opts.followUp?` · sent ${Math.floor(daysSince(q.sent_at||q.created_at))}d ago, no booking yet`:''}</div></div>
-      <div class="lactions"><button class="ghost tinybtn" onclick="event.stopPropagation();quoteBuilder('${q.id}')">${q.status==='sent'||q.status==='booked'?'View':'Build'}</button></div>
+      <div class="meta">${esc(q.event_location||'')}${sentDateStr?` · sent ${sentDateStr}`:''}${opts.followUp?` · no booking yet`:''}</div></div>
+      <div class="lactions">
+        ${opts.followUp&&q.customer_email?`<button class="act tinybtn" onclick="event.stopPropagation();sendReminderEmail('${q.id}')">🔔 Remind</button>`:''}
+        <button class="ghost tinybtn" onclick="event.stopPropagation();quoteBuilder('${q.id}')">${q.status==='sent'||q.status==='booked'?'View':'Build'}</button>
+      </div>
     </div>`;
   };
   if(pending.length) h+=`<div class="schsec"><div class="schsechd">Needs a quote <span class="schcount">${pending.length}</span></div><div class="rowlist">${pending.map(q=>row(q)).join('')}</div></div>`;
@@ -879,12 +887,19 @@ function quoteBuilder(qid){
   if(q.status==='sent'){
     const sentDate=q.sent_at||q.created_at;
     const daysAgo=sentDate?Math.floor((Date.now()-new Date(sentDate).getTime())/86400000):null;
+    const sentDateStr=sentDate?new Date(sentDate).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'—';
     const expDate=sentDate?new Date(new Date(sentDate).getTime()+QUOTE_VALID_DAYS*86400000).toLocaleDateString():null;
+    const reminderStr=q.reminder_sent_at
+      ?new Date(q.reminder_sent_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+` (${Math.floor((Date.now()-new Date(q.reminder_sent_at).getTime())/86400000)}d ago)`
+      :null;
     statusLine=`<div class="wfbox"><div class="wfhd">Status</div>
-      <div class="wfrow"><span>Sent</span><span>${daysAgo!=null?daysAgo+'d ago':''}</span></div>
+      <div class="wfrow"><span>Sent</span><span>${sentDateStr}${daysAgo!=null?' ('+daysAgo+'d ago)':''}</span></div>
       <div class="wfrow"><span>Valid until</span><span>${expDate||'—'}</span></div>
+      <div class="wfrow"><span>Reminder</span><span>${reminderStr?'🔔 '+reminderStr:'Not sent yet'}</span></div>
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
         <button class="ghost tinybtn" onclick="markQuoteBooked('${q.id}')">✓ Mark booked</button>
+        <button class="ghost tinybtn" onclick="sendReminderEmail('${q.id}')" ${q.customer_email?'':'disabled title="No email on file"'}>🔔 Send reminder email</button>
+        <button class="ghost tinybtn" onclick="logReminderSent('${q.id}')" title="I already followed up another way">Log reminder (no email)</button>
         <button class="ghost tinybtn" onclick="logDecline('${q.id}')">Log decline reason</button>
       </div></div>`;
   } else if(q.status==='booked'){
@@ -934,6 +949,27 @@ async function markQuoteBooked(qid){
   const {error}=await SB.from('quote_requests').update({status:'booked'}).eq('id',qid);
   if(error){toast(error.message);return}
   toast('Marked as booked 🎉');closeModal();await loadAll();
+}
+async function sendReminderEmail(qid){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
+  const car=q.car_id?carById(q.car_id):null;
+  if(!confirm(`Send a reminder email to ${q.customer_email} about their $${q.total?Number(q.total).toFixed(2):''} quote?`)) return;
+  const bookUrl=(car&&car.book_url)?car.book_url:'https://www.chanceclassics.com/book-online?referral=quote_email';
+  try{
+    await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'quote_reminder', to:q.customer_email, book_url:bookUrl,
+      quote:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:q.event_date,
+        event_location:q.event_location, total:q.total}
+    })});
+    await SB.from('quote_requests').update({reminder_sent_at:new Date().toISOString()}).eq('id',qid);
+    toast('Reminder sent 🔔');
+  }catch(e){ toast('Send failed: '+(e.message||e)); }
+  closeModal();await loadAll();
+}
+async function logReminderSent(qid){
+  const {error}=await SB.from('quote_requests').update({reminder_sent_at:new Date().toISOString()}).eq('id',qid);
+  if(error){toast(error.message);return}
+  toast('Reminder logged 🔔');closeModal();await loadAll();
 }
 async function logDecline(qid){
   const reason=prompt('Why did this one not book? (e.g. "too expensive", "went with competitor", "date unavailable")');
