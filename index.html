@@ -835,6 +835,41 @@ function calcQuote(carId, hours, miles){
   return {base,extraH,overage,mi,travel,subtotal,tax,total};
 }
 
+function unavailableNotice(qid, requestedCarId){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
+  const evDate=window._quoteEventDate;
+  const requestedCar=carById(requestedCarId);
+  const others=DATA.cars.filter(c=>c.id!==requestedCarId && !DATA.bookings.some(b=>b.car_id===c.id && b.event_date===evDate && b.status!=='cancelled'));
+  const defaultNote=others.length
+    ? `Unfortunately ${requestedCar?requestedCar.name:'that car'} is already booked on ${evDate}. The good news — we do have ${others.map(c=>c.name).join(', ')} available that day if you'd like to see photos or get a quote for one of those instead!`
+    : `Unfortunately ${requestedCar?requestedCar.name:'that car'} is already booked on ${evDate}, and it looks like our other cars are booked that day as well. Let us know if your date has any flexibility and we'll check again!`;
+  openModal('Draft: car unavailable', `
+    <div class="qreq"><div class="meta">To: ${esc(q.customer_email)}</div><div class="meta">Re: ${esc(requestedCar?requestedCar.name:'')} on ${esc(evDate||'')}</div></div>
+    <div style="margin-top:12px"><label>Message</label><textarea id="un_note" rows="6">${esc(defaultNote)}</textarea></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="act" onclick="sendUnavailableNotice('${qid}','${requestedCarId}')">Send</button>
+      <button class="ghost" onclick="quoteBuilder('${qid}')">Back</button>
+    </div>
+  `);
+}
+
+async function sendUnavailableNotice(qid, requestedCarId){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
+  const evDate=window._quoteEventDate;
+  const requestedCar=carById(requestedCarId);
+  const others=DATA.cars.filter(c=>c.id!==requestedCarId && !DATA.bookings.some(b=>b.car_id===c.id && b.event_date===evDate && b.status!=='cancelled'));
+  const note=document.getElementById('un_note').value;
+  try{
+    await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'unavailable', to:q.customer_email,
+      notice:{customer_name:q.customer_name, car_name:requestedCar?requestedCar.name:'', event_date:evDate,
+        alternatives:others.map(c=>c.name), note}
+    })});
+    toast('Sent');
+  }catch(e){ toast('Send failed: '+(e.message||e)); }
+  closeModal();
+}
+
 function quoteBuilder(qid){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q) return;
   const carOpts=DATA.cars.map(c=>`<option value="${c.id}" ${q.car_id===c.id?'selected':''}>${esc(c.name)} ($${c.base_rate||0})</option>`).join('');
@@ -883,6 +918,7 @@ function quoteBuilder(qid){
     </div>
   `);
   window._quoteEventDate=q.event_date||null;
+  window._quoteId=q.id;
   quoteRecalc();
 }
 
@@ -924,7 +960,12 @@ function quoteRecalc(){
       const clash=DATA.bookings.find(b=>b.car_id===carId && b.event_date===evDate && b.status!=='cancelled');
       if(clash){
         const drv=staffById(clash.driver_id);
-        avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} is already booked on ${esc(evDate)} — ${esc(clash.customer_name||'another customer')}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}</div>`;
+        const others=DATA.cars.filter(c=>c.id!==carId && !DATA.bookings.some(b=>b.car_id===c.id && b.event_date===evDate && b.status!=='cancelled'));
+        avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} is already booked on ${esc(evDate)} — ${esc(clash.customer_name||'another customer')}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}
+          ${window._quoteId && DATA.quotes.find(q=>q.id===window._quoteId)?.customer_email
+            ? `<div style="margin-top:8px"><button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood);background:#fff" onclick="unavailableNotice('${window._quoteId}','${carId}')">✉️ Draft unavailable notice${others.length?` (${others.length} car${others.length===1?'':'s'} open)`:''}</button></div>`
+            : ''}
+        </div>`;
       } else {
         avail.innerHTML=`<div class="qok">✓ ${esc(carById(carId)?.name||'This car')} is open on ${esc(evDate)}</div>`;
       }
