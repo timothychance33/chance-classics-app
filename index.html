@@ -799,7 +799,7 @@ let calView=new Date(); // currently displayed month in the calendar tab
 function renderAll(){renderSchedule();renderCalendar();renderPrep();renderCars();renderStaff();renderQuotes()}
 
 // ---------- QUOTES ----------
-const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.10;
+const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.10, HOTEL_FEE=200;
 const FOLLOWUP_DAYS=3, QUOTE_VALID_DAYS=7;
 function renderQuotes(){
   const el=document.getElementById('panel-quotes');
@@ -873,17 +873,18 @@ function showOtherQuotes(){
   openModal('Old quotes', body);
 }
 
-function calcQuote(carId, hours, miles){
+function calcQuote(carId, hours, miles, hotelFee){
   const car=carById(carId);
   const base=car?Number(car.base_rate||0):0;
   const extraH=Math.max(0,(Number(hours)||0)-INCLUDED_HOURS);
   const overage=extraH*OVERAGE_RATE;
   const mi=Number(miles)||0;
   const travel=mi>FREE_MILES?mi*PER_MILE:0;
-  const subtotal=base+overage+travel;
+  const hotel=(Number(hotelFee)||0)>0?HOTEL_FEE:0;
+  const subtotal=base+overage+travel+hotel;
   const tax=subtotal*TAX_RATE;
   const total=subtotal+tax;
-  return {base,extraH,overage,mi,travel,subtotal,tax,total};
+  return {base,extraH,overage,mi,travel,hotel,subtotal,tax,total};
 }
 
 function unavailableNotice(qid, requestedCarId){
@@ -962,6 +963,7 @@ function quoteBuilder(qid){
     </div>
     <div id="q_avail"></div>
     <div><label>One-way miles from Benton (0 if within 30)</label><input id="q_miles" type="number" step="1" min="0" value="${initMiles}" oninput="quoteRecalc()"></div>
+    <label class="toggle" style="margin-top:10px"><input type="checkbox" id="q_hotel" ${Number(q.hotel_fee)>0?'checked':''} onchange="quoteRecalc()"><span class="toggleslide"></span><span>Overnight hotel accommodation — $${HOTEL_FEE}</span></label>
     <div id="q_breakdown" class="qbreak"></div>
     <div><label>Note to customer (optional)</label><textarea id="q_note" placeholder="e.g. Suggested arrival 45 min before ceremony...">${esc(q.quote_notes||'')}</textarea></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
@@ -1025,11 +1027,14 @@ async function logDecline(qid){
   toast('Noted');closeModal();await loadAll();
 }
 
+function quoteHotelOn(){
+  return !!(document.getElementById('q_hotel')&&document.getElementById('q_hotel').checked);
+}
 function quoteRecalc(){
   const carId=document.getElementById('q_car').value;
   const hours=document.getElementById('q_hours').value;
   const miles=document.getElementById('q_miles').value;
-  const c=calcQuote(carId,hours,miles);
+  const c=calcQuote(carId,hours,miles,quoteHotelOn()?HOTEL_FEE:0);
   const m=n=>`$${n.toFixed(2)}`;
 
   // Availability check: does the selected car already have a booking that day?
@@ -1058,6 +1063,7 @@ function quoteRecalc(){
     <div class="qline"><span>Base (up to ${INCLUDED_HOURS} hrs)</span><span>${m(c.base)}</span></div>
     ${c.overage>0?`<div class="qline"><span>+${c.extraH} extra hr × $${OVERAGE_RATE}</span><span>${m(c.overage)}</span></div>`:''}
     ${c.travel>0?`<div class="qline"><span>Travel ${c.mi} mi × $${PER_MILE} (trailered)</span><span>${m(c.travel)}</span></div>`:`<div class="qline muted"><span>Travel (within ${FREE_MILES} mi)</span><span>$0.00</span></div>`}
+    ${c.hotel>0?`<div class="qline"><span>Overnight hotel accommodation</span><span>${m(c.hotel)}</span></div>`:`<div class="qline muted"><span>Overnight hotel (not included)</span><span>$0.00</span></div>`}
     <div class="qline"><span>Subtotal</span><span>${m(c.subtotal)}</span></div>
     <div class="qline"><span>Tax (${(TAX_RATE*100).toFixed(0)}%)</span><span>${m(c.tax)}</span></div>
     <div class="qline qtotal"><span>Total</span><span>${m(c.total)}</span></div>`;
@@ -1068,8 +1074,8 @@ function quoteFields(qid){
   const hours=parseFloat(document.getElementById('q_hours').value)||INCLUDED_HOURS;
   const miles=parseFloat(document.getElementById('q_miles').value)||0;
   const note=document.getElementById('q_note').value||null;
-  const c=calcQuote(carId,hours,miles);
-  return {car_id:carId,hours,miles,base_rate:c.base,overage:c.overage,travel:c.travel,
+  const c=calcQuote(carId,hours,miles,quoteHotelOn()?HOTEL_FEE:0);
+  return {car_id:carId,hours,miles,base_rate:c.base,overage:c.overage,travel:c.travel,hotel_fee:c.hotel,
     subtotal:c.subtotal,tax:c.tax,total:c.total,quote_notes:note,extra_hours:c.extraH};
 }
 
@@ -1077,7 +1083,7 @@ async function saveQuoteDraft(qid){
   const f=quoteFields(qid);
   const {error}=await SB.from('quote_requests').update({
     car_id:f.car_id,hours:f.hours,miles:f.miles,base_rate:f.base_rate,overage:f.overage,
-    travel:f.travel,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
+    travel:f.travel,hotel_fee:f.hotel_fee,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
     status:'quoted'
   }).eq('id',qid);
   if(error){toast(error.message);return}
@@ -1095,7 +1101,7 @@ async function sendQuote(qid){
   // save first
   await SB.from('quote_requests').update({
     car_id:f.car_id,hours:f.hours,miles:f.miles,base_rate:f.base_rate,overage:f.overage,
-    travel:f.travel,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
+    travel:f.travel,hotel_fee:f.hotel_fee,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
     status:'sent', sent_at:nowIso
   }).eq('id',qid);
   // send email
@@ -1105,7 +1111,7 @@ async function sendQuote(qid){
       book_url:(car&&car.book_url)?car.book_url:'https://www.chanceclassics.com/book-online?referral=quote_email',
       quote:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:q.event_date,
         event_location:q.event_location, base_rate:f.base_rate, overage:f.overage, extra_hours:f.extra_hours,
-        travel:f.travel, miles:f.miles, subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes,
+        travel:f.travel, miles:f.miles, hotel_fee:f.hotel_fee, subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes,
         expires:expiresStr}
     })});
     toast('Quote sent to customer');
