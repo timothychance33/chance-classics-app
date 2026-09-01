@@ -150,6 +150,19 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .dtname{font-weight:700;font-size:14px}
 .rowthumb{width:46px;height:46px;border-radius:8px;background-size:cover;background-position:center;flex:none;border:1px solid var(--line)}
 .earnpill{display:inline-block;margin-top:8px;font:700 12px/1 "Inter",sans-serif;background:#eef4ec;color:#2f5740;padding:7px 11px;border-radius:8px;cursor:pointer}
+.drvjobs{margin-top:12px;border-top:1px solid var(--paper-2);padding-top:10px}
+.drvjobs .wfhd{margin-top:8px}
+.owedbox{font:800 22px/1 "Playfair Display",serif;color:var(--oxblood)}
+.owedbox .meta{margin-top:4px;font:600 11px/1.3 "Inter",sans-serif;letter-spacing:.02em;text-transform:none;color:#6b6052}
+.jobcheck{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--paper-2);font-size:13px;cursor:pointer}
+.jobcheck:last-child{border-bottom:0}
+.jobcheck input{width:18px;height:18px;flex:none;margin-top:1px;accent-color:var(--green)}
+.jobcheck .jmain{flex:1;min-width:0}
+.jobcheck .jname{font-weight:700}
+.jobcheck .jamt{font-weight:800;color:var(--green);white-space:nowrap}
+.jobcheck.paid{color:#6b6052}
+.jobcheck.paid .jname{text-decoration:line-through}
+.jobcheck.paid .jamt{color:#6b6052}
 .trailertag{font:700 10px/1 "Inter",sans-serif;letter-spacing:.04em;text-transform:uppercase;background:#3a4a5c;color:#fff;padding:4px 8px;border-radius:20px;white-space:nowrap}
 .toggle{display:flex;align-items:center;gap:10px;margin-top:14px;cursor:pointer;font-size:14px;font-weight:600;color:var(--ink)}
 .toggle input{display:none}
@@ -661,19 +674,29 @@ async function notifyOfferTo(booking){
 }
 
 function myStaff(){const id=myStaffId();return id?staffById(id):null;}
-// Driver earnings split: earned = past/completed jobs, upcoming = future claimed jobs.
-function driverEarnings(staffId){
-  const s=staffById(staffId); if(!s) return {earned:0,upcoming:0,total:0,jobs:[]};
+// Finished = event day has arrived or status is completed. Accepted = driver assigned.
+function isFinishedJob(b){
+  if(!b||b.status==='cancelled') return false;
+  if(b.status==='completed') return true;
   const today=new Date().toISOString().slice(0,10);
+  return !!(b.event_date && b.event_date<=today);
+}
+// Driver earnings split: earned = finished jobs, upcoming = future claimed jobs.
+// owed = unpaid computed pay on finished/accepted jobs (uses bookings.driver_paid_at).
+function driverEarnings(staffId){
+  const s=staffById(staffId); if(!s) return {earned:0,upcoming:0,owed:0,total:0,jobs:[]};
   const list=DATA.bookings.filter(b=>b.driver_id===staffId && b.status!=='cancelled');
-  let earned=0, upcoming=0;
+  let earned=0, upcoming=0, owed=0;
   const detail=list.map(b=>{
     const amt=(b.pay_tier&&s.pay_rate)?b.pay_tier*s.pay_rate:0;
-    const isPast = b.status==='completed' || (b.event_date && b.event_date<today);
-    if(isPast) earned+=amt; else upcoming+=amt;
+    const isPast=isFinishedJob(b);
+    if(isPast){
+      earned+=amt;
+      if(!b.driver_paid_at) owed+=amt;
+    } else upcoming+=amt;
     return {b,amt,isPast};
   }).sort((a,b)=>(b.b.event_date||'').localeCompare(a.b.event_date||''));
-  return {earned,upcoming,total:earned+upcoming,jobs:detail};
+  return {earned,upcoming,owed,total:earned+upcoming,jobs:detail};
 }
 // Classify a booking for color-coding: mine | open | other
 function bookingCategory(b){
@@ -726,15 +749,31 @@ function ownerPayPillHtml(b, extraStyle){
   }
   return `<div class="paypill muted"${st}>Payout pending — set pay scale</div>`;
 }
+async function persistDriverPaid(bid, paid){
+  const when=paid?new Date().toISOString():null;
+  const local=DATA.bookings.find(x=>x.id===bid);
+  if(local) local.driver_paid_at=when;
+  if(typeof SB!=='undefined' && SB){
+    const {error}=await SB.from('bookings').update({driver_paid_at:when}).eq('id',bid);
+    if(error){toast(error.message);return false}
+  }
+  return true;
+}
 async function markDriverPaid(bid){
-  const {error}=await SB.from('bookings').update({driver_paid_at:new Date().toISOString()}).eq('id',bid);
-  if(error){toast(error.message);return}
-  toast('Marked as paid ✓');await loadAll();
+  if(!await persistDriverPaid(bid,true)) return;
+  toast('Marked as paid ✓');
+  if(typeof SB!=='undefined' && SB) await loadAll();
+  else renderAll();
 }
 async function unmarkDriverPaid(bid){
-  const {error}=await SB.from('bookings').update({driver_paid_at:null}).eq('id',bid);
-  if(error){toast(error.message);return}
-  toast('Marked unpaid');await loadAll();
+  if(!await persistDriverPaid(bid,false)) return;
+  toast('Marked unpaid');
+  if(typeof SB!=='undefined' && SB) await loadAll();
+  else renderAll();
+}
+async function toggleDriverPaid(bid, paid){
+  if(paid) await markDriverPaid(bid);
+  else await unmarkDriverPaid(bid);
 }
 // Advance the waterfall to the next-ranked ELIGIBLE driver who hasn't passed; null if none left
 function nextRankAfter(currentRank, passedIds, booking){
@@ -1521,7 +1560,7 @@ function renderStaff(){
   const admin=isAdmin();
   const addBtn=admin?`<button class="act add" onclick="staffModal()">+ Add driver</button>`:'';
   let h=`<div class="sectionhead"><div><div class="kicker">${admin?'Roster · pay scales · waterfall':'Your profile'}</div><h2 class="display">${admin?'Drivers':'Crew'}</h2></div><span class="line"></span>${addBtn}</div>`;
-  if(admin) h+=`<div class="meta" style="margin:-8px 0 16px">Driver info, $/tier pay scale, waterfall order, add and delete. Job payouts show on each accepted booking — not here.</div>`;
+  if(admin) h+=`<div class="meta" style="margin:-8px 0 16px">Roster, $/tier pay scale, waterfall order, add and delete. Each driver lists upcoming jobs and what you owe — check off a job when you’ve paid.</div>`;
   const mineId=myStaffId();
 
   // ---- Non-admin: just their own card ----
@@ -1574,7 +1613,7 @@ function staffCardHtml(s, showPay, canUp, canDown, drvList){
     <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">${pills}</span></div>
     <div class="bd"><div class="meta">${esc(s.phone||'')} ${s.email?'· '+esc(s.email):''}</div>
     ${(hasRole(s,'driver')&&showPay)?`<div class="meta" style="margin-top:6px">${s.priority!=null?`Priority #${s.priority}`:'<em>not in rotation</em>'} · $${s.pay_rate??0}/tier${s.pulls_trailer===false?' · <span style="color:#b8862c">no trailer</span>':' · 🚛 trailer ok'}</div>`:''}
-    ${(hasRole(s,'driver')&&showPay)?(()=>{const e=driverEarnings(s.id);return `<div class="earnpill" onclick="driverPayDetail('${s.id}');event.stopPropagation()">💰 $${e.earned} earned${e.upcoming?` · $${e.upcoming} upcoming`:''}</div>`;})():''}
+    ${(hasRole(s,'driver')&&showPay)?driverCardJobsHtml(s,admin):''}
     ${!s.active?'<div class="meta">Inactive</div>':''}
     <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
       ${admin?`<button class="ghost tinybtn" onclick="staffModal('${s.id}')">Edit</button>`:''}
@@ -1582,32 +1621,58 @@ function staffCardHtml(s, showPay, canUp, canDown, drvList){
     </div></div></div>`;
 }
 
+function driverJobLineHtml(x, {checkable}={}){
+  const b=x.b, car=carById(b.car_id), dc=fmtDate(b.event_date);
+  const paid=!!b.driver_paid_at;
+  const when=`${dc.m} ${dc.d}${dc.y?', '+dc.y:''}`;
+  const title=`${esc(b.customer_name||'Booking')}${car?' · '+esc(car.name):''}`;
+  if(checkable){
+    return `<label class="jobcheck${paid?' paid':''}">
+      <input type="checkbox" ${paid?'checked':''} onchange="toggleDriverPaid('${b.id}',this.checked)">
+      <span class="jmain"><span class="jname">${when} · ${title}</span>
+        <span class="meta" style="display:block;margin-top:2px">${paid?'Paid':'Unpaid'}${b.pay_tier?` · T${b.pay_tier}`:''}</span></span>
+      <span class="jamt">$${x.amt}</span>
+    </label>`;
+  }
+  return `<div class="wfrow" onclick="bookingDetail('${b.id}')" style="cursor:pointer">
+    <span>${when} · ${title}</span>
+    <span class="jamt">$${x.amt}</span>
+  </div>`;
+}
+function driverCardJobsHtml(s, admin){
+  const e=driverEarnings(s.id);
+  const upcoming=e.jobs.filter(x=>!x.isPast).sort((a,b)=>(a.b.event_date||'').localeCompare(b.b.event_date||''));
+  const finished=e.jobs.filter(x=>x.isPast);
+  const unpaid=finished.filter(x=>!x.b.driver_paid_at);
+  const paid=finished.filter(x=>x.b.driver_paid_at);
+  const owedJobs=[...unpaid,...paid];
+  return `<div class="drvjobs">
+    <div class="owedbox">$${e.owed}<div class="meta">${e.owed?`You owe ${esc(s.name.split(' ')[0])}`:'Nothing owed'}</div></div>
+    <div class="wfhd">Upcoming bookings</div>
+    ${upcoming.length?upcoming.map(x=>driverJobLineHtml(x)).join(''):'<div class="meta" style="padding:4px 0 8px">No upcoming jobs.</div>'}
+    ${admin?`<div class="wfhd">Unpaid / mark paid</div>
+      ${owedJobs.length?owedJobs.map(x=>driverJobLineHtml(x,{checkable:true})).join(''):'<div class="meta" style="padding:4px 0">No finished jobs yet.</div>'}
+      <div class="meta" style="margin-top:6px;font-size:11px">Check off when you’ve paid. Saved on the booking.</div>`:''}
+    <div class="earnpill" onclick="driverPayDetail('${s.id}');event.stopPropagation()">All jobs · $${e.earned} earned${e.upcoming?` · $${e.upcoming} upcoming`:''}</div>
+  </div>`;
+}
 function driverPayDetail(sid){
   const s=staffById(sid); if(!s) return;
   const e=driverEarnings(sid);
-  const line=(x)=>{
-    const b=x.b, car=carById(b.car_id), dc=fmtDate(b.event_date);
-    const paidTag=b.driver_paid_at?'<span class="remindertag" style="background:#eef4ec;color:#2f5740">Paid</span>':(x.isPast?'<span class="waittag">Owed</span>':'');
-    return `<div class="wfrow" onclick="bookingDetail('${b.id}')" style="cursor:pointer">
-      <span>${dc.m} ${dc.d}, ${dc.y} · ${esc(b.customer_name||'Booking')}${car?' · '+esc(car.name):''}${b.pay_tier?` <span class="tiertag">T${b.pay_tier}</span>`:''} ${paidTag}</span>
-      <span style="font-weight:700;color:var(--green)">$${x.amt}</span>
-    </div>`;
-  };
   const earnedJobs=e.jobs.filter(x=>x.isPast);
-  const upcomingJobs=e.jobs.filter(x=>!x.isPast);
-  const owedNow=earnedJobs.filter(x=>!x.b.driver_paid_at).reduce((sum,x)=>sum+x.amt,0);
+  const upcomingJobs=e.jobs.filter(x=>!x.isPast).sort((a,b)=>(a.b.event_date||'').localeCompare(b.b.event_date||''));
   openModal(`${s.name} — pay`, `
     <div style="display:flex;gap:18px;margin-bottom:16px;flex-wrap:wrap">
-      <div><div style="font:800 24px/1 'Playfair Display',serif;color:var(--oxblood)">$${owedNow}</div><div class="meta">owed now</div></div>
+      <div><div style="font:800 24px/1 'Playfair Display',serif;color:var(--oxblood)">$${e.owed}</div><div class="meta">owed now</div></div>
       <div><div style="font:800 24px/1 'Playfair Display',serif;color:var(--green)">$${e.earned}</div><div class="meta">earned total</div></div>
       <div><div style="font:800 24px/1 'Playfair Display',serif;color:var(--amber)">$${e.upcoming}</div><div class="meta">upcoming</div></div>
       <div><div style="font:800 24px/1 'Playfair Display',serif">$${s.pay_rate??0}</div><div class="meta">per tier</div></div>
     </div>
-    <div class="wfhd">Earned (completed)</div>
-    ${earnedJobs.length?earnedJobs.map(line).join(''):'<div class="meta" style="padding:4px 0 10px">No completed jobs yet.</div>'}
-    <div class="wfhd" style="margin-top:14px">Upcoming (claimed)</div>
-    ${upcomingJobs.length?upcomingJobs.map(line).join(''):'<div class="meta" style="padding:4px 0">No upcoming claimed jobs.</div>'}
-    <div class="meta" style="margin-top:12px;font-size:11px">Pay = each job's tier × $${s.pay_rate??0}. "Earned" = past or completed jobs.</div>
+    <div class="wfhd">Finished — check off when paid</div>
+    ${earnedJobs.length?earnedJobs.map(x=>driverJobLineHtml(x,{checkable:isAdmin()})).join(''):'<div class="meta" style="padding:4px 0 10px">No completed jobs yet.</div>'}
+    <div class="wfhd" style="margin-top:14px">Upcoming bookings</div>
+    ${upcomingJobs.length?upcomingJobs.map(x=>driverJobLineHtml(x)).join(''):'<div class="meta" style="padding:4px 0">No upcoming claimed jobs.</div>'}
+    <div class="meta" style="margin-top:12px;font-size:11px">Pay = each job's tier × $${s.pay_rate??0}. Paid is stored on the booking (driver_paid_at).</div>
   `);
 }
 
@@ -2025,6 +2090,10 @@ function bootOwnerPreview(){
     bookings:[
       {id:'b-accepted',customer_name:'Accepted Wedding',event_type:'wedding',event_date:soon,start_time:'14:00',end_time:'18:00',
         car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:3,needs_trailer:false},
+      {id:'b-alex-soon',customer_name:'Rehearsal Dinner',event_type:'dinner',event_date:soon,start_time:'18:00',
+        car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:2,needs_trailer:false},
+      {id:'b-alex-done',customer_name:'Airport Run',event_type:'transfer',event_date:past,start_time:'09:00',
+        car_id:'c1',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:2,needs_trailer:false},
       {id:'b-done',customer_name:'Completed Parade',event_type:'parade',event_date:past,start_time:'10:00',
         car_id:'c1',driver_id:'d2',status:'completed',payment_status:'paid',pay_tier:2,needs_trailer:false},
       {id:'b-open',customer_name:'Unclaimed Birthday',event_type:'birthday',event_date:soon,start_time:'16:00',

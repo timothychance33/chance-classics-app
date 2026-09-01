@@ -11,6 +11,11 @@ assert.doesNotMatch(html, /<button data-role="driver">Drivers<\/button>/, 'heade
 assert.match(html, /Pay driver \$\$\{dp\.amount\}/, 'owner payout copy uses Pay driver $X');
 assert.match(html, /function ownerPayPillHtml/, 'owner payout helper exists');
 assert.match(html, /Roster · pay scales · waterfall/, 'Drivers page names roster + scales + waterfall');
+assert.match(html, /function driverCardJobsHtml/, 'each driver card lists jobs and owed');
+assert.match(html, /toggleDriverPaid/, 'Tim can check off paid jobs');
+assert.match(html, /driver_paid_at/, 'reuses bookings.driver_paid_at — no second ledger');
+assert.match(html, /You owe/, 'card shows what Tim owes the driver');
+assert.match(html, /Upcoming bookings/, 'card lists upcoming bookings');
 
 // Same formula the app uses: amount = pay_tier × driver.pay_rate
 function driverPayFor(b, staff){
@@ -23,5 +28,17 @@ const alex={id:'d1',pay_rate:50};
 assert.equal(driverPayFor({driver_id:'d1',pay_tier:3},[alex]).amount, 150);
 assert.equal(driverPayFor({driver_id:null,pay_tier:3},[alex]), null);
 assert.equal(driverPayFor({driver_id:'d1',pay_tier:null},[alex]), null);
+
+function isFinishedJob(b){
+  if(!b||b.status==='cancelled') return false;
+  if(b.status==='completed') return true;
+  return !!(b.event_date && b.event_date<='2026-09-01');
+}
+const finishedUnpaid={status:'completed',event_date:'2026-08-29',driver_paid_at:null};
+const upcomingAccepted={status:'confirmed',event_date:'2026-09-06',driver_paid_at:null};
+assert.equal(isFinishedJob(finishedUnpaid), true);
+assert.equal(isFinishedJob(upcomingAccepted), false);
+const owed = [finishedUnpaid].filter(b=>isFinishedJob(b)&&!b.driver_paid_at).length;
+assert.equal(owed, 1);
 
 console.log('owner-views tests passed');
