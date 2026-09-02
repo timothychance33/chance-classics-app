@@ -72,6 +72,7 @@ header{
 /* ---- Layout ---- */
 .wrap{max-width:1180px;margin:0 auto;padding:22px 20px 80px}
 nav.tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap}
+nav.tabs .tabbtns{display:flex;gap:4px;flex-wrap:wrap;width:100%}
 nav.tabs button{
   background:var(--paper-2);border:1px solid var(--line);border-bottom:none;
   font:700 13px/1 sans-serif;padding:11px 18px;border-radius:8px 8px 0 0;cursor:pointer;color:var(--ink)
@@ -136,9 +137,10 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .earnrow:last-child{border-bottom:0}
 .earnrow .ek{color:#6b6052}
 .earnrow .ev{font-weight:700;white-space:nowrap}
-.monthstrip{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px}
-.monthchip{background:#fff;border:1px solid var(--line);border-radius:999px;font:700 11px/1 "Inter",sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:8px 11px;cursor:pointer;color:var(--ink)}
-.monthchip.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.monthnav{display:flex;align-items:center;gap:8px;margin:0 0 16px;max-width:100%}
+.monthnav button{flex:none;min-width:44px;min-height:40px}
+.monthnav select{flex:1;min-width:0;font:700 14px/1.2 "Inter",sans-serif}
+.tabselect{display:none;width:100%;margin-bottom:12px;font:700 15px/1.2 "Inter",sans-serif}
 .car-earn .hd{flex-wrap:wrap}
 .car-earn .period{margin-top:10px;padding-top:10px;border-top:1px solid var(--paper-2)}
 .car-earn .period:first-child{margin-top:0;padding-top:0;border-top:0}
@@ -354,7 +356,8 @@ img,svg{max-width:100%}
   .signout{margin-left:auto;padding:7px 10px;font-size:10px}
   .wrap{padding:14px 12px 80px}
   nav.tabs{gap:3px;margin-bottom:14px;flex-wrap:wrap}
-  nav.tabs button{padding:9px 12px;font-size:12px;white-space:nowrap;flex:0 0 auto}
+  nav.tabs .tabbtns{display:none}
+  nav.tabs .tabselect{display:block}
   .grid.cols{grid-template-columns:1fr}
   .sectionhead{flex-wrap:wrap;gap:8px}
   .sectionhead h2{font-size:19px}
@@ -414,13 +417,24 @@ img,svg{max-width:100%}
 
 <div class="wrap" id="app" style="display:none">
   <nav class="tabs" id="tabs">
-    <button data-tab="schedule" class="active">Schedule</button>
-    <button data-tab="calendar">Calendar</button>
-    <button data-tab="staff">Drivers</button>
-    <button data-tab="earnings">Earnings</button>
-    <button data-tab="quotes">Quotes</button>
-    <button data-tab="prep">Prep Board</button>
-    <button data-tab="cars">Cars</button>
+    <select class="tabselect" id="tabSelect" aria-label="Section" onchange="activateTab(this.value)">
+      <option value="schedule">Schedule</option>
+      <option value="calendar">Calendar</option>
+      <option value="staff">Drivers</option>
+      <option value="earnings">Earnings</option>
+      <option value="quotes">Quotes</option>
+      <option value="prep">Prep Board</option>
+      <option value="cars">Cars</option>
+    </select>
+    <div class="tabbtns">
+      <button data-tab="schedule" class="active">Schedule</button>
+      <button data-tab="calendar">Calendar</button>
+      <button data-tab="staff">Drivers</button>
+      <button data-tab="earnings">Earnings</button>
+      <button data-tab="quotes">Quotes</button>
+      <button data-tab="prep">Prep Board</button>
+      <button data-tab="cars">Cars</button>
+    </div>
   </nav>
 
   <div class="panel active" id="panel-schedule"></div>
@@ -605,9 +619,15 @@ function setupRoleUI(){
   if(qtab) qtab.style.display=isAdmin()?'':'none';
   const etab=document.querySelector('#tabs button[data-tab="earnings"]');
   if(etab) etab.style.display=isAdmin()?'':'none';
+  const qopt=document.querySelector('#tabSelect option[value="quotes"]');
+  const eopt=document.querySelector('#tabSelect option[value="earnings"]');
+  if(qopt) qopt.hidden=!isAdmin();
+  if(eopt) eopt.hidden=!isAdmin();
   // Owner sees "Drivers" (roster + waterfall + scales). Crew see their own profile as "Crew".
   const stab=document.querySelector('#tabs button[data-tab="staff"]');
   if(stab) stab.textContent=isAdmin()?'Drivers':'Crew';
+  const sopt=document.querySelector('#tabSelect option[value="staff"]');
+  if(sopt) sopt.textContent=isAdmin()?'Drivers':'Crew';
 }
 
 async function loadAll(){
@@ -792,6 +812,21 @@ function bookingInMonth(b, year, month){
   const mm=String(month).padStart(2,'0');
   return !!(b.event_date && b.event_date.slice(0,7)===`${year}-${mm}`);
 }
+// Wix sync writes price.value onto the booking as a notes line: "Price: $1234".
+function wixPriceFromNotes(notes){
+  if(!notes) return null;
+  const m=String(notes).match(/Price:\s*\$([0-9]+(?:\.[0-9]+)?)/i);
+  if(!m) return null;
+  const n=parseFloat(m[1]);
+  return Number.isFinite(n)?n:null;
+}
+function bookingGrossAmount(b, quoteMap){
+  const fromNotes=wixPriceFromNotes(b&&b.notes);
+  if(fromNotes!=null) return fromNotes;
+  const q=quoteMap&&b?quoteMap[b.id]:null;
+  if(q && q.total!=null && !Number.isNaN(Number(q.total))) return Number(q.total);
+  return null;
+}
 // Pair each booking with at most one quote. Same email match autoMatchQuotes already
 // uses to mark a quote booked; prefer email+date, then email+car, then email.
 function assignQuotesToBookings(bookings, quotes){
@@ -830,13 +865,24 @@ function bookingDriverPayAmount(b, staff){
   return Number(b.pay_tier*d.pay_rate)||0; // same $ as Pay driver $X
 }
 function sumEarnings(list, quoteMap, staff){
-  let gross=0, driverPay=0;
+  let gross=0, driverPay=0, unknown=0, unknownPay=0, known=0;
   for(const b of list){
-    const q=quoteMap[b.id];
-    gross += q?Number(q.total)||0:0;
-    driverPay += bookingDriverPayAmount(b, staff);
+    const g=bookingGrossAmount(b, quoteMap);
+    const pay=bookingDriverPayAmount(b, staff);
+    if(g==null){
+      unknown++;
+      unknownPay+=pay;
+    }else{
+      known++;
+      gross+=g;
+      driverPay+=pay;
+    }
   }
-  return {gross, driverPay, net:gross-driverPay, jobs:list.length};
+  return {
+    gross, driverPay,
+    net: list.length===0 ? 0 : (known ? gross-driverPay : null),
+    jobs:list.length, known, unknown, unknownPay
+  };
 }
 function buildOwnerEarnings(data, selected, today){
   const day=today||chicagoToday();
@@ -862,8 +908,9 @@ function buildOwnerEarnings(data, selected, today){
     };
   });
   const unassigned=bookings.filter(b=>!b.car_id);
+  const missingAmount=bookings.filter(b=>bookingGrossAmount(b, quoteMap)==null).length;
   return {day, month, quoteMap, company, perCar, unassignedCount:unassigned.length,
-    unmatchedCount:bookings.filter(b=>!quoteMap[b.id]).length, jobCount:bookings.length};
+    missingAmount, jobCount:bookings.length};
 }
 // Owner-facing payout line: "Pay driver $X" once a job is claimed/assigned.
 function ownerPayPillHtml(b, extraStyle){
@@ -986,25 +1033,48 @@ function setEarnMonth(year, month){
   earnMonth={year:+year, month:+month};
   renderEarnings();
 }
+function shiftEarnMonth(dir){
+  const today=chicagoToday();
+  if(!earnMonth) earnMonth={year:today.year, month:today.month};
+  let m=earnMonth.month+dir;
+  if(m<1) m=1;
+  if(m>12) m=12;
+  setEarnMonth(today.year, m);
+}
+function moneyOrDash(n){
+  if(n==null) return '—';
+  return moneyFmt(n);
+}
+function earnUnknownNote(roll){
+  if(!roll.unknown) return '';
+  const pay=roll.unknownPay?` Driver pay on those jobs is ${moneyFmt(roll.unknownPay)} — shown here, not subtracted from $0.`:"";
+  return `<div class="meta" style="margin-top:8px">${roll.unknown} job${roll.unknown===1?' has':'s have'} no stored customer amount (not in gross).${pay}</div>`;
+}
 function earnPeriodHtml(label, roll){
-  const netCls=roll.net<0?'net-neg':(roll.net>0?'net-pos':'');
+  const hasNet=roll.net!=null;
+  const netCls=!hasNet?'':(roll.net<0?'net-neg':(roll.net>0?'net-pos':''));
+  const jobBit=roll.jobs?`${roll.known} of ${roll.jobs} with an amount`:'no jobs';
   return `<div class="earncard">
     <div class="elbl">${esc(label)}</div>
-    <div class="eamt ${netCls}">${moneyFmt(roll.net)}</div>
-    <div class="meta" style="margin-bottom:8px">Net after driver pay · ${roll.jobs} job${roll.jobs===1?'':'s'}</div>
-    <div class="earnrow"><span class="ek">Gross</span><span class="ev">${moneyFmt(roll.gross)}</span></div>
-    <div class="earnrow"><span class="ek">Driver pay</span><span class="ev">${moneyFmt(roll.driverPay)}</span></div>
-    <div class="earnrow"><span class="ek">Net</span><span class="ev">${moneyFmt(roll.net)}</span></div>
+    <div class="eamt ${netCls}">${moneyOrDash(roll.net)}</div>
+    <div class="meta" style="margin-bottom:8px">${hasNet?'Net after driver pay':"Net only when a job has a customer amount"} · ${jobBit}</div>
+    <div class="earnrow"><span class="ek">Gross</span><span class="ev">${roll.known?moneyFmt(roll.gross):'—'}</span></div>
+    <div class="earnrow"><span class="ek">Driver pay</span><span class="ev">${roll.known?moneyFmt(roll.driverPay):'—'}</span></div>
+    <div class="earnrow"><span class="ek">Net</span><span class="ev">${moneyOrDash(roll.net)}</span></div>
+    ${earnUnknownNote(roll)}
   </div>`;
 }
 function earnCarPeriodHtml(label, roll){
+  const g=roll.jobs===0?moneyFmt(0):(roll.known?moneyFmt(roll.gross):'—');
+  const p=roll.jobs===0?moneyFmt(0):(roll.known?moneyFmt(roll.driverPay):'—');
   return `<div class="period">
     <div class="plbl">${esc(label)}</div>
     <div class="pvals">
-      <span>Gross <b>${moneyFmt(roll.gross)}</b></span>
-      <span>Driver pay <b>${moneyFmt(roll.driverPay)}</b></span>
-      <span>Net <b>${moneyFmt(roll.net)}</b></span>
+      <span>Gross <b>${g}</b></span>
+      <span>Driver pay <b>${p}</b></span>
+      <span>Net <b>${moneyOrDash(roll.net)}</b></span>
     </div>
+    ${earnUnknownNote(roll)}
   </div>`;
 }
 function renderEarnings(){
@@ -1013,23 +1083,25 @@ function renderEarnings(){
   if(!isAdmin()){ el.innerHTML=`<div class="empty"><div class="big">Earnings</div>Owner only.</div>`; return; }
   const today=chicagoToday();
   if(!earnMonth) earnMonth={year:today.year, month:today.month};
+  if(earnMonth.year!==today.year) earnMonth={year:today.year, month:earnMonth.month};
   const report=buildOwnerEarnings(DATA, earnMonth, today);
   const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const monthLabel=`${monthNames[report.month.month-1]} ${report.month.year}`;
-  const chips=monthNames.map((name,i)=>{
-    const m=i+1;
-    const on=report.month.year===today.year && report.month.month===m;
-    return `<button type="button" class="monthchip${on?' active':''}" onclick="setEarnMonth(${today.year},${m})">${name.slice(0,3)}</button>`;
-  }).join('');
+  const monthOpts=monthNames.map((name,i)=>`<option value="${i+1}" ${report.month.month===i+1?'selected':''}>${name} ${today.year}</option>`).join('');
   let h=`<div class="sectionhead"><div><div class="kicker">Owner view · America/Chicago</div><h2 class="display">Earnings</h2></div><span class="line"></span></div>`;
-  h+=`<div class="meta" style="margin:-8px 0 14px">Gross is the quote total already stored on the matching quote (same customer email the board uses to mark a quote booked). Driver pay is the same tier × scale as “Pay driver $X”. Accepted jobs that are still unpaid or deposit-only are included when they have that quote total — this is not a new paid/unpaid ledger. Bookings with no matching quote show $0 gross. Each booking is attributed to its assigned car (the board stores one car per booking, not a per-car split).</div>`;
-  h+=`<div class="meta" style="margin:-6px 0 12px">${report.jobCount} counted job${report.jobCount===1?'':'s'} (confirmed / in progress / completed, plus accepted or collected <em>new</em> imports). Cancelled jobs are out.${report.unmatchedCount?` ${report.unmatchedCount} counted booking${report.unmatchedCount===1?' has':'s have'} no matching quote.`:' All counted bookings have a quote total.'}${report.unassignedCount?` ${report.unassignedCount} counted booking${report.unassignedCount===1?' has':'s have'} no car assigned — in company totals only.`:''}</div>`;
+  h+=`<div class="meta" style="margin:-8px 0 14px">Gross is the customer amount Wix already writes on the booking (<em>Price: $X</em> in notes). If that line is missing, a matching quote total is the fallback. Driver pay is the same tier × scale as “Pay driver $X”. Net is only calculated when a job has a customer amount — missing amounts are not treated as $0. Each booking is attributed to its assigned car (one car per booking).</div>`;
+  h+=`<div class="meta" style="margin:-6px 0 12px">${report.jobCount} counted job${report.jobCount===1?'':'s'} (confirmed / in progress / completed, plus accepted or collected <em>new</em> imports). Cancelled jobs are out.${report.missingAmount?` ${report.missingAmount} counted booking${report.missingAmount===1?' has':'s have'} no stored customer amount.`:' All counted bookings have a customer amount.'}${report.unassignedCount?` ${report.unassignedCount} counted booking${report.unassignedCount===1?' has':'s have'} no car assigned — in company totals only.`:''}</div>`;
   h+=`<div class="earnstats">
     ${earnPeriodHtml('All-time', report.company.allTime)}
     ${earnPeriodHtml(`${today.year} year-to-date`, report.company.ytd)}
     ${earnPeriodHtml(monthLabel, report.company.month)}
   </div>`;
-  h+=`<div class="schsechd">Month</div><div class="monthstrip">${chips}</div>`;
+  h+=`<div class="schsechd">Month</div>
+    <div class="monthnav">
+      <button type="button" class="ghost" onclick="shiftEarnMonth(-1)" aria-label="Previous month">‹</button>
+      <select id="earnMonthSel" aria-label="Month" onchange="setEarnMonth(${today.year},this.value)">${monthOpts}</select>
+      <button type="button" class="ghost" onclick="shiftEarnMonth(1)" aria-label="Next month">›</button>
+    </div>`;
   h+=`<div class="schsechd">Per car <span class="meta" style="font-weight:400;font-size:12px">· every car on the roster</span></div>`;
   if(!report.perCar.length){
     h+=`<div class="empty"><div class="big">No cars on the roster</div>Add cars on the Cars tab.</div>`;
@@ -2250,11 +2322,18 @@ async function saveStaff(id){
 async function delStaff(id){if(!confirm('Delete?'))return;const {error}=await SB.from('staff').delete().eq('id',id);if(error){toast(error.message);return}closeModal();toast('Deleted');await loadAll()}
 
 // ---------- nav ----------
-document.getElementById('tabs').addEventListener('click',e=>{
-  const b=e.target.closest('button');if(!b)return;
-  document.querySelectorAll('#tabs button').forEach(x=>x.classList.remove('active'));
+function activateTab(name){
+  if(!name) return;
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));
   document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
-  b.classList.add('active');document.getElementById('panel-'+b.dataset.tab).classList.add('active');
+  const panel=document.getElementById('panel-'+name);
+  if(panel) panel.classList.add('active');
+  const sel=document.getElementById('tabSelect');
+  if(sel && sel.value!==name) sel.value=name;
+}
+document.getElementById('tabs').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||!b.dataset.tab)return;
+  activateTab(b.dataset.tab);
 });
 document.getElementById('roleSwitch').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
@@ -2287,17 +2366,24 @@ function bootOwnerPreview(){
     staff:[d1,d2,d3,shop],
     bookings:[
       {id:'b-accepted',customer_name:'Accepted Wedding',customer_email:'wedding@example.com',event_type:'wedding',event_date:soon,start_time:'14:00',end_time:'18:00',
-        car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:3,needs_trailer:false},
+        car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:3,needs_trailer:false,
+        source:'wix',notes:'Event Location: chapel\nPrice: $880'},
       {id:'b-alex-soon',customer_name:'Rehearsal Dinner',customer_email:'rehearsal@example.com',event_type:'dinner',event_date:soon,start_time:'18:00',
-        car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:2,needs_trailer:false},
+        car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:2,needs_trailer:false,
+        source:'wix',notes:'Price: $660'},
       {id:'b-alex-done',customer_name:'Airport Run',customer_email:'airport@example.com',event_type:'transfer',event_date:past,start_time:'09:00',
-        car_id:'c1',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:2,needs_trailer:false},
+        car_id:'c1',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:2,needs_trailer:false,
+        source:'wix',notes:'Price: $550'},
       {id:'b-done',customer_name:'Completed Parade',customer_email:'parade@example.com',event_type:'parade',event_date:past,start_time:'10:00',
         car_id:'c1',driver_id:'d2',status:'completed',payment_status:'paid',pay_tier:2,needs_trailer:false},
       {id:'b-open',customer_name:'Unclaimed Birthday',customer_email:'birthday@example.com',event_type:'birthday',event_date:soon,start_time:'16:00',
         car_id:'c1',driver_id:null,status:'confirmed',payment_status:'unpaid',pay_tier:2,offer_rank:1,needs_trailer:false},
       {id:'b-last-year',customer_name:'Last Year Gala',customer_email:'gala@example.com',event_type:'gala',event_date:lastYear,start_time:'17:00',
-        car_id:'c1',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:4,needs_trailer:false},
+        car_id:'c1',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:4,needs_trailer:false,
+        source:'wix',notes:'Price: $1100'},
+      {id:'b-wix-noprice',customer_name:'October Wix Import',customer_email:'noline@example.com',event_type:'rental',event_date:`${chicagoToday().year}-10-12`,start_time:'15:00',
+        car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:2,needs_trailer:false,
+        source:'wix',notes:'Event Location: Benton'},
       {id:'b-cancelled',customer_name:'Cancelled Prom',customer_email:'prom@example.com',event_type:'prom',event_date:past,start_time:'19:00',
         car_id:'c1',driver_id:'d2',status:'cancelled',payment_status:'unpaid',pay_tier:2,needs_trailer:false},
       {id:'b-draft',customer_name:'Draft Inquiry',customer_email:'draft@example.com',event_type:'inquiry',event_date:soon,

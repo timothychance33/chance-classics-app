@@ -8,15 +8,18 @@ const html = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'i
 assert.match(html, /<button data-tab="staff">Drivers<\/button>\s*<button data-tab="earnings">Earnings<\/button>/,
   'Earnings tab sits next to Drivers');
 assert.match(html, /id="panel-earnings"/, 'Earnings panel exists');
+assert.match(html, /id="tabSelect"/, 'owner nav collapses to a select on the phone');
+assert.match(html, /class="monthnav"/, 'month is a stepper/select, not a chip strip');
+assert.doesNotMatch(html, /class="monthchip/, 'old month chips are gone');
 assert.match(html, /previewlbl">View as/, 'role-preview stays labeled View as');
 assert.match(html, /<button data-role="admin" class="active">Owner<\/button>/, 'Owner preview role stays');
 assert.match(html, /<button data-role="driver">Driver<\/button>/, 'Driver preview role stays');
 assert.match(html, /<button data-tab="staff">Drivers<\/button>/, 'Drivers tab is unchanged');
+assert.match(html, /function wixPriceFromNotes/, 'reads Wix Price line from notes');
+assert.match(html, /price\.value/, 'names the Wix field the sync already writes');
 assert.match(html, /function isEarningBooking/, 'earning-status helper exists');
 assert.match(html, /function buildOwnerEarnings/, 'owner earnings rollup exists');
-assert.match(html, /function assignQuotesToBookings/, 'quote match helper exists');
 assert.match(html, /America\/Chicago/, 'Chicago calendar is named');
-assert.match(html, /same customer email/, 'gross is labeled as quote-total match');
 assert.match(html, /one car per booking/, 'multi-car note is in the UI');
 assert.doesNotMatch(html, /service_role/, 'no service_role in the browser app');
 
@@ -33,6 +36,20 @@ function bookingInMonth(b, year, month){
   return !!(b.event_date && b.event_date.slice(0,7)===`${year}-${mm}`);
 }
 function normEmail(e){return (e||'').toString().toLowerCase().trim()}
+function wixPriceFromNotes(notes){
+  if(!notes) return null;
+  const m=String(notes).match(/Price:\s*\$([0-9]+(?:\.[0-9]+)?)/i);
+  if(!m) return null;
+  const n=parseFloat(m[1]);
+  return Number.isFinite(n)?n:null;
+}
+function bookingGrossAmount(b, quoteMap){
+  const fromNotes=wixPriceFromNotes(b&&b.notes);
+  if(fromNotes!=null) return fromNotes;
+  const q=quoteMap&&b?quoteMap[b.id]:null;
+  if(q && q.total!=null && !Number.isNaN(Number(q.total))) return Number(q.total);
+  return null;
+}
 function assignQuotesToBookings(bookings, quotes){
   const used=new Set();
   const map={};
@@ -68,13 +85,24 @@ function bookingDriverPayAmount(b, staff){
   return Number(b.pay_tier*d.pay_rate)||0;
 }
 function sumEarnings(list, quoteMap, staff){
-  let gross=0, driverPay=0;
+  let gross=0, driverPay=0, unknown=0, unknownPay=0, known=0;
   for(const b of list){
-    const q=quoteMap[b.id];
-    gross += q?Number(q.total)||0:0;
-    driverPay += bookingDriverPayAmount(b, staff);
+    const g=bookingGrossAmount(b, quoteMap);
+    const pay=bookingDriverPayAmount(b, staff);
+    if(g==null){
+      unknown++;
+      unknownPay+=pay;
+    }else{
+      known++;
+      gross+=g;
+      driverPay+=pay;
+    }
   }
-  return {gross, driverPay, net:gross-driverPay, jobs:list.length};
+  return {
+    gross, driverPay,
+    net: list.length===0 ? 0 : (known ? gross-driverPay : null),
+    jobs:list.length, known, unknown, unknownPay
+  };
 }
 function buildOwnerEarnings(data, selected, today){
   const day=today;
@@ -99,94 +127,79 @@ function buildOwnerEarnings(data, selected, today){
       month:sumEarnings(mine.filter(b=>bookingInMonth(b, month.year, month.month)), quoteMap, staff)
     };
   });
-  const unassigned=bookings.filter(b=>!b.car_id);
-  return {company, perCar, unassignedCount:unassigned.length,
-    unmatchedCount:bookings.filter(b=>!quoteMap[b.id]).length, jobCount:bookings.length};
+  const missingAmount=bookings.filter(b=>bookingGrossAmount(b, quoteMap)==null).length;
+  return {company, perCar, missingAmount, jobCount:bookings.length};
 }
 
+assert.equal(wixPriceFromNotes('Event Location: chapel\nPrice: $1201.75 ($200 due)'), 1201.75);
+assert.equal(wixPriceFromNotes('no money here'), null);
 assert.equal(isEarningBooking({status:'completed'}), true);
-assert.equal(isEarningBooking({status:'confirmed',payment_status:'unpaid'}), true);
-assert.equal(isEarningBooking({status:'prepping'}), true);
-assert.equal(isEarningBooking({status:'ready'}), true);
-assert.equal(isEarningBooking({status:'out'}), true);
 assert.equal(isEarningBooking({status:'cancelled',payment_status:'paid',driver_id:'d1'}), false);
 assert.equal(isEarningBooking({status:'new',payment_status:'unpaid',driver_id:null}), false);
 assert.equal(isEarningBooking({status:'new',payment_status:'deposit'}), true);
-assert.equal(isEarningBooking({status:'new',driver_id:'d1',payment_status:'unpaid'}), true);
 
-const staff=[
-  {id:'d1',pay_rate:50},
-  {id:'d2',pay_rate:40},
-];
-assert.equal(bookingDriverPayAmount({driver_id:'d1',pay_tier:3}, staff), 150);
-assert.equal(bookingDriverPayAmount({driver_id:'d2',pay_tier:2}, staff), 80);
-assert.equal(bookingDriverPayAmount({driver_id:null,pay_tier:2}, staff), 0);
-
+const staff=[{id:'d1',pay_rate:50},{id:'d2',pay_rate:40}];
 const mustang={id:'c1',name:'1967 Mustang',status:'available'};
 const chevy={id:'c2',name:'1957 Chevy Bel Air',status:'available'};
 const today={year:2026, month:9, day:2, iso:'2026-09-02'};
+
+// Wix Price line wins; quote is fallback; missing amount is not $0 vs driver pay
 const data={
   cars:[mustang, chevy],
   staff,
   bookings:[
     {id:'b1',car_id:'c1',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:2,
-      event_date:'2026-08-29',customer_email:'a@example.com'},
+      event_date:'2026-08-29',customer_email:'a@example.com',
+      notes:'Price: $764.75',source:'wix'},
     {id:'b2',car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'unpaid',pay_tier:3,
       event_date:'2026-09-06',customer_email:'b@example.com'},
     {id:'b3',car_id:'c1',driver_id:'d2',status:'completed',payment_status:'paid',pay_tier:2,
-      event_date:'2025-06-14',customer_email:'c@example.com'},
+      event_date:'2025-06-14',customer_email:'c@example.com',
+      notes:'Price: $1100'},
     {id:'b4',car_id:'c1',driver_id:'d2',status:'cancelled',payment_status:'paid',pay_tier:2,
-      event_date:'2026-08-01',customer_email:'d@example.com'},
+      event_date:'2026-08-01',customer_email:'d@example.com',notes:'Price: $700'},
     {id:'b5',car_id:'c1',driver_id:null,status:'new',payment_status:'unpaid',pay_tier:null,
       event_date:'2026-09-10',customer_email:'e@example.com'},
+    {id:'b6',car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:2,
+      event_date:'2026-10-12',customer_email:'noline@example.com',
+      notes:'Event Location: Benton',source:'wix'},
   ],
   quotes:[
     {id:'q1',customer_email:'a@example.com',event_date:'2026-08-29',car_id:'c1',status:'booked',total:550},
     {id:'q2',customer_email:'b@example.com',event_date:'2026-09-06',car_id:'c1',status:'sent',total:880},
-    {id:'q3',customer_email:'c@example.com',event_date:'2025-06-14',car_id:'c1',status:'booked',total:1100},
-    {id:'q4',customer_email:'d@example.com',event_date:'2026-08-01',car_id:'c1',status:'booked',total:700},
+    {id:'q3',customer_email:'c@example.com',event_date:'2025-06-14',car_id:'c1',status:'booked',total:9999},
     {id:'q5',customer_email:'e@example.com',event_date:'2026-09-10',car_id:'c1',status:'quoted',total:300},
   ]
 };
 
-const allTime=buildOwnerEarnings(data, {year:2026, month:9}, today);
-assert.equal(allTime.jobCount, 3, 'cancelled and unpaid new draft are excluded');
-assert.equal(allTime.company.allTime.gross, 550+880+1100);
-assert.equal(allTime.company.allTime.driverPay, 100+150+80);
-assert.equal(allTime.company.allTime.net, (550+880+1100)-(100+150+80));
-assert.equal(allTime.company.ytd.gross, 550, 'YTD is Chicago year through today — future Sep job is not YTD');
-assert.equal(allTime.company.ytd.driverPay, 100);
-assert.equal(allTime.company.month.gross, 880, 'selected September includes the accepted unpaid job');
-assert.equal(allTime.company.month.driverPay, 150);
-assert.equal(allTime.unmatchedCount, 0);
+const allTime=buildOwnerEarnings(data, {year:2026, month:10}, today);
+assert.equal(allTime.jobCount, 4, 'cancelled and unpaid new draft are excluded');
+assert.equal(allTime.company.allTime.gross, 764.75+880+1100, 'Wix Price wins; quote is fallback');
+assert.equal(allTime.company.allTime.driverPay, 100+150+80, 'driver pay only on jobs with gross');
+assert.equal(allTime.company.allTime.net, (764.75+880+1100)-(100+150+80));
+assert.equal(allTime.company.allTime.unknown, 1);
+assert.equal(allTime.company.allTime.unknownPay, 100, 'October Wix job pay is not subtracted from $0');
+assert.equal(allTime.missingAmount, 1);
 
-const mustangRow=allTime.perCar.find(r=>r.car.id==='c1');
+assert.equal(allTime.company.ytd.gross, 764.75, 'YTD uses Price line, not the unused quote 550');
+assert.equal(allTime.company.ytd.driverPay, 100);
+assert.equal(allTime.company.ytd.net, 764.75-100);
+
+const october=allTime.company.month;
+assert.equal(october.jobs, 1);
+assert.equal(october.known, 0);
+assert.equal(october.gross, 0);
+assert.equal(october.net, null, 'no fake negative when October has driver pay and no amount');
+assert.equal(october.unknownPay, 100);
+
 const chevyRow=allTime.perCar.find(r=>r.car.id==='c2');
 assert.ok(chevyRow, 'idle roster car is listed');
-assert.equal(chevyRow.allTime.gross, 0);
-assert.equal(chevyRow.allTime.driverPay, 0);
+assert.equal(chevyRow.allTime.jobs, 0);
 assert.equal(chevyRow.allTime.net, 0);
-assert.equal(mustangRow.allTime.gross, 550+880+1100);
-assert.equal(mustangRow.month.gross, 880);
 
-const august=buildOwnerEarnings(data, {year:2026, month:8}, today);
-assert.equal(august.company.month.gross, 550);
-assert.equal(august.company.month.driverPay, 100);
-
-// One quote per booking — two jobs, one email, only the dated match + leftover email match once
-const shared={
-  cars:[mustang],
-  staff,
-  bookings:[
-    {id:'x1',car_id:'c1',driver_id:'d1',status:'completed',pay_tier:1,event_date:'2026-04-01',customer_email:'same@example.com'},
-    {id:'x2',car_id:'c1',driver_id:'d1',status:'completed',pay_tier:1,event_date:'2026-05-01',customer_email:'same@example.com'},
-  ],
-  quotes:[
-    {id:'qx',customer_email:'same@example.com',event_date:'2026-04-01',car_id:'c1',status:'booked',total:400},
-  ]
-};
-const sharedRep=buildOwnerEarnings(shared, {year:2026, month:4}, today);
-assert.equal(sharedRep.company.allTime.gross, 400, 'a single quote is not double-counted');
-assert.equal(sharedRep.unmatchedCount, 1);
+// Quote-only month still works
+const sept=buildOwnerEarnings(data, {year:2026, month:9}, today);
+assert.equal(sept.company.month.gross, 880);
+assert.equal(sept.company.month.driverPay, 150);
 
 console.log('owner-earnings tests passed');

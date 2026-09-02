@@ -3,7 +3,7 @@
 // Data still comes live from Supabase (network), so we use a
 // network-first strategy and only fall back to cache when offline.
 
-const CACHE = 'chance-classics-v2';
+const CACHE = 'chance-classics-v3';
 const SHELL = ['./', './index.html', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './manifest.json'];
 
 self.addEventListener('install', e => {
