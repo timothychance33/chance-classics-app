@@ -20,6 +20,8 @@ assert.match(html, /function wixPriceDetailsFromNotes/, 'parses remaining due fr
 assert.match(html, /function ownerCustomerAmountTagHtml/, 'owner booking card can show the customer amount');
 assert.match(html, /function notesForViewer/, 'staff notes hide the Wix Price line');
 assert.match(html, /function showOwnerCustomerAmount/, 'customer dollars use the owner gate');
+assert.match(html, /function isOwnerView/, 'owner tabs and dollars share the same gate');
+assert.match(html, /OWNER_ONLY_TABS=\[\'staff\',\'earnings\',\'quotes\'\]/, 'staff nav hides Quotes, Earnings, Drivers');
 assert.match(html, /Customer amount/, 'booking detail has an owner customer-amount row');
 assert.match(html, /class="amttag"/, 'amount tag style exists');
 assert.match(html, /price\.value/, 'names the Wix field the sync already writes');
