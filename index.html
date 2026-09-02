@@ -125,6 +125,26 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .dash{margin-bottom:24px}
 .dashstats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
 .dstat{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 8px;text-align:center}
+.earnstats{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:18px}
+@media(min-width:720px){.earnstats{grid-template-columns:repeat(3,1fr)}}
+.earncard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
+.earncard .elbl{font:700 11px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#6b6052}
+.earncard .eamt{font:800 26px/1 "Playfair Display",serif;margin:8px 0 4px;color:var(--ink)}
+.earncard .eamt.net-pos{color:var(--green)}
+.earncard .eamt.net-neg{color:var(--oxblood)}
+.earnrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;font-size:13px;border-bottom:1px solid var(--paper-2)}
+.earnrow:last-child{border-bottom:0}
+.earnrow .ek{color:#6b6052}
+.earnrow .ev{font-weight:700;white-space:nowrap}
+.monthstrip{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px}
+.monthchip{background:#fff;border:1px solid var(--line);border-radius:999px;font:700 11px/1 "Inter",sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:8px 11px;cursor:pointer;color:var(--ink)}
+.monthchip.active{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.car-earn .hd{flex-wrap:wrap}
+.car-earn .period{margin-top:10px;padding-top:10px;border-top:1px solid var(--paper-2)}
+.car-earn .period:first-child{margin-top:0;padding-top:0;border-top:0}
+.car-earn .plbl{font:700 10px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#6b6052;margin-bottom:4px}
+.car-earn .pvals{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px}
+.car-earn .pvals b{font-weight:800}
 .dstat.alert{border-color:var(--amber);background:#fff8ec}
 .dstat.warn{border-color:var(--oxblood);background:#fcf0ef}
 .dnum{font:800 24px/1 "Playfair Display",serif;color:var(--ink)}
@@ -333,7 +353,7 @@ img,svg{max-width:100%}
   .roles button{padding:7px 10px;font-size:10px;letter-spacing:.04em}
   .signout{margin-left:auto;padding:7px 10px;font-size:10px}
   .wrap{padding:14px 12px 80px}
-  nav.tabs{gap:3px;margin-bottom:14px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
+  nav.tabs{gap:3px;margin-bottom:14px;flex-wrap:wrap}
   nav.tabs button{padding:9px 12px;font-size:12px;white-space:nowrap;flex:0 0 auto}
   .grid.cols{grid-template-columns:1fr}
   .sectionhead{flex-wrap:wrap;gap:8px}
@@ -397,6 +417,7 @@ img,svg{max-width:100%}
     <button data-tab="schedule" class="active">Schedule</button>
     <button data-tab="calendar">Calendar</button>
     <button data-tab="staff">Drivers</button>
+    <button data-tab="earnings">Earnings</button>
     <button data-tab="quotes">Quotes</button>
     <button data-tab="prep">Prep Board</button>
     <button data-tab="cars">Cars</button>
@@ -408,6 +429,7 @@ img,svg{max-width:100%}
   <div class="panel" id="panel-prep"></div>
   <div class="panel" id="panel-cars"></div>
   <div class="panel" id="panel-staff"></div>
+  <div class="panel" id="panel-earnings"></div>
 </div>
 
 <div class="modal" id="modal"><div class="sheet">
@@ -578,9 +600,11 @@ function setupRoleUI(){
   }else{
     rs.style.display='none';
   }
-  // Quotes tab is owner-only — hide the button entirely for crew.
+  // Quotes + Earnings are owner-only — hide the buttons entirely for crew.
   const qtab=document.querySelector('#tabs button[data-tab="quotes"]');
   if(qtab) qtab.style.display=isAdmin()?'':'none';
+  const etab=document.querySelector('#tabs button[data-tab="earnings"]');
+  if(etab) etab.style.display=isAdmin()?'':'none';
   // Owner sees "Drivers" (roster + waterfall + scales). Crew see their own profile as "Crew".
   const stab=document.querySelector('#tabs button[data-tab="staff"]');
   if(stab) stab.textContent=isAdmin()?'Drivers':'Crew';
@@ -738,6 +762,109 @@ function driverPayFor(b){
   if(!d||d.pay_rate==null) return null;
   return {driver:d, amount:b.pay_tier*d.pay_rate};
 }
+
+// ---------- owner earnings (quote total − Pay driver $X) ----------
+const CHICAGO_TZ='America/Chicago';
+const EARNING_STATUSES=['confirmed','prepping','ready','out','completed'];
+let earnMonth=null; // {year, month} in America/Chicago; set on first render
+
+function chicagoToday(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:CHICAGO_TZ,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const get=t=>parts.find(p=>p.type===t).value;
+  return {year:+get('year'), month:+get('month'), day:+get('day'), iso:`${get('year')}-${get('month')}-${get('day')}`};
+}
+function moneyFmt(n){
+  const v=Number(n)||0;
+  return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function normEmail(e){return (e||'').toString().toLowerCase().trim()}
+// Count completed / accepted / in-progress jobs. `new` is the create/import default —
+// include it only when the board already treats it as accepted (driver assigned) or
+// collected (deposit/paid). Cancelled is out. There is no declined/draft booking status.
+function isEarningBooking(b){
+  if(!b||b.status==='cancelled') return false;
+  if(EARNING_STATUSES.includes(b.status)) return true;
+  if(b.status==='new') return !!(b.driver_id || b.payment_status==='paid' || b.payment_status==='deposit');
+  return false;
+}
+function bookingInYear(b, year){return !!(b.event_date && b.event_date.slice(0,4)===String(year))}
+function bookingInMonth(b, year, month){
+  const mm=String(month).padStart(2,'0');
+  return !!(b.event_date && b.event_date.slice(0,7)===`${year}-${mm}`);
+}
+// Pair each booking with at most one quote. Same email match autoMatchQuotes already
+// uses to mark a quote booked; prefer email+date, then email+car, then email.
+function assignQuotesToBookings(bookings, quotes){
+  const used=new Set();
+  const map={};
+  const usable=(quotes||[]).filter(q=>q && q.total!=null && !Number.isNaN(Number(q.total)));
+  const take=(b, pred)=>{
+    const q=usable.find(x=>!used.has(x.id) && pred(x,b));
+    if(q){ used.add(q.id); map[b.id]=q; return true; }
+    return false;
+  };
+  const list=bookings||[];
+  for(const b of list){
+    const em=normEmail(b.customer_email);
+    if(!em||!b.event_date) continue;
+    take(b, q=>normEmail(q.customer_email)===em && q.event_date===b.event_date);
+  }
+  for(const b of list){
+    if(map[b.id]) continue;
+    const em=normEmail(b.customer_email);
+    if(!em||!b.car_id) continue;
+    take(b, q=>normEmail(q.customer_email)===em && q.car_id===b.car_id);
+  }
+  for(const b of list){
+    if(map[b.id]) continue;
+    const em=normEmail(b.customer_email);
+    if(!em) continue;
+    take(b, q=>normEmail(q.customer_email)===em);
+  }
+  return map;
+}
+function bookingDriverPayAmount(b, staff){
+  if(!b.driver_id||b.pay_tier==null) return 0;
+  const d=(staff||DATA.staff||[]).find(s=>s.id===b.driver_id);
+  if(!d||d.pay_rate==null) return 0;
+  return Number(b.pay_tier*d.pay_rate)||0; // same $ as Pay driver $X
+}
+function sumEarnings(list, quoteMap, staff){
+  let gross=0, driverPay=0;
+  for(const b of list){
+    const q=quoteMap[b.id];
+    gross += q?Number(q.total)||0:0;
+    driverPay += bookingDriverPayAmount(b, staff);
+  }
+  return {gross, driverPay, net:gross-driverPay, jobs:list.length};
+}
+function buildOwnerEarnings(data, selected, today){
+  const day=today||chicagoToday();
+  const month=selected||{year:day.year, month:day.month};
+  const staff=data.staff||[];
+  const bookings=(data.bookings||[]).filter(isEarningBooking);
+  const quoteMap=assignQuotesToBookings(bookings, data.quotes||[]);
+  const ytd=bookings.filter(b=>bookingInYear(b, day.year) && b.event_date && b.event_date<=day.iso);
+  const monthly=bookings.filter(b=>bookingInMonth(b, month.year, month.month));
+  const company={
+    allTime:sumEarnings(bookings, quoteMap, staff),
+    ytd:sumEarnings(ytd, quoteMap, staff),
+    month:sumEarnings(monthly, quoteMap, staff)
+  };
+  const cars=[...(data.cars||[])].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const perCar=cars.map(car=>{
+    const mine=bookings.filter(b=>b.car_id===car.id);
+    return {
+      car,
+      allTime:sumEarnings(mine, quoteMap, staff),
+      ytd:sumEarnings(mine.filter(b=>bookingInYear(b, day.year) && b.event_date && b.event_date<=day.iso), quoteMap, staff),
+      month:sumEarnings(mine.filter(b=>bookingInMonth(b, month.year, month.month)), quoteMap, staff)
+    };
+  });
+  const unassigned=bookings.filter(b=>!b.car_id);
+  return {day, month, quoteMap, company, perCar, unassignedCount:unassigned.length,
+    unmatchedCount:bookings.filter(b=>!quoteMap[b.id]).length, jobCount:bookings.length};
+}
 // Owner-facing payout line: "Pay driver $X" once a job is claimed/assigned.
 function ownerPayPillHtml(b, extraStyle){
   if(!b.driver_id) return '';
@@ -853,7 +980,76 @@ async function approveRelease(bid){
 
 // ---------- renderers ----------
 let calView=new Date(); // currently displayed month in the calendar tab
-function renderAll(){renderSchedule();renderCalendar();renderPrep();renderCars();renderStaff();renderQuotes()}
+function renderAll(){renderSchedule();renderCalendar();renderPrep();renderCars();renderStaff();renderQuotes();renderEarnings()}
+
+function setEarnMonth(year, month){
+  earnMonth={year:+year, month:+month};
+  renderEarnings();
+}
+function earnPeriodHtml(label, roll){
+  const netCls=roll.net<0?'net-neg':(roll.net>0?'net-pos':'');
+  return `<div class="earncard">
+    <div class="elbl">${esc(label)}</div>
+    <div class="eamt ${netCls}">${moneyFmt(roll.net)}</div>
+    <div class="meta" style="margin-bottom:8px">Net after driver pay · ${roll.jobs} job${roll.jobs===1?'':'s'}</div>
+    <div class="earnrow"><span class="ek">Gross</span><span class="ev">${moneyFmt(roll.gross)}</span></div>
+    <div class="earnrow"><span class="ek">Driver pay</span><span class="ev">${moneyFmt(roll.driverPay)}</span></div>
+    <div class="earnrow"><span class="ek">Net</span><span class="ev">${moneyFmt(roll.net)}</span></div>
+  </div>`;
+}
+function earnCarPeriodHtml(label, roll){
+  return `<div class="period">
+    <div class="plbl">${esc(label)}</div>
+    <div class="pvals">
+      <span>Gross <b>${moneyFmt(roll.gross)}</b></span>
+      <span>Driver pay <b>${moneyFmt(roll.driverPay)}</b></span>
+      <span>Net <b>${moneyFmt(roll.net)}</b></span>
+    </div>
+  </div>`;
+}
+function renderEarnings(){
+  const el=document.getElementById('panel-earnings');
+  if(!el) return;
+  if(!isAdmin()){ el.innerHTML=`<div class="empty"><div class="big">Earnings</div>Owner only.</div>`; return; }
+  const today=chicagoToday();
+  if(!earnMonth) earnMonth={year:today.year, month:today.month};
+  const report=buildOwnerEarnings(DATA, earnMonth, today);
+  const monthNames=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const monthLabel=`${monthNames[report.month.month-1]} ${report.month.year}`;
+  const chips=monthNames.map((name,i)=>{
+    const m=i+1;
+    const on=report.month.year===today.year && report.month.month===m;
+    return `<button type="button" class="monthchip${on?' active':''}" onclick="setEarnMonth(${today.year},${m})">${name.slice(0,3)}</button>`;
+  }).join('');
+  let h=`<div class="sectionhead"><div><div class="kicker">Owner view · America/Chicago</div><h2 class="display">Earnings</h2></div><span class="line"></span></div>`;
+  h+=`<div class="meta" style="margin:-8px 0 14px">Gross is the quote total already stored on the matching quote (same customer email the board uses to mark a quote booked). Driver pay is the same tier × scale as “Pay driver $X”. Accepted jobs that are still unpaid or deposit-only are included when they have that quote total — this is not a new paid/unpaid ledger. Bookings with no matching quote show $0 gross. Each booking is attributed to its assigned car (the board stores one car per booking, not a per-car split).</div>`;
+  h+=`<div class="meta" style="margin:-6px 0 12px">${report.jobCount} counted job${report.jobCount===1?'':'s'} (confirmed / in progress / completed, plus accepted or collected <em>new</em> imports). Cancelled jobs are out.${report.unmatchedCount?` ${report.unmatchedCount} counted booking${report.unmatchedCount===1?' has':'s have'} no matching quote.`:' All counted bookings have a quote total.'}${report.unassignedCount?` ${report.unassignedCount} counted booking${report.unassignedCount===1?' has':'s have'} no car assigned — in company totals only.`:''}</div>`;
+  h+=`<div class="earnstats">
+    ${earnPeriodHtml('All-time', report.company.allTime)}
+    ${earnPeriodHtml(`${today.year} year-to-date`, report.company.ytd)}
+    ${earnPeriodHtml(monthLabel, report.company.month)}
+  </div>`;
+  h+=`<div class="schsechd">Month</div><div class="monthstrip">${chips}</div>`;
+  h+=`<div class="schsechd">Per car <span class="meta" style="font-weight:400;font-size:12px">· every car on the roster</span></div>`;
+  if(!report.perCar.length){
+    h+=`<div class="empty"><div class="big">No cars on the roster</div>Add cars on the Cars tab.</div>`;
+  }else{
+    h+='<div class="grid cols">';
+    for(const row of report.perCar){
+      const c=row.car;
+      h+=`<div class="card car-earn">
+        <div class="hd"><div class="ttl">${esc(c.name)}</div><span class="pill s-${c.status||'available'}" style="margin-left:auto">${esc(c.status||'')}</span></div>
+        <div class="bd">
+          ${earnCarPeriodHtml('All-time', row.allTime)}
+          ${earnCarPeriodHtml(`${today.year} YTD`, row.ytd)}
+          ${earnCarPeriodHtml(monthLabel, row.month)}
+        </div>
+      </div>`;
+    }
+    h+='</div>';
+  }
+  el.innerHTML=h;
+}
 
 // ---------- QUOTES ----------
 const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.10, HOTEL_FEE=200;
@@ -2081,25 +2277,43 @@ function bootOwnerPreview(){
   const d3={id:'d3',name:'Sam Patel',role:'driver,mechanic',email:'sam@example.com',phone:'555-0103',pay_rate:45,priority:3,active:true,pulls_trailer:false};
   const shop={id:'m1',name:'Chris Shop',role:'mechanic',email:'chris@example.com',phone:'555-0199',active:true};
   const car={id:'c1',name:'1967 Mustang',year:1967,make:'Ford',model:'Mustang',status:'available'};
+  const idle={id:'c2',name:'1957 Chevy Bel Air',year:1957,make:'Chevrolet',model:'Bel Air',status:'available'};
   const today=new Date().toISOString().slice(0,10);
   const soon=new Date(Date.now()+5*86400000).toISOString().slice(0,10);
   const past=new Date(Date.now()-3*86400000).toISOString().slice(0,10);
+  const lastYear=String((chicagoToday().year)-1)+'-06-14';
   DATA={
-    cars:[car],
+    cars:[car,idle],
     staff:[d1,d2,d3,shop],
     bookings:[
-      {id:'b-accepted',customer_name:'Accepted Wedding',event_type:'wedding',event_date:soon,start_time:'14:00',end_time:'18:00',
+      {id:'b-accepted',customer_name:'Accepted Wedding',customer_email:'wedding@example.com',event_type:'wedding',event_date:soon,start_time:'14:00',end_time:'18:00',
         car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:3,needs_trailer:false},
-      {id:'b-alex-soon',customer_name:'Rehearsal Dinner',event_type:'dinner',event_date:soon,start_time:'18:00',
+      {id:'b-alex-soon',customer_name:'Rehearsal Dinner',customer_email:'rehearsal@example.com',event_type:'dinner',event_date:soon,start_time:'18:00',
         car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:2,needs_trailer:false},
-      {id:'b-alex-done',customer_name:'Airport Run',event_type:'transfer',event_date:past,start_time:'09:00',
+      {id:'b-alex-done',customer_name:'Airport Run',customer_email:'airport@example.com',event_type:'transfer',event_date:past,start_time:'09:00',
         car_id:'c1',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:2,needs_trailer:false},
-      {id:'b-done',customer_name:'Completed Parade',event_type:'parade',event_date:past,start_time:'10:00',
+      {id:'b-done',customer_name:'Completed Parade',customer_email:'parade@example.com',event_type:'parade',event_date:past,start_time:'10:00',
         car_id:'c1',driver_id:'d2',status:'completed',payment_status:'paid',pay_tier:2,needs_trailer:false},
-      {id:'b-open',customer_name:'Unclaimed Birthday',event_type:'birthday',event_date:soon,start_time:'16:00',
+      {id:'b-open',customer_name:'Unclaimed Birthday',customer_email:'birthday@example.com',event_type:'birthday',event_date:soon,start_time:'16:00',
         car_id:'c1',driver_id:null,status:'confirmed',payment_status:'unpaid',pay_tier:2,offer_rank:1,needs_trailer:false},
+      {id:'b-last-year',customer_name:'Last Year Gala',customer_email:'gala@example.com',event_type:'gala',event_date:lastYear,start_time:'17:00',
+        car_id:'c1',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:4,needs_trailer:false},
+      {id:'b-cancelled',customer_name:'Cancelled Prom',customer_email:'prom@example.com',event_type:'prom',event_date:past,start_time:'19:00',
+        car_id:'c1',driver_id:'d2',status:'cancelled',payment_status:'unpaid',pay_tier:2,needs_trailer:false},
+      {id:'b-draft',customer_name:'Draft Inquiry',customer_email:'draft@example.com',event_type:'inquiry',event_date:soon,
+        car_id:'c1',driver_id:null,status:'new',payment_status:'unpaid',pay_tier:null,needs_trailer:false},
     ],
-    prep:[],templates:[],quotes:[]
+    prep:[],templates:[],
+    quotes:[
+      {id:'q-wed',customer_email:'wedding@example.com',event_date:soon,car_id:'c1',status:'booked',total:880},
+      {id:'q-reh',customer_email:'rehearsal@example.com',event_date:soon,car_id:'c1',status:'booked',total:660},
+      {id:'q-air',customer_email:'airport@example.com',event_date:past,car_id:'c1',status:'booked',total:550},
+      {id:'q-par',customer_email:'parade@example.com',event_date:past,car_id:'c1',status:'booked',total:440},
+      {id:'q-bday',customer_email:'birthday@example.com',event_date:soon,car_id:'c1',status:'sent',total:495},
+      {id:'q-gala',customer_email:'gala@example.com',event_date:lastYear,car_id:'c1',status:'booked',total:1100},
+      {id:'q-prom',customer_email:'prom@example.com',event_date:past,car_id:'c1',status:'booked',total:700},
+      {id:'q-draft',customer_email:'draft@example.com',event_date:soon,car_id:'c1',status:'quoted',total:300},
+    ]
   };
   showApp(); setupRoleUI(); renderAll();
 }
