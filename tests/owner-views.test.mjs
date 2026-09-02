@@ -16,6 +16,9 @@ assert.match(html, /toggleDriverPaid/, 'Tim can check off paid jobs');
 assert.match(html, /driver_paid_at/, 'reuses bookings.driver_paid_at — no second ledger');
 assert.match(html, /You owe/, 'card shows what Tim owes the driver');
 assert.match(html, /Upcoming bookings/, 'card lists upcoming bookings');
+assert.match(html, /function showOwnerCustomerAmount/, 'customer amount is owner-gated');
+assert.match(html, /isAdmin\(\) && ROLE==='admin'/, 'View as Driver hides customer dollars');
+assert.doesNotMatch(html, /service_role/, 'no service_role in the browser app');
 
 // Same formula the app uses: amount = pay_tier × driver.pay_rate
 function driverPayFor(b, staff){

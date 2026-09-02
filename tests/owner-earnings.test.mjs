@@ -16,6 +16,12 @@ assert.match(html, /<button data-role="admin" class="active">Owner<\/button>/, '
 assert.match(html, /<button data-role="driver">Driver<\/button>/, 'Driver preview role stays');
 assert.match(html, /<button data-tab="staff">Drivers<\/button>/, 'Drivers tab is unchanged');
 assert.match(html, /function wixPriceFromNotes/, 'reads Wix Price line from notes');
+assert.match(html, /function wixPriceDetailsFromNotes/, 'parses remaining due from the Wix Price line');
+assert.match(html, /function ownerCustomerAmountTagHtml/, 'owner booking card can show the customer amount');
+assert.match(html, /function notesForViewer/, 'staff notes hide the Wix Price line');
+assert.match(html, /function showOwnerCustomerAmount/, 'customer dollars use the owner gate');
+assert.match(html, /Customer amount/, 'booking detail has an owner customer-amount row');
+assert.match(html, /class="amttag"/, 'amount tag style exists');
 assert.match(html, /price\.value/, 'names the Wix field the sync already writes');
 assert.match(html, /function isEarningBooking/, 'earning-status helper exists');
 assert.match(html, /function buildOwnerEarnings/, 'owner earnings rollup exists');
@@ -36,12 +42,31 @@ function bookingInMonth(b, year, month){
   return !!(b.event_date && b.event_date.slice(0,7)===`${year}-${mm}`);
 }
 function normEmail(e){return (e||'').toString().toLowerCase().trim()}
-function wixPriceFromNotes(notes){
+function wixPriceDetailsFromNotes(notes){
   if(!notes) return null;
-  const m=String(notes).match(/Price:\s*\$([0-9]+(?:\.[0-9]+)?)/i);
+  const m=String(notes).match(/Price:\s*\$([0-9]+(?:\.[0-9]+)?)(?:\s*\(\$?([0-9]+(?:\.[0-9]+)?)\s*due\))?/i);
   if(!m) return null;
-  const n=parseFloat(m[1]);
-  return Number.isFinite(n)?n:null;
+  const amount=parseFloat(m[1]);
+  if(!Number.isFinite(amount)) return null;
+  const due=m[2]!=null?parseFloat(m[2]):null;
+  return {amount, due:Number.isFinite(due)?due:null};
+}
+function wixPriceFromNotes(notes){
+  const d=wixPriceDetailsFromNotes(notes);
+  return d?d.amount:null;
+}
+function notesForViewer(notes, ownerView){
+  if(!notes) return notes;
+  if(ownerView) return notes;
+  return String(notes).split('\n').filter(line=>!/^\s*Price:\s*\$/i.test(line)).join('\n').trim();
+}
+function moneyFmt(n){
+  const v=Number(n)||0;
+  return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function ownerCustomerAmountLabel(charge){
+  if(!charge) return '';
+  return moneyFmt(charge.amount)+(charge.due!=null?` · ${moneyFmt(charge.due)} due`:'');
 }
 function bookingGrossAmount(b, quoteMap){
   const fromNotes=wixPriceFromNotes(b&&b.notes);
@@ -133,6 +158,16 @@ function buildOwnerEarnings(data, selected, today){
 
 assert.equal(wixPriceFromNotes('Event Location: chapel\nPrice: $1201.75 ($200 due)'), 1201.75);
 assert.equal(wixPriceFromNotes('no money here'), null);
+assert.deepEqual(wixPriceDetailsFromNotes('Price: $764.75 ($514.75 due)'), {amount:764.75, due:514.75});
+assert.deepEqual(wixPriceDetailsFromNotes('Price: $660'), {amount:660, due:null});
+assert.equal(wixPriceDetailsFromNotes('Event Location: Benton'), null);
+assert.equal(ownerCustomerAmountLabel({amount:764.75, due:514.75}), '$764.75 · $514.75 due');
+assert.equal(ownerCustomerAmountLabel({amount:660, due:null}), '$660.00');
+assert.equal(notesForViewer('Event Location: chapel\nPrice: $880 ($200 due)', true),
+  'Event Location: chapel\nPrice: $880 ($200 due)');
+assert.equal(notesForViewer('Event Location: chapel\nPrice: $880 ($200 due)', false),
+  'Event Location: chapel');
+assert.equal(notesForViewer('Price: $550', false), '');
 assert.equal(isEarningBooking({status:'completed'}), true);
 assert.equal(isEarningBooking({status:'cancelled',payment_status:'paid',driver_id:'d1'}), false);
 assert.equal(isEarningBooking({status:'new',payment_status:'unpaid',driver_id:null}), false);

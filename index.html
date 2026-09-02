@@ -204,6 +204,7 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .opentag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;
   background:var(--amber);color:#fff;padding:4px 7px;border-radius:20px}
 .paytag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:20px}
+.amttag{font:800 10px/1 "Inter",sans-serif;letter-spacing:.02em;background:var(--ink);color:var(--paper);padding:4px 8px;border-radius:20px;white-space:nowrap}
 .pay-paid{background:var(--green);color:#fff}
 .pay-deposit{background:var(--amber);color:#fff}
 .pay-unpaid{background:#e0d6c8;color:#7a6a55}
@@ -812,13 +813,30 @@ function bookingInMonth(b, year, month){
   const mm=String(month).padStart(2,'0');
   return !!(b.event_date && b.event_date.slice(0,7)===`${year}-${mm}`);
 }
-// Wix sync writes price.value onto the booking as a notes line: "Price: $1234".
-function wixPriceFromNotes(notes){
+// Wix sync writes price.value onto the booking as a notes line:
+// "Price: $764.75" or "Price: $764.75 ($514.75 due)".
+function wixPriceDetailsFromNotes(notes){
   if(!notes) return null;
-  const m=String(notes).match(/Price:\s*\$([0-9]+(?:\.[0-9]+)?)/i);
+  const m=String(notes).match(/Price:\s*\$([0-9]+(?:\.[0-9]+)?)(?:\s*\(\$?([0-9]+(?:\.[0-9]+)?)\s*due\))?/i);
   if(!m) return null;
-  const n=parseFloat(m[1]);
-  return Number.isFinite(n)?n:null;
+  const amount=parseFloat(m[1]);
+  if(!Number.isFinite(amount)) return null;
+  const due=m[2]!=null?parseFloat(m[2]):null;
+  return {amount, due:Number.isFinite(due)?due:null};
+}
+function wixPriceFromNotes(notes){
+  const d=wixPriceDetailsFromNotes(notes);
+  return d?d.amount:null;
+}
+function showOwnerCustomerAmount(){
+  // Same owner gate as the Paid/Deposit tag (isAdmin). Also hide in View as
+  // Driver/Shop so the staff preview has no customer dollars.
+  return isAdmin() && ROLE==='admin';
+}
+function notesForViewer(notes){
+  if(!notes) return notes;
+  if(showOwnerCustomerAmount()) return notes;
+  return String(notes).split('\n').filter(line=>!/^\s*Price:\s*\$/i.test(line)).join('\n').trim();
 }
 function bookingGrossAmount(b, quoteMap){
   const fromNotes=wixPriceFromNotes(b&&b.notes);
@@ -826,6 +844,24 @@ function bookingGrossAmount(b, quoteMap){
   const q=quoteMap&&b?quoteMap[b.id]:null;
   if(q && q.total!=null && !Number.isNaN(Number(q.total))) return Number(q.total);
   return null;
+}
+function bookingCustomerCharge(b){
+  const wix=wixPriceDetailsFromNotes(b&&b.notes);
+  if(wix) return {amount:wix.amount, due:wix.due, source:'wix'};
+  const map=assignQuotesToBookings((typeof DATA!=='undefined'&&DATA.bookings)||[], (typeof DATA!=='undefined'&&DATA.quotes)||[]);
+  const q=b&&map[b.id];
+  if(q && q.total!=null && !Number.isNaN(Number(q.total))) return {amount:Number(q.total), due:null, source:'quote'};
+  return null;
+}
+function ownerCustomerAmountLabel(b){
+  const c=bookingCustomerCharge(b);
+  if(!c) return '';
+  return moneyFmt(c.amount)+(c.due!=null?` · ${moneyFmt(c.due)} due`:'');
+}
+function ownerCustomerAmountTagHtml(b){
+  if(!showOwnerCustomerAmount()) return '';
+  const label=ownerCustomerAmountLabel(b);
+  return label?`<span class="amttag">${esc(label)}</span>`:'';
 }
 // Pair each booking with at most one quote. Same email match autoMatchQuotes already
 // uses to mark a quote booked; prefer email+date, then email+car, then email.
@@ -1459,6 +1495,7 @@ function showPast(){
         <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div><div class="y">${dc.y}</div></div>
         <div class="lmain"><div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span></div>
         <div class="meta lcar">🚗 ${car?esc(car.name):'—'} · 👤 ${drv?esc(drv.name):'no driver'}</div>
+        ${ownerCustomerAmountTagHtml(b)}
         ${isAdmin()?ownerPayPillHtml(b):''}</div></div>`;
     }
     body+='</div>';
@@ -1514,6 +1551,7 @@ function bookingRowHtml(b){
         <span class="ttl">${esc(b.customer_name||'Unnamed')}</span>
         <span class="pill s-${b.status}">${b.status}</span>
         ${isAdmin()?`<span class="paytag pay-${b.payment_status||'unpaid'}">${b.payment_status==='paid'?'Paid':b.payment_status==='deposit'?'Deposit':'Unpaid'}</span>`:''}
+        ${showOwnerCustomerAmount()?ownerCustomerAmountTagHtml(b):''}
         ${isAdmin()&&b.pay_tier&&!b.driver_id?`<span class="tiertag">T${b.pay_tier}</span>`:''}
         ${crewtag}
         ${b.needs_trailer?'<span class="trailertag">🚛 Trailer</span>':''}
@@ -1711,6 +1749,7 @@ function calDay(day){
       <div class="lmain">
         <div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}</div>
         <div class="meta lcar">🚗 ${car?esc(car.name):'<em>no car</em>'} &nbsp;·&nbsp; 👤 ${drv?esc(drv.name):'<em>no driver</em>'}${b.event_type?' · '+esc(b.event_type):''}</div>
+        ${ownerCustomerAmountTagHtml(b)}
         ${isAdmin()?ownerPayPillHtml(b):''}
       </div></div>`;
   }
@@ -1805,7 +1844,7 @@ function carDetail(cid){
     const drv=staffById(b.driver_id), dc=fmtDate(b.event_date);
     return `<div class="lrow" style="margin-bottom:8px" onclick="bookingDetail('${b.id}')">
       <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div><div class="y">${dc.y}</div></div>
-      <div class="lmain"><div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}</div>
+      <div class="lmain"><div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}${showOwnerCustomerAmount()?ownerCustomerAmountTagHtml(b):''}</div>
       <div class="meta">👤 ${drv?esc(drv.name):'<em>no driver</em>'}${b.event_type?' · '+esc(b.event_type):''}</div></div></div>`;
   };
   const pastShown=past.slice(0,15);
@@ -2132,6 +2171,8 @@ function bookingDetail(bid){
   openModal('Booking details',`
     ${isAdmin()?ownerPayPillHtml(b,'margin-bottom:14px;font-size:16px'):''}
     ${!isAdmin()&&pay!=null?`<div class="paypill" style="margin-bottom:14px">You earn $${pay}</div>`:''}
+    ${showOwnerCustomerAmount()&&ownerCustomerAmountLabel(b)?row('Customer amount', ownerCustomerAmountLabel(b)):''}
+    ${isAdmin()?row('Payment', b.payment_status==='paid'?'Paid in full':b.payment_status==='deposit'?'Deposit':'Unpaid'):''}
     ${row('Customer', b.customer_name)}
     ${row('Event', b.event_type)}
     ${row('Date', b.event_date)}
@@ -2142,7 +2183,7 @@ function bookingDetail(bid){
     ${row('Phone', b.customer_phone)}
     ${row('Email', b.customer_email)}
     ${b.needs_trailer?`<div style="margin-bottom:10px"><span class="trailertag">🚛 Car must be trailered</span></div>`:''}
-    ${row('Notes', b.notes)}
+    ${row('Notes', notesForViewer(b.notes))}
     ${isAdmin()?waterfallStatusHtml(b):''}
     ${isAdmin()?driverPayStatusHtml(b):''}
     ${claimBtns}
@@ -2367,7 +2408,7 @@ function bootOwnerPreview(){
     bookings:[
       {id:'b-accepted',customer_name:'Accepted Wedding',customer_email:'wedding@example.com',event_type:'wedding',event_date:soon,start_time:'14:00',end_time:'18:00',
         car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:3,needs_trailer:false,
-        source:'wix',notes:'Event Location: chapel\nPrice: $880'},
+        source:'wix',notes:'Event Location: chapel\nPrice: $880 ($200 due)'},
       {id:'b-alex-soon',customer_name:'Rehearsal Dinner',customer_email:'rehearsal@example.com',event_type:'dinner',event_date:soon,start_time:'18:00',
         car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:2,needs_trailer:false,
         source:'wix',notes:'Price: $660'},
