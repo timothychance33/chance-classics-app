@@ -27,6 +27,17 @@ assert.match(html, /class="amttag"/, 'amount tag style exists');
 assert.match(html, /price\.value/, 'names the Wix field the sync already writes');
 assert.match(html, /function isEarningBooking/, 'earning-status helper exists');
 assert.match(html, /function buildOwnerEarnings/, 'owner earnings rollup exists');
+assert.match(html, /function bookingsInCalendarYear/, 'year window is the full calendar year');
+assert.match(html, /function earnBookingCountText/, 'booking count helper exists');
+assert.match(html, /function openEarnWindow/, 'tapping a window opens the job list');
+assert.match(html, /function saveEarnBookingAmount/, 'owner can save a missing customer amount');
+assert.match(html, /function setWixPriceInNotes/, 'amount is written onto the booking Price line');
+assert.match(html, /function parseMoneyInput/, 'typed dollars are parsed, not invented');
+assert.match(html, /Tap a company total or a car window/, 'copy tells Tim to tap a rollup');
+assert.match(html, /This year<\/em> is every counted job dated Jan 1/, 'copy says this year is the full calendar year');
+assert.match(html, /\$\{today\.year\} this year/, 'company and car labels say this year, not through today');
+assert.match(html, /class="ecount"/, 'booking count is next to each window label');
+assert.doesNotMatch(html, /event_date<=day\.iso/, 'this year is not capped at today');
 assert.match(html, /America\/Chicago/, 'Chicago calendar is named');
 assert.match(html, /one car per booking/, 'multi-car note is in the UI');
 assert.doesNotMatch(html, /service_role/, 'no service_role in the browser app');
@@ -43,6 +54,19 @@ function bookingInMonth(b, year, month){
   const mm=String(month).padStart(2,'0');
   return !!(b.event_date && b.event_date.slice(0,7)===`${year}-${mm}`);
 }
+function bookingsInCalendarYear(list, year){
+  return (list||[]).filter(b=>bookingInYear(b, year));
+}
+function earnBookingCountText(roll){
+  const n=Number(roll&&roll.jobs)||0;
+  const noun=n===1?'booking':'bookings';
+  if(!n) return '0 bookings';
+  if(roll.unknown){
+    const known=Number(roll.known)||0;
+    return `${n} ${noun} · ${known} with amount`;
+  }
+  return `${n} ${noun}`;
+}
 function normEmail(e){return (e||'').toString().toLowerCase().trim()}
 function wixPriceDetailsFromNotes(notes){
   if(!notes) return null;
@@ -56,6 +80,28 @@ function wixPriceDetailsFromNotes(notes){
 function wixPriceFromNotes(notes){
   const d=wixPriceDetailsFromNotes(notes);
   return d?d.amount:null;
+}
+function parseMoneyInput(raw){
+  if(raw==null) return null;
+  const t=String(raw).trim().replace(/[$,]/g,'');
+  if(!t) return null;
+  const n=Number(t);
+  if(!Number.isFinite(n) || n<0) return null;
+  return Math.round(n*100)/100;
+}
+function setWixPriceInNotes(notes, amount){
+  const n=Number(amount);
+  if(!Number.isFinite(n) || n<0) return notes;
+  const line=`Price: $${n.toFixed(2)}`;
+  const text=notes==null?'':String(notes);
+  if(!text.trim()) return line;
+  let replaced=false;
+  const next=text.split('\n').map(row=>{
+    if(/^\s*Price:\s*\$/i.test(row)){ replaced=true; return line; }
+    return row;
+  });
+  if(replaced) return next.join('\n');
+  return text.replace(/\s+$/,'')+'\n'+line;
 }
 function notesForViewer(notes, ownerView){
   if(!notes) return notes;
@@ -128,7 +174,7 @@ function sumEarnings(list, quoteMap, staff){
   return {
     gross, driverPay,
     net: list.length===0 ? 0 : (known ? gross-driverPay : null),
-    jobs:list.length, known, unknown, unknownPay
+    jobs:list.length, known, unknown, unknownPay, list
   };
 }
 function buildOwnerEarnings(data, selected, today){
@@ -137,11 +183,11 @@ function buildOwnerEarnings(data, selected, today){
   const staff=data.staff||[];
   const bookings=(data.bookings||[]).filter(isEarningBooking);
   const quoteMap=assignQuotesToBookings(bookings, data.quotes||[]);
-  const ytd=bookings.filter(b=>bookingInYear(b, day.year) && b.event_date && b.event_date<=day.iso);
+  const yearJobs=bookingsInCalendarYear(bookings, day.year);
   const monthly=bookings.filter(b=>bookingInMonth(b, month.year, month.month));
   const company={
     allTime:sumEarnings(bookings, quoteMap, staff),
-    ytd:sumEarnings(ytd, quoteMap, staff),
+    ytd:sumEarnings(yearJobs, quoteMap, staff),
     month:sumEarnings(monthly, quoteMap, staff)
   };
   const cars=[...(data.cars||[])].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
@@ -150,7 +196,7 @@ function buildOwnerEarnings(data, selected, today){
     return {
       car,
       allTime:sumEarnings(mine, quoteMap, staff),
-      ytd:sumEarnings(mine.filter(b=>bookingInYear(b, day.year) && b.event_date && b.event_date<=day.iso), quoteMap, staff),
+      ytd:sumEarnings(bookingsInCalendarYear(mine, day.year), quoteMap, staff),
       month:sumEarnings(mine.filter(b=>bookingInMonth(b, month.year, month.month)), quoteMap, staff)
     };
   });
@@ -218,9 +264,13 @@ assert.equal(allTime.company.allTime.unknown, 1);
 assert.equal(allTime.company.allTime.unknownPay, 100, 'October Wix job pay is not subtracted from $0');
 assert.equal(allTime.missingAmount, 1);
 
-assert.equal(allTime.company.ytd.gross, 764.75, 'YTD uses Price line, not the unused quote 550');
-assert.equal(allTime.company.ytd.driverPay, 100);
-assert.equal(allTime.company.ytd.net, 764.75-100);
+assert.equal(allTime.company.ytd.gross, 764.75+880, 'this year includes later-2026 jobs, Price line still wins over unused quote 550');
+assert.equal(allTime.company.ytd.driverPay, 100+150);
+assert.equal(allTime.company.ytd.net, (764.75+880)-(100+150));
+assert.equal(allTime.company.ytd.jobs, 3, 'Aug + Sept 6 + Oct 12 are all this year');
+assert.equal(allTime.company.ytd.known, 2);
+assert.equal(allTime.company.ytd.unknown, 1);
+assert.equal(allTime.company.ytd.unknownPay, 100);
 
 const october=allTime.company.month;
 assert.equal(october.jobs, 1);
@@ -238,5 +288,66 @@ assert.equal(chevyRow.allTime.net, 0);
 const sept=buildOwnerEarnings(data, {year:2026, month:9}, today);
 assert.equal(sept.company.month.gross, 880);
 assert.equal(sept.company.month.driverPay, 150);
+assert.ok(sept.company.ytd.gross >= sept.company.month.gross,
+  'a 2026 month cannot out-earn 2026 this year');
+assert.equal(earnBookingCountText(sept.company.month), '1 booking');
+assert.equal(earnBookingCountText(sept.company.ytd), '3 bookings · 2 with amount');
+assert.equal(earnBookingCountText(chevyRow.allTime), '0 bookings');
+
+// Phyllis-shaped: jobs through today have no amount (old YTD = dashes),
+// later September jobs have a Price line. This year must include those.
+const phyllis={id:'phyllis',name:'Phyllis',status:'available'};
+const phyllisData={
+  cars:[phyllis],
+  staff:[{id:'d1',pay_rate:80},{id:'d2',pay_rate:120}],
+  bookings:[
+    {id:'p1',car_id:'phyllis',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:1,
+      event_date:'2026-03-12',customer_email:'early1@example.com'},
+    {id:'p2',car_id:'phyllis',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:1,
+      event_date:'2026-06-08',customer_email:'early2@example.com'},
+    {id:'p3',car_id:'phyllis',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:1,
+      event_date:'2026-09-01',customer_email:'early3@example.com'},
+    {id:'p4',car_id:'phyllis',driver_id:'d2',status:'confirmed',payment_status:'deposit',pay_tier:5,
+      event_date:'2026-09-12',customer_email:'later@example.com',
+      notes:'Price: $1420.25'},
+  ],
+  quotes:[]
+};
+const phyllisReport=buildOwnerEarnings(phyllisData, {year:2026, month:9}, today);
+const phyllisRow=phyllisReport.perCar.find(r=>r.car.id==='phyllis');
+assert.ok(phyllisRow);
+assert.equal(phyllisRow.month.gross, 1420.25, 'September uses the stored Price line');
+assert.equal(phyllisRow.month.driverPay, 600, 'driver pay only on the September job with a stored amount');
+assert.equal(phyllisRow.month.net, 1420.25-600);
+assert.equal(phyllisRow.ytd.gross, 1420.25, 'this year includes the later-September job');
+assert.ok(phyllisRow.ytd.gross >= phyllisRow.month.gross, 'Phyllis this-year gross is at least September');
+assert.equal(phyllisRow.ytd.unknown, 3, 'early jobs stay unknown, not $0');
+assert.equal(phyllisRow.ytd.unknownPay, 240);
+assert.equal(phyllisRow.ytd.net, 1420.25-600);
+assert.equal(earnBookingCountText(phyllisRow.ytd), '4 bookings · 1 with amount');
+assert.equal(earnBookingCountText(phyllisRow.month), '2 bookings · 1 with amount');
+assert.equal(phyllisRow.ytd.list.length, 4, 'this-year drill-in lists the counted jobs');
+assert.equal(phyllisRow.ytd.list.filter(b=>bookingGrossAmount(b, assignQuotesToBookings(phyllisData.bookings, []))==null).length, 3);
+
+assert.equal(parseMoneyInput(''), null);
+assert.equal(parseMoneyInput('abc'), null);
+assert.equal(parseMoneyInput('-10'), null);
+assert.equal(parseMoneyInput('$1,420.25'), 1420.25);
+assert.equal(setWixPriceInNotes('Event Location: Benton', 880), 'Event Location: Benton\nPrice: $880.00');
+assert.equal(setWixPriceInNotes('Price: $100\nEvent Location: chapel', 220), 'Price: $220.00\nEvent Location: chapel');
+assert.equal(setWixPriceInNotes('', 50), 'Price: $50.00');
+assert.equal(wixPriceFromNotes(setWixPriceInNotes('Event Location: chapel', 1420.25)), 1420.25);
+assert.equal(setWixPriceInNotes('Keep me', -1), 'Keep me', 'invalid amount does not invent a Price line');
+
+const missing=phyllisData.bookings.find(b=>b.id==='p1');
+missing.notes=setWixPriceInNotes(missing.notes, 100);
+const afterSave=buildOwnerEarnings(phyllisData, {year:2026, month:9}, today);
+const afterRow=afterSave.perCar.find(r=>r.car.id==='phyllis');
+assert.equal(afterRow.ytd.gross, 1420.25+100, 'saved amount lands in this-year gross');
+assert.equal(afterRow.month.gross, 1420.25, 'March save does not invent September dollars');
+assert.equal(afterRow.allTime.gross, 1420.25+100, 'saved amount lands in all-time');
+assert.equal(afterRow.ytd.unknown, 2);
+assert.equal(afterRow.ytd.known, 2);
+assert.equal(afterRow.ytd.net, (1420.25+100)-600-80);
 
 console.log('owner-earnings tests passed');
