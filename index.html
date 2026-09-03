@@ -129,7 +129,9 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .earnstats{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:18px}
 @media(min-width:720px){.earnstats{grid-template-columns:repeat(3,1fr)}}
 .earncard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
+.earncard .elbl,.car-earn .plbl{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .earncard .elbl{font:700 11px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#6b6052}
+.ecount{font:600 10px/1.2 "Inter",sans-serif;letter-spacing:.02em;text-transform:none;color:#8a7d6e;white-space:nowrap}
 .earncard .eamt{font:800 26px/1 "Playfair Display",serif;margin:8px 0 4px;color:var(--ink)}
 .earncard .eamt.net-pos{color:var(--green)}
 .earncard .eamt.net-neg{color:var(--oxblood)}
@@ -815,6 +817,11 @@ function bookingInMonth(b, year, month){
   const mm=String(month).padStart(2,'0');
   return !!(b.event_date && b.event_date.slice(0,7)===`${year}-${mm}`);
 }
+// This year = every counted job whose event_date is in the Chicago calendar year
+// (Jan 1–Dec 31), including upcoming jobs later this year. Not “through today”.
+function bookingsInCalendarYear(list, year){
+  return (list||[]).filter(b=>bookingInYear(b, year));
+}
 // Wix sync writes price.value onto the booking as a notes line:
 // "Price: $764.75" or "Price: $764.75 ($514.75 due)".
 function wixPriceDetailsFromNotes(notes){
@@ -926,11 +933,11 @@ function buildOwnerEarnings(data, selected, today){
   const staff=data.staff||[];
   const bookings=(data.bookings||[]).filter(isEarningBooking);
   const quoteMap=assignQuotesToBookings(bookings, data.quotes||[]);
-  const ytd=bookings.filter(b=>bookingInYear(b, day.year) && b.event_date && b.event_date<=day.iso);
+  const yearJobs=bookingsInCalendarYear(bookings, day.year);
   const monthly=bookings.filter(b=>bookingInMonth(b, month.year, month.month));
   const company={
     allTime:sumEarnings(bookings, quoteMap, staff),
-    ytd:sumEarnings(ytd, quoteMap, staff),
+    ytd:sumEarnings(yearJobs, quoteMap, staff),
     month:sumEarnings(monthly, quoteMap, staff)
   };
   const cars=[...(data.cars||[])].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
@@ -939,7 +946,7 @@ function buildOwnerEarnings(data, selected, today){
     return {
       car,
       allTime:sumEarnings(mine, quoteMap, staff),
-      ytd:sumEarnings(mine.filter(b=>bookingInYear(b, day.year) && b.event_date && b.event_date<=day.iso), quoteMap, staff),
+      ytd:sumEarnings(bookingsInCalendarYear(mine, day.year), quoteMap, staff),
       month:sumEarnings(mine.filter(b=>bookingInMonth(b, month.year, month.month)), quoteMap, staff)
     };
   });
@@ -1086,14 +1093,26 @@ function earnUnknownNote(roll){
   const pay=roll.unknownPay?` Driver pay on those jobs is ${moneyFmt(roll.unknownPay)} — shown here, not subtracted from $0.`:"";
   return `<div class="meta" style="margin-top:8px">${roll.unknown} job${roll.unknown===1?' has':'s have'} no stored customer amount (not in gross).${pay}</div>`;
 }
+function earnBookingCountText(roll){
+  const n=Number(roll&&roll.jobs)||0;
+  const noun=n===1?'booking':'bookings';
+  if(!n) return '0 bookings';
+  if(roll.unknown){
+    const known=Number(roll.known)||0;
+    return `${n} ${noun} · ${known} with amount`;
+  }
+  return `${n} ${noun}`;
+}
+function earnWindowLabelHtml(label, roll){
+  return `${esc(label)} <span class="ecount">${esc(earnBookingCountText(roll))}</span>`;
+}
 function earnPeriodHtml(label, roll){
   const hasNet=roll.net!=null;
   const netCls=!hasNet?'':(roll.net<0?'net-neg':(roll.net>0?'net-pos':''));
-  const jobBit=roll.jobs?`${roll.known} of ${roll.jobs} with an amount`:'no jobs';
   return `<div class="earncard">
-    <div class="elbl">${esc(label)}</div>
+    <div class="elbl">${earnWindowLabelHtml(label, roll)}</div>
     <div class="eamt ${netCls}">${moneyOrDash(roll.net)}</div>
-    <div class="meta" style="margin-bottom:8px">${hasNet?'Net after driver pay':"Net only when a job has a customer amount"} · ${jobBit}</div>
+    <div class="meta" style="margin-bottom:8px">${hasNet?'Net after driver pay':"Net only when a job has a customer amount"}</div>
     <div class="earnrow"><span class="ek">Gross</span><span class="ev">${roll.known?moneyFmt(roll.gross):'—'}</span></div>
     <div class="earnrow"><span class="ek">Driver pay</span><span class="ev">${roll.known?moneyFmt(roll.driverPay):'—'}</span></div>
     <div class="earnrow"><span class="ek">Net</span><span class="ev">${moneyOrDash(roll.net)}</span></div>
@@ -1104,7 +1123,7 @@ function earnCarPeriodHtml(label, roll){
   const g=roll.jobs===0?moneyFmt(0):(roll.known?moneyFmt(roll.gross):'—');
   const p=roll.jobs===0?moneyFmt(0):(roll.known?moneyFmt(roll.driverPay):'—');
   return `<div class="period">
-    <div class="plbl">${esc(label)}</div>
+    <div class="plbl">${earnWindowLabelHtml(label, roll)}</div>
     <div class="pvals">
       <span>Gross <b>${g}</b></span>
       <span>Driver pay <b>${p}</b></span>
@@ -1125,11 +1144,11 @@ function renderEarnings(){
   const monthLabel=`${monthNames[report.month.month-1]} ${report.month.year}`;
   const monthOpts=monthNames.map((name,i)=>`<option value="${i+1}" ${report.month.month===i+1?'selected':''}>${name} ${today.year}</option>`).join('');
   let h=`<div class="sectionhead"><div><div class="kicker">Owner view · America/Chicago</div><h2 class="display">Earnings</h2></div><span class="line"></span></div>`;
-  h+=`<div class="meta" style="margin:-8px 0 14px">Gross is the customer amount Wix already writes on the booking (<em>Price: $X</em> in notes). If that line is missing, a matching quote total is the fallback. Driver pay is the same tier × scale as “Pay driver $X”. Net is only calculated when a job has a customer amount — missing amounts are not treated as $0. Each booking is attributed to its assigned car (one car per booking).</div>`;
+  h+=`<div class="meta" style="margin:-8px 0 14px">Gross is the customer amount Wix already writes on the booking (<em>Price: $X</em> in notes). If that line is missing, a matching quote total is the fallback. Driver pay is the same tier × scale as “Pay driver $X”. Net is only calculated when a job has a customer amount — missing amounts are not treated as $0. Each booking is attributed to its assigned car (one car per booking). <em>This year</em> is every counted job dated Jan 1–Dec 31 in America/Chicago, including upcoming jobs later this year.</div>`;
   h+=`<div class="meta" style="margin:-6px 0 12px">${report.jobCount} counted job${report.jobCount===1?'':'s'} (confirmed / in progress / completed, plus accepted or collected <em>new</em> imports). Cancelled jobs are out.${report.missingAmount?` ${report.missingAmount} counted booking${report.missingAmount===1?' has':'s have'} no stored customer amount.`:' All counted bookings have a customer amount.'}${report.unassignedCount?` ${report.unassignedCount} counted booking${report.unassignedCount===1?' has':'s have'} no car assigned — in company totals only.`:''}</div>`;
   h+=`<div class="earnstats">
     ${earnPeriodHtml('All-time', report.company.allTime)}
-    ${earnPeriodHtml(`${today.year} year-to-date`, report.company.ytd)}
+    ${earnPeriodHtml(`${today.year} this year`, report.company.ytd)}
     ${earnPeriodHtml(monthLabel, report.company.month)}
   </div>`;
   h+=`<div class="schsechd">Month</div>
@@ -1149,7 +1168,7 @@ function renderEarnings(){
         <div class="hd"><div class="ttl">${esc(c.name)}</div><span class="pill s-${c.status||'available'}" style="margin-left:auto">${esc(c.status||'')}</span></div>
         <div class="bd">
           ${earnCarPeriodHtml('All-time', row.allTime)}
-          ${earnCarPeriodHtml(`${today.year} YTD`, row.ytd)}
+          ${earnCarPeriodHtml(`${today.year} this year`, row.ytd)}
           ${earnCarPeriodHtml(monthLabel, row.month)}
         </div>
       </div>`;
@@ -2390,12 +2409,14 @@ function bootOwnerPreview(){
   const shop={id:'m1',name:'Chris Shop',role:'mechanic',email:'chris@example.com',phone:'555-0199',active:true};
   const car={id:'c1',name:'1967 Mustang',year:1967,make:'Ford',model:'Mustang',status:'available'};
   const idle={id:'c2',name:'1957 Chevy Bel Air',year:1957,make:'Chevrolet',model:'Bel Air',status:'available'};
+  const phyllis={id:'c-phyllis',name:'Phyllis',year:1964,make:'Ford',model:'Thunderbird',status:'available'};
   const today=new Date().toISOString().slice(0,10);
   const soon=new Date(Date.now()+5*86400000).toISOString().slice(0,10);
   const past=new Date(Date.now()-3*86400000).toISOString().slice(0,10);
   const lastYear=String((chicagoToday().year)-1)+'-06-14';
+  const y=chicagoToday().year;
   DATA={
-    cars:[car,idle],
+    cars:[car,idle,phyllis],
     staff:[d1,d2,d3,shop],
     bookings:[
       {id:'b-accepted',customer_name:'Accepted Wedding',customer_email:'wedding@example.com',event_type:'wedding',event_date:soon,start_time:'14:00',end_time:'18:00',
@@ -2417,6 +2438,15 @@ function bootOwnerPreview(){
       {id:'b-wix-noprice',customer_name:'October Wix Import',customer_email:'noline@example.com',event_type:'rental',event_date:`${chicagoToday().year}-10-12`,start_time:'15:00',
         car_id:'c1',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:2,needs_trailer:false,
         source:'wix',notes:'Event Location: Benton'},
+      {id:'b-phyllis-early-1',customer_name:'Phyllis March',customer_email:'phyllis1@example.com',event_type:'wedding',event_date:`${y}-03-12`,start_time:'14:00',
+        car_id:'c-phyllis',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:1,needs_trailer:false},
+      {id:'b-phyllis-early-2',customer_name:'Phyllis June',customer_email:'phyllis2@example.com',event_type:'gala',event_date:`${y}-06-08`,start_time:'16:00',
+        car_id:'c-phyllis',driver_id:'d1',status:'completed',payment_status:'paid',pay_tier:1,needs_trailer:false},
+      {id:'b-phyllis-early-3',customer_name:'Phyllis Sept 1',customer_email:'phyllis3@example.com',event_type:'dinner',event_date:`${y}-09-01`,start_time:'18:00',
+        car_id:'c-phyllis',driver_id:'d1',status:'confirmed',payment_status:'deposit',pay_tier:1,needs_trailer:false},
+      {id:'b-phyllis-later',customer_name:'Phyllis Sept 12',customer_email:'phyllis4@example.com',event_type:'wedding',event_date:`${y}-09-12`,start_time:'15:00',
+        car_id:'c-phyllis',driver_id:'d2',status:'confirmed',payment_status:'deposit',pay_tier:5,needs_trailer:false,
+        source:'wix',notes:'Price: $1420.25'},
       {id:'b-cancelled',customer_name:'Cancelled Prom',customer_email:'prom@example.com',event_type:'prom',event_date:past,start_time:'19:00',
         car_id:'c1',driver_id:'d2',status:'cancelled',payment_status:'unpaid',pay_tier:2,needs_trailer:false},
       {id:'b-draft',customer_name:'Draft Inquiry',customer_email:'draft@example.com',event_type:'inquiry',event_date:soon,
