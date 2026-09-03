@@ -29,6 +29,11 @@ assert.match(html, /function isEarningBooking/, 'earning-status helper exists');
 assert.match(html, /function buildOwnerEarnings/, 'owner earnings rollup exists');
 assert.match(html, /function bookingsInCalendarYear/, 'year window is the full calendar year');
 assert.match(html, /function earnBookingCountText/, 'booking count helper exists');
+assert.match(html, /function openEarnWindow/, 'tapping a window opens the job list');
+assert.match(html, /function saveEarnBookingAmount/, 'owner can save a missing customer amount');
+assert.match(html, /function setWixPriceInNotes/, 'amount is written onto the booking Price line');
+assert.match(html, /function parseMoneyInput/, 'typed dollars are parsed, not invented');
+assert.match(html, /Tap a company total or a car window/, 'copy tells Tim to tap a rollup');
 assert.match(html, /This year<\/em> is every counted job dated Jan 1/, 'copy says this year is the full calendar year');
 assert.match(html, /\$\{today\.year\} this year/, 'company and car labels say this year, not through today');
 assert.match(html, /class="ecount"/, 'booking count is next to each window label');
@@ -75,6 +80,28 @@ function wixPriceDetailsFromNotes(notes){
 function wixPriceFromNotes(notes){
   const d=wixPriceDetailsFromNotes(notes);
   return d?d.amount:null;
+}
+function parseMoneyInput(raw){
+  if(raw==null) return null;
+  const t=String(raw).trim().replace(/[$,]/g,'');
+  if(!t) return null;
+  const n=Number(t);
+  if(!Number.isFinite(n) || n<0) return null;
+  return Math.round(n*100)/100;
+}
+function setWixPriceInNotes(notes, amount){
+  const n=Number(amount);
+  if(!Number.isFinite(n) || n<0) return notes;
+  const line=`Price: $${n.toFixed(2)}`;
+  const text=notes==null?'':String(notes);
+  if(!text.trim()) return line;
+  let replaced=false;
+  const next=text.split('\n').map(row=>{
+    if(/^\s*Price:\s*\$/i.test(row)){ replaced=true; return line; }
+    return row;
+  });
+  if(replaced) return next.join('\n');
+  return text.replace(/\s+$/,'')+'\n'+line;
 }
 function notesForViewer(notes, ownerView){
   if(!notes) return notes;
@@ -147,7 +174,7 @@ function sumEarnings(list, quoteMap, staff){
   return {
     gross, driverPay,
     net: list.length===0 ? 0 : (known ? gross-driverPay : null),
-    jobs:list.length, known, unknown, unknownPay
+    jobs:list.length, known, unknown, unknownPay, list
   };
 }
 function buildOwnerEarnings(data, selected, today){
@@ -299,5 +326,28 @@ assert.equal(phyllisRow.ytd.unknownPay, 240);
 assert.equal(phyllisRow.ytd.net, 1420.25-600);
 assert.equal(earnBookingCountText(phyllisRow.ytd), '4 bookings · 1 with amount');
 assert.equal(earnBookingCountText(phyllisRow.month), '2 bookings · 1 with amount');
+assert.equal(phyllisRow.ytd.list.length, 4, 'this-year drill-in lists the counted jobs');
+assert.equal(phyllisRow.ytd.list.filter(b=>bookingGrossAmount(b, assignQuotesToBookings(phyllisData.bookings, []))==null).length, 3);
+
+assert.equal(parseMoneyInput(''), null);
+assert.equal(parseMoneyInput('abc'), null);
+assert.equal(parseMoneyInput('-10'), null);
+assert.equal(parseMoneyInput('$1,420.25'), 1420.25);
+assert.equal(setWixPriceInNotes('Event Location: Benton', 880), 'Event Location: Benton\nPrice: $880.00');
+assert.equal(setWixPriceInNotes('Price: $100\nEvent Location: chapel', 220), 'Price: $220.00\nEvent Location: chapel');
+assert.equal(setWixPriceInNotes('', 50), 'Price: $50.00');
+assert.equal(wixPriceFromNotes(setWixPriceInNotes('Event Location: chapel', 1420.25)), 1420.25);
+assert.equal(setWixPriceInNotes('Keep me', -1), 'Keep me', 'invalid amount does not invent a Price line');
+
+const missing=phyllisData.bookings.find(b=>b.id==='p1');
+missing.notes=setWixPriceInNotes(missing.notes, 100);
+const afterSave=buildOwnerEarnings(phyllisData, {year:2026, month:9}, today);
+const afterRow=afterSave.perCar.find(r=>r.car.id==='phyllis');
+assert.equal(afterRow.ytd.gross, 1420.25+100, 'saved amount lands in this-year gross');
+assert.equal(afterRow.month.gross, 1420.25, 'March save does not invent September dollars');
+assert.equal(afterRow.allTime.gross, 1420.25+100, 'saved amount lands in all-time');
+assert.equal(afterRow.ytd.unknown, 2);
+assert.equal(afterRow.ytd.known, 2);
+assert.equal(afterRow.ytd.net, (1420.25+100)-600-80);
 
 console.log('owner-earnings tests passed');
