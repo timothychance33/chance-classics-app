@@ -24,6 +24,8 @@ assert.match(html, /if\(!isOwnerView\(\) && !STAFF_TABS\.includes\(name\)\) name
 assert.match(html, /isAdmin\(\) && ROLE==='admin'/, 'View as Driver hides owner chrome');
 assert.doesNotMatch(html, /stab\.textContent=isAdmin\(\)\?'Drivers':'Crew'/, 'staff no longer get a Crew tab');
 assert.doesNotMatch(html, /service_role/, 'no service_role in the browser app');
+assert.doesNotMatch(html, /section\('Unclaimed'/, 'Schedule no longer renders an Unclaimed section');
+assert.match(html, /Ready to release to drivers/, 'Ready to release to drivers stays on Schedule');
 
 // Same formula the app uses: amount = pay_tier × driver.pay_rate
 function driverPayFor(b, staff){
