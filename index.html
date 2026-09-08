@@ -699,18 +699,13 @@ function fmtDate(d){if(!d)return{d:'—',m:'',y:''};const dt=new Date(d+'T00:00:
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':');let hh=+h;const ap=hh>=12?'PM':'AM';hh=hh%12||12;return hh+':'+m+ap}
 
 // ---------- marketplace helpers ----------
-// Send an email notification (offer / claimed / passed). Fire-and-forget.
+// Send an email notification (offer / claimed / passed / driver assignment edits). Fire-and-forget.
 async function notify(type, booking, extra){
   try{
-    const car=carById(booking.car_id);
+    const car=carById(booking&&booking.car_id);
     const payload={
       type,
-      booking:{
-        customer_name:booking.customer_name, event_type:booking.event_type,
-        event_date:booking.event_date, start_time:booking.start_time?fmtTime(booking.start_time):'',
-        car_id:booking.car_id, car_name:car?car.name:'',
-        pickup_location:booking.pickup_location, return_location:booking.return_location
-      },
+      booking:driverNotifyBookingPayload(booking, car),
       ...extra
     };
     await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -726,6 +721,128 @@ async function notifyOfferTo(booking){
   try{
     await notify('offer',booking,{driver_name:d.name,driver_email:d.email,pay});
   }catch(e){ toast('Offer email failed: '+(e.message||e)); }
+}
+
+// Driver-facing notes hide the owner-only Wix Price line (same as notesForViewer).
+function driverFacingNotes(notes){
+  if(!notes) return '';
+  return String(notes).split('\n').filter(line=>!/^\s*Price:\s*\$/i.test(line)).join('\n').trim();
+}
+function normTime(t){
+  if(t==null||t==='') return '';
+  const m=String(t).match(/^(\d{1,2}):(\d{2})/);
+  if(!m) return String(t).trim();
+  return m[1].padStart(2,'0')+':'+m[2];
+}
+function fmtEventDate(isoDate){
+  if(!isoDate) return '';
+  const[y,mo,d]=String(isoDate).slice(0,10).split('-').map(Number);
+  if(!y||!mo||!d) return String(isoDate);
+  const dt=new Date(Date.UTC(y,mo-1,d));
+  const dow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getUTCDay()];
+  return dow+' '+MONTHS[dt.getUTCMonth()][0]+MONTHS[dt.getUTCMonth()].slice(1).toLowerCase()+' '+dt.getUTCDate();
+}
+function blankVal(v){ return v==null||v===''; }
+function sameDriverVal(key,a,b){
+  if(key==='notes') return driverFacingNotes(a)===driverFacingNotes(b);
+  if(key==='start_time'||key==='end_time') return normTime(a)===normTime(b);
+  if(key==='needs_trailer') return !!a===!!b;
+  if(key==='pay_tier'){
+    const na=a==null||a===''?null:Number(a);
+    const nb=b==null||b===''?null:Number(b);
+    return na===nb;
+  }
+  if(blankVal(a)&&blankVal(b)) return true;
+  return String(a)===String(b);
+}
+function displayDriverVal(key,value,driver){
+  if(key==='notes') return driverFacingNotes(value)||'—';
+  if(key==='start_time'||key==='end_time') return (value?fmtTime(normTime(value)):'')||'—';
+  if(key==='event_date') return fmtEventDate(value)||'—';
+  if(key==='car_id'){ const c=carById(value); return c?c.name:'—'; }
+  if(key==='needs_trailer') return value?'Yes — car must be trailered':'No';
+  if(key==='pay_tier'){
+    if(value==null||value==='') return '—';
+    if(driver&&driver.pay_rate!=null) return 'Tier '+value+' ($'+(Number(value)*Number(driver.pay_rate))+')';
+    return 'Tier '+value;
+  }
+  return blankVal(value)?'—':String(value);
+}
+const DRIVER_FACING_FIELDS=[
+  {key:'event_date',label:'Date'},{key:'start_time',label:'Start'},{key:'end_time',label:'End'},
+  {key:'car_id',label:'Car'},{key:'pickup_location',label:'Pickup'},{key:'return_location',label:'Drop-off'},
+  {key:'customer_name',label:'Customer'},{key:'event_type',label:'Event'},
+  {key:'customer_phone',label:'Phone'},{key:'customer_email',label:'Email'},
+  {key:'notes',label:'Notes'},{key:'needs_trailer',label:'Trailer'},
+  {key:'pay_tier',label:'Pay tier'},{key:'status',label:'Status'}
+];
+function diffDriverFacing(previous,next,driver){
+  const changes=[];
+  for(const field of DRIVER_FACING_FIELDS){
+    const before=previous?previous[field.key]:undefined;
+    const after=next?next[field.key]:undefined;
+    if(sameDriverVal(field.key,before,after)) continue;
+    changes.push({key:field.key,label:field.label,from:displayDriverVal(field.key,before,driver),to:displayDriverVal(field.key,after,driver)});
+  }
+  return changes;
+}
+function classifyDriverNotify({previous,next,deleted}={}){
+  const emails=[];
+  if(deleted && previous && previous.driver_id){
+    emails.push({kind:'booking_unassigned',driverId:previous.driver_id,booking:previous});
+    return emails;
+  }
+  const prevDriver=previous&&previous.driver_id?previous.driver_id:null;
+  const nextDriver=next&&next.driver_id?next.driver_id:null;
+  if(prevDriver && prevDriver!==nextDriver) emails.push({kind:'booking_unassigned',driverId:prevDriver,booking:previous});
+  if(nextDriver && nextDriver!==prevDriver) emails.push({kind:'booking_assigned',driverId:nextDriver,booking:next});
+  if(nextDriver && prevDriver && prevDriver===nextDriver){
+    const changes=diffDriverFacing(previous,next,staffById(nextDriver));
+    if(changes.length) emails.push({kind:'booking_updated',driverId:nextDriver,booking:next,changes});
+  }
+  return emails;
+}
+function driverNotifyBookingPayload(booking, car){
+  if(!booking) return {};
+  return {
+    customer_name:booking.customer_name, event_type:booking.event_type,
+    event_date:booking.event_date?fmtEventDate(booking.event_date):booking.event_date,
+    start_time:booking.start_time?fmtTime(normTime(booking.start_time)):'',
+    end_time:booking.end_time?fmtTime(normTime(booking.end_time)):'',
+    car_id:booking.car_id, car_name:car?car.name:'',
+    pickup_location:booking.pickup_location, return_location:booking.return_location,
+    customer_phone:booking.customer_phone, customer_email:booking.customer_email,
+    notes:driverFacingNotes(booking.notes),
+    needs_trailer:!!booking.needs_trailer,
+    status:booking.status,
+    pay_tier:booking.pay_tier
+  };
+}
+function driverMailSubject(kind, booking){
+  const who=(booking&&(booking.customer_name||booking.event_type))||'booking';
+  const when=booking&&booking.event_date?fmtEventDate(booking.event_date):'';
+  const tail=when?who+' — '+when:who;
+  if(kind==='booking_updated') return 'Booking updated: '+tail;
+  if(kind==='booking_assigned') return "You're on a booking: "+tail;
+  if(kind==='booking_unassigned') return "You're off a booking: "+tail;
+  return tail;
+}
+// Your Chance Classics bookings this week — weekly digest subject lives on scheduled-tasks.
+async function notifyDriversAfterBookingWrite({previous,next,deleted}={}){
+  const actions=classifyDriverNotify({previous,next,deleted});
+  for(const action of actions){
+    const d=staffById(action.driverId);
+    if(!d||!d.email){ console.log('driver email skipped: no email on roster', action.kind, action.driverId); continue; }
+    const booking=action.booking||next||previous||{};
+    const pay=booking.pay_tier&&d.pay_rate!=null?booking.pay_tier*d.pay_rate:null;
+    try{
+      await notify(action.kind, booking, {
+        driver_name:d.name, driver_email:d.email, pay,
+        changes:action.changes||[],
+        subject:driverMailSubject(action.kind, booking)
+      });
+    }catch(e){ console.error('driver notify failed', action.kind, e); }
+  }
 }
 
 function myStaff(){const id=myStaffId();return id?staffById(id):null;}
@@ -1094,6 +1211,7 @@ async function approveRelease(bid){
     offer_rank:newRank, passed_by:[], offered_at:newRank!=null?new Date().toISOString():null, offer_warned:false
   }).eq('id',bid);
   if(error){toast(error.message);return}
+  if(b && b.driver_id) notifyDriversAfterBookingWrite({previous:b, next:{...b, driver_id:null, offer_rank:newRank}});
   if(b && newRank!=null) notifyOfferTo({...b, driver_id:null, offer_rank:newRank});
   toast('Released and re-offered');await loadAll();
 }
@@ -2213,10 +2331,12 @@ async function saveBooking(id){
   }
   if(rec.driver_id){ rec.offer_rank=null; rec.assigned_by='owner'; } // admin-assigned
   try{
+    let savedId=id||null;
     if(id){
       const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
     }else{
       const {data,error}=await SB.from('bookings').insert(rec).select().single();if(error)throw error;
+      savedId=data&&data.id;
       // copy car prep template into booking
       if(rec.car_id){
         const tpl=DATA.templates.filter(t=>t.car_id===rec.car_id);
@@ -2226,10 +2346,18 @@ async function saveBooking(id){
       }
     }
     if(justOffered) notifyOfferTo(rec);  // email the #1 driver that a job awaits
+    notifyDriversAfterBookingWrite({previous:existing, next:{...rec,id:savedId}});
     closeModal();toast('Booking saved');await loadAll();
   }catch(e){toast('Error: '+(e.message||e))}
 }
-async function delBooking(id){if(!confirm('Delete this booking?'))return;const {error}=await SB.from('bookings').delete().eq('id',id);if(error){toast(error.message);return}closeModal();toast('Deleted');await loadAll()}
+async function delBooking(id){
+  if(!confirm('Delete this booking?'))return;
+  const existing=DATA.bookings.find(x=>x.id===id);
+  const {error}=await SB.from('bookings').delete().eq('id',id);
+  if(error){toast(error.message);return}
+  notifyDriversAfterBookingWrite({previous:existing, deleted:true});
+  closeModal();toast('Deleted');await loadAll();
+}
 
 // PREP list for a single booking (admin/mechanic)
 function driverPayStatusHtml(b){
