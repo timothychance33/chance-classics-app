@@ -37,4 +37,41 @@ assert.match(migration, /rental\.driver_weekly_digest_sends/);
 assert.match(migration, /primary key \(staff_id, week_start\)/);
 assert.match(migration, /enable row level security/);
 
+function mockRes(){
+  return {
+    statusCode: 0,
+    headers: {},
+    body: '',
+    setHeader(k, v){ this.headers[k]=v; },
+    end(s){ this.body=s; },
+  };
+}
+
+const { createRequire } = await import('node:module');
+const require = createRequire(import.meta.url);
+const handler = require(join(root, 'api/cron/weekly-driver-digest.js'));
+
+{
+  const res = mockRes();
+  delete process.env.CRON_SECRET;
+  await handler({ method: 'GET', headers: {}, url: '/api/cron/weekly-driver-digest' }, res);
+  assert.equal(res.statusCode, 503);
+  assert.equal(JSON.parse(res.body).skipped, true);
+}
+
+{
+  const res = mockRes();
+  process.env.CRON_SECRET = 'test-cron-secret';
+  await handler({ method: 'GET', headers: {}, url: '/api/cron/weekly-driver-digest' }, res);
+  assert.equal(res.statusCode, 401);
+}
+
+{
+  const res = mockRes();
+  await handler({ method: 'PUT', headers: {}, url: '/api/cron/weekly-driver-digest' }, res);
+  assert.equal(res.statusCode, 405);
+}
+
+delete process.env.CRON_SECRET;
+
 console.log('driver-cron tests passed');
