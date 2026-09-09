@@ -168,6 +168,11 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .qbreak{margin:14px 0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px}
 .qwarn{margin-top:10px;background:#fcf0ef;border:1px solid var(--oxblood);color:var(--oxblood);border-radius:8px;padding:10px 12px;font-size:13px;font-weight:600}
 .qok{margin-top:10px;background:#eef4ec;border:1px solid var(--green);color:#2f5740;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600}
+.qalts{margin-top:10px;background:#fff;border:1px solid var(--green);border-radius:10px;padding:12px}
+.qalts .qahd{font:700 13px/1.35 "Inter",sans-serif;color:#2f5740;margin-bottom:8px}
+.qalt{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--paper-2);font-size:14px}
+.qalt:last-child{border-bottom:0}
+.qalt b{font-weight:800;white-space:nowrap}
 .remindertag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.04em;text-transform:uppercase;background:#cdd9e6;color:#4a5a6b;padding:4px 8px;border-radius:20px;white-space:nowrap}
 .qline{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--paper-2)}
 .qline:last-child{border-bottom:0}
@@ -1497,14 +1502,48 @@ function calcQuote(carId, hours, miles, hotelFee){
   return {base,extraH,overage,mi,travel,hotel,subtotal,tax,total};
 }
 
+function findBookingClash(carId, evDate){
+  if(!evDate||!carId) return null;
+  return (DATA.bookings||[]).find(b=>b.car_id===carId && b.event_date===evDate && b.status!=='cancelled')||null;
+}
+function carsOpenOnDate(evDate, excludeCarId){
+  return (DATA.cars||[]).filter(c=>c.id!==excludeCarId && !findBookingClash(c.id, evDate));
+}
+function pricedAlternateQuotes(excludeCarId, hours, miles, hotelFee, evDate){
+  const when=evDate||window._quoteEventDate;
+  return carsOpenOnDate(when, excludeCarId).map(car=>{
+    const c=calcQuote(car.id, hours, miles, hotelFee);
+    return {id:car.id, name:car.name, book_url:car.book_url||null,
+      base_rate:c.base, extra_hours:c.extraH, overage:c.overage, miles:c.mi, travel:c.travel,
+      hotel_fee:c.hotel, subtotal:c.subtotal, tax:c.tax, total:c.total};
+  });
+}
+function quoteCarOptions(selectedId, evDate){
+  return (DATA.cars||[]).map(c=>{
+    const booked=!!findBookingClash(c.id, evDate);
+    return `<option value="${c.id}" ${selectedId===c.id?'selected':''}>${esc(c.name)} ($${c.base_rate||0})${booked?' — booked':''}</option>`;
+  }).join('');
+}
+function defaultUnavailableNote(requestedName, evDate, otherNames){
+  const car=requestedName||'that car';
+  const when=evDate||'that date';
+  if(otherNames&&otherNames.length){
+    return `Unfortunately ${car} is already booked on ${when}. The good news — we do have ${otherNames.join(', ')} available that day if you'd like to see photos or get a quote for one of those instead!`;
+  }
+  return `Unfortunately ${car} is already booked on ${when}, and it looks like our other cars are booked that day as well. Let us know if your date has any flexibility and we'll check again!`;
+}
+function defaultAlternateNote(requestedName, evDate){
+  const car=requestedName||'that car';
+  const when=evDate||'that date';
+  return `${car} is already booked on ${when}. Same trip — hours, locations, the whole plan — here are prices for the cars we still have open. Reply and tell us which one you want!`;
+}
+
 function unavailableNotice(qid, requestedCarId){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
   const evDate=window._quoteEventDate;
   const requestedCar=carById(requestedCarId);
-  const others=DATA.cars.filter(c=>c.id!==requestedCarId && !DATA.bookings.some(b=>b.car_id===c.id && b.event_date===evDate && b.status!=='cancelled'));
-  const defaultNote=others.length
-    ? `Unfortunately ${requestedCar?requestedCar.name:'that car'} is already booked on ${evDate}. The good news — we do have ${others.map(c=>c.name).join(', ')} available that day if you'd like to see photos or get a quote for one of those instead!`
-    : `Unfortunately ${requestedCar?requestedCar.name:'that car'} is already booked on ${evDate}, and it looks like our other cars are booked that day as well. Let us know if your date has any flexibility and we'll check again!`;
+  const others=carsOpenOnDate(evDate, requestedCarId);
+  const defaultNote=defaultUnavailableNote(requestedCar?requestedCar.name:null, evDate, others.map(c=>c.name));
   openModal('Draft: car unavailable', `
     <div class="qreq"><div class="meta">To: ${esc(q.customer_email)}</div><div class="meta">Re: ${esc(requestedCar?requestedCar.name:'')} on ${esc(evDate||'')}</div></div>
     <div style="margin-top:12px"><label>Message</label><textarea id="un_note" rows="6">${esc(defaultNote)}</textarea></div>
@@ -1519,7 +1558,7 @@ async function sendUnavailableNotice(qid, requestedCarId){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
   const evDate=window._quoteEventDate;
   const requestedCar=carById(requestedCarId);
-  const others=DATA.cars.filter(c=>c.id!==requestedCarId && !DATA.bookings.some(b=>b.car_id===c.id && b.event_date===evDate && b.status!=='cancelled'));
+  const others=carsOpenOnDate(evDate, requestedCarId);
   const note=document.getElementById('un_note').value;
   try{
     await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
@@ -1532,11 +1571,76 @@ async function sendUnavailableNotice(qid, requestedCarId){
   closeModal();
 }
 
+function alternateQuotesNotice(qid, requestedCarId){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
+  const evDate=window._quoteEventDate;
+  const requestedCar=carById(requestedCarId);
+  const trip=quoteTripInputs();
+  const alts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate);
+  if(!alts.length){ unavailableNotice(qid, requestedCarId); return; }
+  const m=n=>`$${Number(n).toFixed(2)}`;
+  const bits=[`${trip.hours} hours`];
+  if(trip.miles) bits.push(`${trip.miles} mi`);
+  if(trip.hotel) bits.push('overnight hotel');
+  const rows=alts.map(a=>`<div class="qalt"><span>${esc(a.name)}</span><b>${m(a.total)}</b></div>`).join('');
+  const defaultNote=defaultAlternateNote(requestedCar?requestedCar.name:null, evDate);
+  window._quoteTrip=trip;
+  openModal('Draft: other cars that day', `
+    <div class="qreq">
+      <div class="meta">To: ${esc(q.customer_email)}</div>
+      <div class="meta">${esc(requestedCar?requestedCar.name:'That car')} is booked${evDate?' on '+esc(evDate):''} — same trip, priced for the open cars</div>
+      <div class="meta">${esc(bits.join(' · '))} · tax included</div>
+    </div>
+    <input type="hidden" id="q_hours" value="${trip.hours}">
+    <input type="hidden" id="q_miles" value="${trip.miles}">
+    <input type="hidden" id="alt_hotel" value="${trip.hotel}">
+    <div class="qalts" style="margin-top:12px">${rows}</div>
+    <div style="margin-top:12px"><label>Message</label><textarea id="alt_note" rows="5">${esc(defaultNote)}</textarea></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="act" onclick="sendAlternateQuotes('${qid}','${requestedCarId}')">Send prices</button>
+      <button class="ghost" onclick="quoteBuilder('${qid}')">Back</button>
+    </div>
+  `);
+}
+
+async function sendAlternateQuotes(qid, requestedCarId){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
+  const evDate=window._quoteEventDate||q.event_date;
+  const requestedCar=carById(requestedCarId);
+  const trip=quoteTripInputs();
+  const noteEl=document.getElementById('alt_note');
+  const note=noteEl?noteEl.value:(document.getElementById('q_note')&&document.getElementById('q_note').value)||'';
+  const alts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate);
+  if(!alts.length){ toast('No other cars are open that day'); return; }
+  if(!confirm(`Email ${alts.length} priced car${alts.length===1?'':'s'} to ${q.customer_email}?`)) return;
+  const nowIso=new Date().toISOString();
+  const expiresStr=new Date(Date.now()+QUOTE_VALID_DAYS*86400000).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  await SB.from('quote_requests').update({
+    hours:trip.hours, miles:trip.miles, hotel_fee:trip.hotel,
+    quote_notes:note||null, status:'sent', sent_at:nowIso
+  }).eq('id',qid);
+  try{
+    const r=await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'quote_alternatives', to:q.customer_email,
+      book_url:'https://www.chanceclassics.com/book-online?referral=quote_email',
+      quote:{customer_name:q.customer_name, car_name:requestedCar?requestedCar.name:'', event_date:q.event_date,
+        event_location:q.event_location, hours:trip.hours, miles:trip.miles, hotel_fee:trip.hotel,
+        note, expires:expiresStr, alternatives:alts.map(a=>({name:a.name, total:a.total, book_url:a.book_url}))}
+    })});
+    const out=await r.json().catch(()=>({}));
+    if(out.error) throw new Error(out.error);
+    toast('Priced options sent');
+  }catch(e){ toast('Saved, but email failed: '+(e.message||e)); }
+  closeModal();await loadAll();
+}
+
 function quoteBuilder(qid){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q) return;
-  const carOpts=DATA.cars.map(c=>`<option value="${c.id}" ${q.car_id===c.id?'selected':''}>${esc(c.name)} ($${c.base_rate||0})</option>`).join('');
-  const initHours=q.hours||INCLUDED_HOURS;
-  const initMiles=q.miles||0;
+  const carOpts=quoteCarOptions(q.car_id, q.event_date);
+  const stashed=(window._quoteId===q.id && window._quoteTrip)?window._quoteTrip:null;
+  const initHours=stashed?stashed.hours:(q.hours||INCLUDED_HOURS);
+  const initMiles=stashed?stashed.miles:(q.miles||0);
+  const initHotel=stashed?stashed.hotel>0:Number(q.hotel_fee)>0;
   let statusLine='';
   if(q.status==='sent'){
     const sentDate=q.sent_at||q.created_at;
@@ -1573,10 +1677,11 @@ function quoteBuilder(qid){
     </div>
     <div id="q_avail"></div>
     <div><label>One-way miles from Benton (0 if within 30)</label><input id="q_miles" type="number" step="1" min="0" value="${initMiles}" oninput="quoteRecalc()"></div>
-    <label class="toggle" style="margin-top:10px"><input type="checkbox" id="q_hotel" ${Number(q.hotel_fee)>0?'checked':''} onchange="quoteRecalc()"><span class="toggleslide"></span><span>Overnight hotel accommodation — $${HOTEL_FEE}</span></label>
+    <label class="toggle" style="margin-top:10px"><input type="checkbox" id="q_hotel" ${initHotel?'checked':''} onchange="quoteRecalc()"><span class="toggleslide"></span><span>Overnight hotel accommodation — $${HOTEL_FEE}</span></label>
+    <div id="q_alts"></div>
     <div id="q_breakdown" class="qbreak"></div>
     <div><label>Note to customer (optional)</label><textarea id="q_note" placeholder="e.g. Suggested arrival 45 min before ceremony...">${esc(q.quote_notes||'')}</textarea></div>
-    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+    <div id="q_send_row" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="act" onclick="sendQuote('${q.id}')" ${q.customer_email?'':'disabled title="No email on file"'}>${q.status==='sent'||q.status==='booked'?'Re-send to customer':'Send to customer'}</button>
       <button class="ghost" onclick="saveQuoteDraft('${q.id}')">Save draft</button>
     </div>
@@ -1638,38 +1743,98 @@ async function logDecline(qid){
 }
 
 function quoteHotelOn(){
-  return !!(document.getElementById('q_hotel')&&document.getElementById('q_hotel').checked);
+  const el=document.getElementById('q_hotel');
+  if(el) return !!el.checked;
+  const hidden=document.getElementById('alt_hotel');
+  if(hidden) return Number(hidden.value)>0;
+  return !!(window._quoteTrip&&window._quoteTrip.hotel);
+}
+function quoteTripInputs(){
+  const hoursEl=document.getElementById('q_hours');
+  const milesEl=document.getElementById('q_miles');
+  const noteEl=document.getElementById('q_note')||document.getElementById('alt_note');
+  if(!hoursEl && window._quoteTrip){
+    return {...window._quoteTrip, note:noteEl?noteEl.value||null:window._quoteTrip.note};
+  }
+  const hours=hoursEl?parseFloat(hoursEl.value)||INCLUDED_HOURS:INCLUDED_HOURS;
+  const miles=milesEl?parseFloat(milesEl.value)||0:0;
+  const hotel=quoteHotelOn()?HOTEL_FEE:0;
+  const note=noteEl?noteEl.value||null:null;
+  const trip={hours, miles, hotel, note};
+  window._quoteTrip=trip;
+  return trip;
 }
 function quoteRecalc(){
   const carId=document.getElementById('q_car').value;
   const hours=document.getElementById('q_hours').value;
   const miles=document.getElementById('q_miles').value;
-  const c=calcQuote(carId,hours,miles,quoteHotelOn()?HOTEL_FEE:0);
+  const hotelOn=quoteHotelOn();
+  const c=calcQuote(carId,hours,miles,hotelOn?HOTEL_FEE:0);
   const m=n=>`$${n.toFixed(2)}`;
+  const qid=window._quoteId;
+  const q=qid?(DATA.quotes||[]).find(x=>x.id===qid):null;
+  const hasEmail=!!(q&&q.customer_email);
+  const resend=!!(q&&(q.status==='sent'||q.status==='booked'));
 
   // Availability check: does the selected car already have a booking that day?
   const avail=document.getElementById('q_avail');
+  const altsEl=document.getElementById('q_alts');
+  const sendRow=document.getElementById('q_send_row');
   const evDate=window._quoteEventDate;
+  let clash=null, others=[];
   if(avail){
     if(!evDate){
       avail.innerHTML='';
+      if(altsEl) altsEl.innerHTML='';
     } else {
-      const clash=DATA.bookings.find(b=>b.car_id===carId && b.event_date===evDate && b.status!=='cancelled');
+      clash=findBookingClash(carId, evDate);
       if(clash){
         const drv=staffById(clash.driver_id);
-        const others=DATA.cars.filter(c=>c.id!==carId && !DATA.bookings.some(b=>b.car_id===c.id && b.event_date===evDate && b.status!=='cancelled'));
+        others=carsOpenOnDate(evDate, carId);
         avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} is already booked on ${esc(evDate)} — ${esc(clash.customer_name||'another customer')}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}
-          ${window._quoteId && DATA.quotes.find(q=>q.id===window._quoteId)?.customer_email
-            ? `<div style="margin-top:8px"><button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood);background:#fff" onclick="unavailableNotice('${window._quoteId}','${carId}')">✉️ Draft unavailable notice${others.length?` (${others.length} car${others.length===1?'':'s'} open)`:''}</button></div>`
+          <div class="meta" style="margin-top:6px;font-weight:600">Hours, miles, and hotel still apply — we just swap the car. ${others.length?`Prices for the ${others.length} open car${others.length===1?'':'s'} update as you type.`:'Nothing else is free that day.'}</div>
+          ${hasEmail && !others.length
+            ? `<div style="margin-top:8px"><button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood);background:#fff" onclick="unavailableNotice('${qid}','${carId}')">✉️ Tell them it's booked</button></div>`
             : ''}
         </div>`;
+        if(altsEl){
+          if(others.length){
+            const priced=pricedAlternateQuotes(carId, hours, miles, hotelOn?HOTEL_FEE:0, evDate);
+            altsEl.innerHTML=`<div class="qalts"><div class="qahd">Open that day — same trip, each car priced</div>${
+              priced.map(a=>`<div class="qalt"><span>${esc(a.name)}</span><b>${m(a.total)}</b></div>`).join('')
+            }</div>`;
+          } else {
+            altsEl.innerHTML='';
+          }
+        }
       } else {
         avail.innerHTML=`<div class="qok">✓ ${esc(carById(carId)?.name||'This car')} is open on ${esc(evDate)}</div>`;
+        if(altsEl) altsEl.innerHTML='';
       }
     }
   }
 
+  if(sendRow && qid){
+    if(clash && others.length){
+      sendRow.innerHTML=`
+        <button class="act" ${hasEmail?'':`disabled title="No email on file"`} onclick="alternateQuotesNotice('${qid}','${carId}')">Send prices for ${others.length} open car${others.length===1?'':'s'}</button>
+        <button class="ghost" onclick="saveQuoteDraft('${qid}')">Save draft</button>`;
+    } else if(clash && !others.length){
+      sendRow.innerHTML=`
+        ${hasEmail?`<button class="act" onclick="unavailableNotice('${qid}','${carId}')">Tell them it's booked</button>`:''}
+        <button class="ghost" onclick="saveQuoteDraft('${qid}')">Save draft</button>`;
+    } else {
+      sendRow.innerHTML=`
+        <button class="act" onclick="sendQuote('${qid}')" ${hasEmail?'':`disabled title="No email on file"`}>${resend?'Re-send to customer':'Send to customer'}</button>
+        <button class="ghost" onclick="saveQuoteDraft('${qid}')">Save draft</button>`;
+    }
+  }
+
+  const breakHint=clash
+    ? `<div class="meta" style="margin-bottom:8px">Requested car (already booked). Pick an open car in the list to send one quote, or send all open-car prices.</div>`
+    : '';
   document.getElementById('q_breakdown').innerHTML=`
+    ${breakHint}
     <div class="qline"><span>Base (up to ${INCLUDED_HOURS} hrs)</span><span>${m(c.base)}</span></div>
     ${c.overage>0?`<div class="qline"><span>+${c.extraH} extra hr × $${OVERAGE_RATE}</span><span>${m(c.overage)}</span></div>`:''}
     ${c.travel>0?`<div class="qline"><span>Travel ${c.mi} mi × $${PER_MILE} (trailered)</span><span>${m(c.travel)}</span></div>`:`<div class="qline muted"><span>Travel (within ${FREE_MILES} mi)</span><span>$0.00</span></div>`}
@@ -1705,6 +1870,13 @@ async function sendQuote(qid){
   if(!q.customer_email){toast('No customer email on file');return}
   const f=quoteFields(qid);
   const car=carById(f.car_id);
+  const evDate=q.event_date||window._quoteEventDate;
+  const clash=findBookingClash(f.car_id, evDate);
+  if(clash){
+    const others=carsOpenOnDate(evDate, f.car_id);
+    if(others.length){ alternateQuotesNotice(qid, f.car_id); return; }
+    unavailableNotice(qid, f.car_id); return;
+  }
   if(!confirm(`Send this $${f.total.toFixed(2)} quote to ${q.customer_email}?`)) return;
   const nowIso=new Date().toISOString();
   const expiresStr=new Date(Date.now()+QUOTE_VALID_DAYS*86400000).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
