@@ -5,7 +5,7 @@
 //   type "claimed"            -> tell the owner a driver claimed a job
 //   type "passed"             -> tell the owner a driver passed
 //   type "reoffer"            -> open-to-all re-offer to a driver
-//   type "quote" / "quote_reminder" / "unavailable"
+//   type "quote" / "quote_reminder" / "unavailable" / "quote_alternatives"
 //   type "booking_updated"    -> assigned driver: something they care about changed
 //   type "booking_assigned"   -> driver was put on a booking
 //   type "booking_unassigned" -> driver was taken off a booking
@@ -208,6 +208,44 @@ Deno.serve(async (req) => {
           <p style="color:#6b6052;font-size:13px;margin-top:18px">This quote is an estimate and does not reserve your date. Questions? Just reply to this email.</p>
         </div>`;
       result = await sendEmail(to, `Your Chance Classics quote${q.event_date ? ` — ${q.event_date}` : ""}`, html);
+    } else if (type === "quote_alternatives") {
+      const q = body.quote ?? {};
+      const to = body.to;
+      if (!to) throw new Error("quote_alternatives requires 'to'");
+      const money = (n: unknown) => `$${Number(n || 0).toFixed(2)}`;
+      const fallbackBook = body.book_url || "https://www.chanceclassics.com/book-online?referral=quote_email";
+      const alts = Array.isArray(q.alternatives) ? q.alternatives : [];
+      const altRows = alts.map((a: Record<string, unknown>) => {
+        const href = esc((a.book_url as string) || fallbackBook);
+        return `<tr>
+          <td style="padding:10px 14px 10px 0;border-bottom:1px solid #eee;vertical-align:top">
+            <div style="font-weight:700">${esc(a.name || "Classic car")}</div>
+            <a href="${href}" style="color:#6e1d1a;font-size:13px">Book this car</a>
+          </td>
+          <td style="padding:10px 0;border-bottom:1px solid #eee;text-align:right;font-weight:800;white-space:nowrap">${money(a.total)}</td>
+        </tr>`;
+      }).join("");
+      const bits: string[] = [];
+      if (q.hours) bits.push(`${q.hours} hours`);
+      if (q.miles) bits.push(`${q.miles} mi trailered`);
+      if (Number(q.hotel_fee) > 0) bits.push("overnight hotel");
+      bits.push("tax included");
+      const intro = q.note
+        ? esc(q.note).replace(/\n/g, "<br>")
+        : `${esc(q.car_name || "The car you asked about")} is already booked${q.event_date ? ` on ${esc(q.event_date)}` : ""}. Same trip details — here are prices for the cars we still have that day.`;
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;color:#21130f">
+          <h2 style="color:#6e1d1a">A few cars are still open</h2>
+          <p>Hi ${esc(q.customer_name || "there")},</p>
+          <p>${intro}</p>
+          ${q.event_location ? `<p style="color:#6b6052">${esc(q.event_location)}</p>` : ""}
+          <p style="font-size:13px;color:#6b6052">${esc(bits.join(" · "))}</p>
+          <table style="border-collapse:collapse;width:100%;margin:14px 0">${altRows}</table>
+          ${q.expires ? `<p style="color:#b8862c;font-weight:700;font-size:13px">These prices are good through ${esc(q.expires)}.</p>` : ""}
+          <p style="color:#6b6052;font-size:13px;margin-top:18px">This is an estimate and doesn't hold a date. Reply and tell us which car you want, or tap Book on one above.</p>
+          <p style="margin-top:18px">Tim Chance<br>Chance Classics<br>(318) 344-5001</p>
+        </div>`;
+      result = await sendEmail(to, `Cars still open${q.event_date ? ` — ${q.event_date}` : ""}`, html);
     } else if (type === "reoffer") {
       if (!driverEmail) throw new Error("reoffer requires driver_email");
       const subject = `🏷️ New pay rate! Rental up for grabs — ${b.event_date ?? ""}`;
