@@ -1506,12 +1506,18 @@ function findBookingClash(carId, evDate){
   if(!evDate||!carId) return null;
   return (DATA.bookings||[]).find(b=>b.car_id===carId && b.event_date===evDate && b.status!=='cancelled')||null;
 }
+function isElviraCar(c){
+  return !!(c && (c.id==='afa12220-a923-454e-b1d9-758906d72419' || String(c.name||'').trim().toLowerCase()==='elvira'));
+}
 function carsOpenOnDate(evDate, excludeCarId){
   return (DATA.cars||[]).filter(c=>c.id!==excludeCarId && !findBookingClash(c.id, evDate));
 }
+function carsForAlternateOffers(evDate, excludeCarId){
+  return carsOpenOnDate(evDate, excludeCarId).filter(c=>!isElviraCar(c));
+}
 function pricedAlternateQuotes(excludeCarId, hours, miles, hotelFee, evDate){
   const when=evDate||window._quoteEventDate;
-  return carsOpenOnDate(when, excludeCarId).map(car=>{
+  return carsForAlternateOffers(when, excludeCarId).map(car=>{
     const c=calcQuote(car.id, hours, miles, hotelFee);
     return {id:car.id, name:car.name, book_url:car.book_url||null,
       base_rate:c.base, extra_hours:c.extraH, overage:c.overage, miles:c.mi, travel:c.travel,
@@ -1542,7 +1548,7 @@ function unavailableNotice(qid, requestedCarId){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
   const evDate=window._quoteEventDate;
   const requestedCar=carById(requestedCarId);
-  const others=carsOpenOnDate(evDate, requestedCarId);
+  const others=carsForAlternateOffers(evDate, requestedCarId);
   const defaultNote=defaultUnavailableNote(requestedCar?requestedCar.name:null, evDate, others.map(c=>c.name));
   openModal('Draft: car unavailable', `
     <div class="qreq"><div class="meta">To: ${esc(q.customer_email)}</div><div class="meta">Re: ${esc(requestedCar?requestedCar.name:'')} on ${esc(evDate||'')}</div></div>
@@ -1558,7 +1564,7 @@ async function sendUnavailableNotice(qid, requestedCarId){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
   const evDate=window._quoteEventDate;
   const requestedCar=carById(requestedCarId);
-  const others=carsOpenOnDate(evDate, requestedCarId);
+  const others=carsForAlternateOffers(evDate, requestedCarId);
   const note=document.getElementById('un_note').value;
   try{
     await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
@@ -1790,7 +1796,7 @@ function quoteRecalc(){
       clash=findBookingClash(carId, evDate);
       if(clash){
         const drv=staffById(clash.driver_id);
-        others=carsOpenOnDate(evDate, carId);
+        others=carsForAlternateOffers(evDate, carId);
         avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} is already booked on ${esc(evDate)} — ${esc(clash.customer_name||'another customer')}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}
           <div class="meta" style="margin-top:6px;font-weight:600">Hours, miles, and hotel still apply — we just swap the car. ${others.length?`Prices for the ${others.length} open car${others.length===1?'':'s'} update as you type.`:'Nothing else is free that day.'}</div>
           ${hasEmail && !others.length
@@ -1873,7 +1879,7 @@ async function sendQuote(qid){
   const evDate=q.event_date||window._quoteEventDate;
   const clash=findBookingClash(f.car_id, evDate);
   if(clash){
-    const others=carsOpenOnDate(evDate, f.car_id);
+    const others=carsForAlternateOffers(evDate, f.car_id);
     if(others.length){ alternateQuotesNotice(qid, f.car_id); return; }
     unavailableNotice(qid, f.car_id); return;
   }
