@@ -5,11 +5,14 @@ import assert from 'node:assert/strict';
 
 import {
   calcQuoteFromBase,
+  carsForAlternateOffers,
   carsOpenOnDate,
   defaultAlternateNote,
   defaultUnavailableNote,
+  ELVIRA_CAR_ID,
   findBookingClash,
   HOTEL_FEE,
+  isElviraCar,
   money,
   pricedAlternateQuotes,
 } from '../lib/quotes.mjs';
@@ -21,7 +24,8 @@ const notify = readFileSync(join(root, 'supabase/functions/send-notification/ind
 const mustang = { id: 'm', name: '1965 Mustang', base_rate: 500, book_url: 'https://www.chanceclassics.com/mustang' };
 const chevy = { id: 'c', name: '1957 Chevy', base_rate: 600, book_url: 'https://www.chanceclassics.com/chevy' };
 const impala = { id: 'i', name: '1964 Impala', base_rate: 450 };
-const cars = [mustang, chevy, impala];
+const elvira = { id: ELVIRA_CAR_ID, name: 'Elvira', base_rate: 0 };
+const cars = [mustang, chevy, impala, elvira];
 const bookings = [
   { id: 'b1', car_id: 'm', event_date: '2026-10-10', status: 'confirmed', customer_name: 'Other wedding' },
   { id: 'b2', car_id: 'c', event_date: '2026-10-10', status: 'cancelled' },
@@ -50,7 +54,13 @@ assert.equal(findBookingClash(bookings, 'c', '2026-10-10'), null, 'cancelled boo
 assert.equal(findBookingClash(bookings, 'i', '2026-10-10'), null);
 
 const open = carsOpenOnDate(cars, bookings, '2026-10-10', 'm');
-assert.deepEqual(open.map((c) => c.id), ['c', 'i']);
+assert.deepEqual(open.map((c) => c.id), ['c', 'i', ELVIRA_CAR_ID], 'Elvira stays in true availability');
+
+assert.equal(isElviraCar(elvira), true);
+assert.equal(isElviraCar({ id: 'x', name: ' elvira ' }), true);
+assert.equal(isElviraCar(chevy), false);
+const offered = carsForAlternateOffers(cars, bookings, '2026-10-10', 'm');
+assert.deepEqual(offered.map((c) => c.id), ['c', 'i'], 'Elvira is not an alternate offer');
 
 const alts = pricedAlternateQuotes(cars, bookings, '2026-10-10', 'm', hours, miles, hotel);
 assert.equal(alts.length, 2);
@@ -60,13 +70,23 @@ assert.equal(alts[0].book_url, chevy.book_url);
 assert.equal(alts[1].name, '1964 Impala');
 assert.equal(alts[1].total, impalaQ.total);
 assert.equal(alts[1].book_url, null);
+assert.ok(!alts.some((a) => isElviraCar(a)));
+const elviraOnly = pricedAlternateQuotes([elvira], [], '2026-10-10', 'm', hours, miles, hotel);
+assert.equal(elviraOnly.length, 0, 'if only Elvira is free, do not offer priced alternates');
+const elviraDirect = calcQuoteFromBase(elvira.base_rate, hours, miles, hotel);
+assert.equal(elviraDirect.base, 0, 'direct Elvira quote math is unchanged');
 
+const restBooked = [
+  ...bookings,
+  { id: 'b4', car_id: 'c', event_date: '2026-10-10', status: 'confirmed' },
+  { id: 'b5', car_id: 'i', event_date: '2026-10-10', status: 'confirmed' },
+];
+assert.equal(carsForAlternateOffers(cars, restBooked, '2026-10-10', 'm').length, 0, 'Elvira alone does not count as an alternate');
 const noneOpen = carsOpenOnDate(
   cars,
   [
-    ...bookings,
-    { id: 'b4', car_id: 'c', event_date: '2026-10-10', status: 'confirmed' },
-    { id: 'b5', car_id: 'i', event_date: '2026-10-10', status: 'confirmed' },
+    ...restBooked,
+    { id: 'b6', car_id: ELVIRA_CAR_ID, event_date: '2026-10-10', status: 'confirmed' },
   ],
   '2026-10-10',
   'm',
@@ -81,6 +101,8 @@ assert.equal(money(1210), '$1210.00');
 // Browser builder reuses the same helpers and still has the normal send path.
 assert.match(html, /function findBookingClash/, 'availability helper is in the builder');
 assert.match(html, /function carsOpenOnDate/, 'open-car helper is in the builder');
+assert.match(html, /function isElviraCar/, 'builder knows Elvira by name and id');
+assert.match(html, /function carsForAlternateOffers/, 'priced-offer list has its own helper');
 assert.match(html, /function pricedAlternateQuotes/, 'alternate pricing reuses calcQuote');
 assert.match(html, /function alternateQuotesNotice/, 'Tim can draft priced options');
 assert.match(html, /function sendAlternateQuotes/, 'priced options go out through send-notification');
@@ -96,13 +118,16 @@ assert.match(html, /id="q_send_row"/, 'send actions swap based on availability')
 assert.match(html, /Hours, miles, and hotel still apply/, 'copy says trip details stay, car swaps');
 assert.match(html, /function quoteTripInputs/, 'miles\/hours\/hotel are read once and reused');
 assert.match(html, / — booked/, 'car dropdown marks booked cars');
-assert.match(html, /if\(clash\)\{\s*const others=carsOpenOnDate/, 'Send to customer will not quote a booked car');
+assert.match(html, /if\(clash\)\{\s*const others=carsForAlternateOffers/, 'Send to customer will not quote a booked car');
+assert.match(html, /return \(DATA\.cars\|\|\[\]\)\.map\(c=>/, 'car dropdown still lists every car, including Elvira');
+assert.doesNotMatch(html, /function quoteCarOptions[\s\S]*isElviraCar/, 'dropdown does not hide Elvira');
 assert.match(html, /OWNER_ONLY_TABS=\['staff','earnings','quotes'\]/, 'Quotes stays owner-only');
 assert.match(html, /if\(!isOwnerView\(\)\)\{ el\.innerHTML=`<div class="empty"><div class="big">Quotes<\/div>Owner only\./, 'staff still see Quotes as owner only');
 assert.doesNotMatch(html, /service_role/, 'no service_role in the browser app');
 
 // Edge function: new type sits next to quote / unavailable, still Resend.
 assert.match(notify, /type === "quote_alternatives"/, 'send-notification knows quote_alternatives');
+assert.match(notify, /trim\(\)\.toLowerCase\(\) !== "elvira"/, 'quote_alternatives email drops Elvira by name');
 assert.match(notify, /Cars still open/, 'alternate email subject is practical');
 assert.match(notify, /A few cars are still open/, 'alternate email heading');
 assert.match(notify, /Book this car/, 'each priced car can be booked');

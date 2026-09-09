@@ -214,7 +214,9 @@ Deno.serve(async (req) => {
       if (!to) throw new Error("quote_alternatives requires 'to'");
       const money = (n: unknown) => `$${Number(n || 0).toFixed(2)}`;
       const fallbackBook = body.book_url || "https://www.chanceclassics.com/book-online?referral=quote_email";
-      const alts = Array.isArray(q.alternatives) ? q.alternatives : [];
+      const alts = (Array.isArray(q.alternatives) ? q.alternatives : []).filter((a: Record<string, unknown>) =>
+        String(a?.name || "").trim().toLowerCase() !== "elvira"
+      );
       const altRows = alts.map((a: Record<string, unknown>) => {
         const href = esc((a.book_url as string) || fallbackBook);
         return `<tr>
