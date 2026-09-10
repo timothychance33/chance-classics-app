@@ -7,7 +7,9 @@ import {
   calcQuoteFromBase,
   carsForAlternateOffers,
   carsOpenOnDate,
+  choosePricedAlternates,
   defaultAlternateNote,
+  defaultSingleAlternateNote,
   defaultUnavailableNote,
   ELVIRA_CAR_ID,
   findBookingClash,
@@ -15,6 +17,7 @@ import {
   isElviraCar,
   money,
   pricedAlternateQuotes,
+  quoteAlternativesEmailMeta,
 } from '../lib/quotes.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -95,8 +98,31 @@ assert.equal(noneOpen.length, 0);
 
 assert.match(defaultAlternateNote({ requestedName: '1965 Mustang', evDate: '2026-10-10' }), /1965 Mustang is already booked on 2026-10-10/);
 assert.match(defaultAlternateNote({ requestedName: '1965 Mustang', evDate: '2026-10-10' }), /prices for the cars we still have open/);
+assert.match(defaultSingleAlternateNote({ requestedName: '1965 Mustang', evDate: '2026-10-10', chosenName: '1957 Chevy' }), /here's the price for the 1957 Chevy/);
+assert.doesNotMatch(defaultSingleAlternateNote({ requestedName: '1965 Mustang', evDate: '2026-10-10', chosenName: '1957 Chevy' }), /cars we still have open/);
 assert.match(defaultUnavailableNote({ requestedName: '1965 Mustang', evDate: '2026-10-10' }), /other cars are booked that day as well/);
 assert.equal(money(1210), '$1210.00');
+
+const allOffers = choosePricedAlternates(alts);
+assert.deepEqual(allOffers.map((a) => a.id), ['c', 'i'], 'send-all keeps every non-Elvira alternate');
+const justChevy = choosePricedAlternates(alts, 'c');
+assert.equal(justChevy.length, 1);
+assert.equal(justChevy[0].name, '1957 Chevy');
+assert.equal(justChevy[0].total, chevyQ.total);
+assert.deepEqual(choosePricedAlternates(alts, ELVIRA_CAR_ID), [], 'chosen Elvira is still not an alternate');
+assert.deepEqual(choosePricedAlternates([{ id: ELVIRA_CAR_ID, name: 'Elvira', total: 0 }], ELVIRA_CAR_ID), [], 'Elvira cannot be forced through as the one option');
+assert.deepEqual(choosePricedAlternates(alts, 'missing'), [], 'unknown id sends nothing');
+
+const oneMeta = quoteAlternativesEmailMeta(justChevy, '2026-10-10');
+assert.equal(oneMeta.singular, true);
+assert.equal(oneMeta.subject, '1957 Chevy is still open — 2026-10-10');
+assert.equal(oneMeta.heading, 'This car is still open');
+assert.match(oneMeta.footer, /if you want this car/);
+const allMeta = quoteAlternativesEmailMeta(alts, '2026-10-10');
+assert.equal(allMeta.singular, false);
+assert.equal(allMeta.subject, 'Cars still open — 2026-10-10');
+assert.equal(allMeta.heading, 'A few cars are still open');
+assert.match(allMeta.footer, /which car you want/);
 
 // Browser builder reuses the same helpers and still has the normal send path.
 assert.match(html, /function findBookingClash/, 'availability helper is in the builder');
@@ -106,13 +132,20 @@ assert.match(html, /function carsForAlternateOffers/, 'priced-offer list has its
 assert.match(html, /function pricedAlternateQuotes/, 'alternate pricing reuses calcQuote');
 assert.match(html, /function alternateQuotesNotice/, 'Tim can draft priced options');
 assert.match(html, /function sendAlternateQuotes/, 'priced options go out through send-notification');
+assert.match(html, /function choosePricedAlternates/, 'Tim can narrow the offer list to one car');
+assert.match(html, /function defaultSingleAlternateNote/, 'one-car draft has its own note');
+assert.match(html, /function alternateOfferRowHtml/, 'each open car has a send-this control');
+assert.match(html, /choosePricedAlternates\(allAlts, chosenCarId/, 'send path honors a chosen car id');
 assert.match(html, /type:'quote_alternatives'/, 'browser posts quote_alternatives, not a second mailer');
+assert.match(html, /alternatives:alts\.map\(alternateEmailFields\)/, 'one-car and send-all share the same email payload shape');
 assert.match(html, /function sendQuote/, 'single-car send path stays');
 assert.match(html, /type:'quote'/, 'available-car emails stay type quote');
 assert.match(html, /function unavailableNotice/, 'all-booked path still has the unavailable draft');
 assert.match(html, /type:'unavailable'/, 'all-booked email stays unavailable');
-assert.match(html, /Send prices for \$\{others\.length\} open car/, 'primary CTA is priced options when others are free');
-assert.match(html, /Open that day — same trip, each car priced/, 'builder shows priced open cars');
+assert.match(html, /Send all \$\{others\.length\} prices/, 'primary CTA still sends every open-car price');
+assert.match(html, /Send this option/, 'draft list can send one car');
+assert.match(html, /Send this car/, 'one-car draft has a dedicated send');
+assert.match(html, /tap Send this option on one car, or send all prices/, 'builder shows priced open cars plus send-this');
 assert.match(html, /id="q_alts"/, 'priced list has a home in the builder');
 assert.match(html, /id="q_send_row"/, 'send actions swap based on availability');
 assert.match(html, /Hours, miles, and hotel still apply/, 'copy says trip details stay, car swaps');
@@ -120,7 +153,9 @@ assert.match(html, /function quoteTripInputs/, 'miles\/hours\/hotel are read onc
 assert.match(html, / — booked/, 'car dropdown marks booked cars');
 assert.match(html, /if\(clash\)\{\s*const others=carsForAlternateOffers/, 'Send to customer will not quote a booked car');
 assert.match(html, /return \(DATA\.cars\|\|\[\]\)\.map\(c=>/, 'car dropdown still lists every car, including Elvira');
-assert.doesNotMatch(html, /function quoteCarOptions[\s\S]*isElviraCar/, 'dropdown does not hide Elvira');
+const quoteCarOptsFn = html.match(/function quoteCarOptions\([\s\S]*?\n\}/);
+assert.ok(quoteCarOptsFn, 'quoteCarOptions is present');
+assert.doesNotMatch(quoteCarOptsFn[0], /isElviraCar/, 'dropdown does not hide Elvira');
 assert.match(html, /OWNER_ONLY_TABS=\['staff','earnings','quotes'\]/, 'Quotes stays owner-only');
 assert.match(html, /if\(!isOwnerView\(\)\)\{ el\.innerHTML=`<div class="empty"><div class="big">Quotes<\/div>Owner only\./, 'staff still see Quotes as owner only');
 assert.doesNotMatch(html, /service_role/, 'no service_role in the browser app');
@@ -128,10 +163,14 @@ assert.doesNotMatch(html, /service_role/, 'no service_role in the browser app');
 // Edge function: new type sits next to quote / unavailable, still Resend.
 assert.match(notify, /type === "quote_alternatives"/, 'send-notification knows quote_alternatives');
 assert.match(notify, /trim\(\)\.toLowerCase\(\) !== "elvira"/, 'quote_alternatives email drops Elvira by name');
+assert.match(notify, /const one = alts.length === 1/, 'email copy splits one car vs many');
+assert.match(notify, /This car is still open/, 'one-car heading');
 assert.match(notify, /Cars still open/, 'alternate email subject is practical');
 assert.match(notify, /A few cars are still open/, 'alternate email heading');
 assert.match(notify, /Book this car/, 'each priced car can be booked');
+assert.match(notify, /Book \$\{esc\(chosenName\)\}/, 'one-car email books only that car');
 assert.match(notify, /doesn't hold a date/, 'alternate email does not pretend to reserve');
+assert.match(notify, /if you want this car/, 'one-car footer talks about that car only');
 assert.match(notify, /type === "quote"/, 'normal quote type is unchanged');
 assert.match(notify, /type === "unavailable"/, 'unavailable type is unchanged');
 assert.match(notify, /api\.resend\.com\/emails/, 'still Resend');

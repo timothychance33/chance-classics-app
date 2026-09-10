@@ -170,9 +170,11 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .qok{margin-top:10px;background:#eef4ec;border:1px solid var(--green);color:#2f5740;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600}
 .qalts{margin-top:10px;background:#fff;border:1px solid var(--green);border-radius:10px;padding:12px}
 .qalts .qahd{font:700 13px/1.35 "Inter",sans-serif;color:#2f5740;margin-bottom:8px}
-.qalt{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--paper-2);font-size:14px}
+.qalt{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--paper-2);font-size:14px}
 .qalt:last-child{border-bottom:0}
+.qalt-main{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex:1;min-width:160px}
 .qalt b{font-weight:800;white-space:nowrap}
+.qalt .tinybtn{flex:none}
 .remindertag{font:700 9px/1 "Inter",sans-serif;letter-spacing:.04em;text-transform:uppercase;background:#cdd9e6;color:#4a5a6b;padding:4px 8px;border-radius:20px;white-space:nowrap}
 .qline{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--paper-2)}
 .qline:last-child{border-bottom:0}
@@ -1543,6 +1545,31 @@ function defaultAlternateNote(requestedName, evDate){
   const when=evDate||'that date';
   return `${car} is already booked on ${when}. Same trip — hours, locations, the whole plan — here are prices for the cars we still have open. Reply and tell us which one you want!`;
 }
+function defaultSingleAlternateNote(requestedName, evDate, chosenName){
+  const car=requestedName||'that car';
+  const when=evDate||'that date';
+  const chosen=chosenName||'this car';
+  return `${car} is already booked on ${when}. Same trip — hours, locations, the whole plan — here's the price for the ${chosen}. Reply if you'd like to book it!`;
+}
+function choosePricedAlternates(alts, chosenCarId){
+  const list=(alts||[]).filter(a=>!isElviraCar(a));
+  if(!chosenCarId) return list;
+  return list.filter(a=>a.id===chosenCarId);
+}
+function alternateEmailFields(a){
+  return {name:a.name, total:a.total, book_url:a.book_url,
+    base_rate:a.base_rate, extra_hours:a.extra_hours, overage:a.overage,
+    miles:a.miles, travel:a.travel, hotel_fee:a.hotel_fee, subtotal:a.subtotal, tax:a.tax};
+}
+function alternateOfferRowHtml(qid, requestedCarId, a, hasEmail){
+  const m=n=>`$${Number(n).toFixed(2)}`;
+  const fn=`alternateQuotesNotice('${qid}','${requestedCarId}','${a.id}')`;
+  const disabled=hasEmail===false?`disabled title="No email on file"`:'';
+  return `<div class="qalt">
+    <div class="qalt-main"><span>${esc(a.name)}</span><b>${m(a.total)}</b></div>
+    <button type="button" class="ghost tinybtn" ${disabled} onclick="event.stopPropagation();${fn}">Send this option</button>
+  </div>`;
+}
 
 function unavailableNotice(qid, requestedCarId){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
@@ -1577,65 +1604,95 @@ async function sendUnavailableNotice(qid, requestedCarId){
   closeModal();
 }
 
-function alternateQuotesNotice(qid, requestedCarId){
+function alternateQuotesNotice(qid, requestedCarId, chosenCarId){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
   const evDate=window._quoteEventDate;
   const requestedCar=carById(requestedCarId);
   const trip=quoteTripInputs();
-  const alts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate);
-  if(!alts.length){ unavailableNotice(qid, requestedCarId); return; }
-  const m=n=>`$${Number(n).toFixed(2)}`;
+  const allAlts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate);
+  const alts=choosePricedAlternates(allAlts, chosenCarId||null);
+  if(!allAlts.length){ unavailableNotice(qid, requestedCarId); return; }
+  if(chosenCarId && !alts.length){ toast('That car is not an open alternate'); return; }
+  const one=!!(chosenCarId && alts.length===1);
+  const chosen=one?alts[0]:null;
   const bits=[`${trip.hours} hours`];
   if(trip.miles) bits.push(`${trip.miles} mi`);
   if(trip.hotel) bits.push('overnight hotel');
-  const rows=alts.map(a=>`<div class="qalt"><span>${esc(a.name)}</span><b>${m(a.total)}</b></div>`).join('');
-  const defaultNote=defaultAlternateNote(requestedCar?requestedCar.name:null, evDate);
+  const rows=one
+    ? `<div class="qalt"><div class="qalt-main"><span>${esc(chosen.name)}</span><b>$${Number(chosen.total).toFixed(2)}</b></div></div>`
+    : alts.map(a=>alternateOfferRowHtml(qid, requestedCarId, a)).join('');
+  const defaultNote=one
+    ? defaultSingleAlternateNote(requestedCar?requestedCar.name:null, evDate, chosen.name)
+    : defaultAlternateNote(requestedCar?requestedCar.name:null, evDate);
   window._quoteTrip=trip;
-  openModal('Draft: other cars that day', `
+  const sendAll=`sendAlternateQuotes('${qid}','${requestedCarId}')`;
+  const sendOne=one?`sendAlternateQuotes('${qid}','${requestedCarId}','${chosen.id}')`:'';
+  openModal(one?'Draft: this car instead':'Draft: other cars that day', `
     <div class="qreq">
       <div class="meta">To: ${esc(q.customer_email)}</div>
-      <div class="meta">${esc(requestedCar?requestedCar.name:'That car')} is booked${evDate?' on '+esc(evDate):''} — same trip, priced for the open cars</div>
+      <div class="meta">${esc(requestedCar?requestedCar.name:'That car')} is booked${evDate?' on '+esc(evDate):''} — ${one?`sending the ${esc(chosen.name)}`:'same trip, priced for the open cars'}</div>
       <div class="meta">${esc(bits.join(' · '))} · tax included</div>
     </div>
     <input type="hidden" id="q_hours" value="${trip.hours}">
     <input type="hidden" id="q_miles" value="${trip.miles}">
     <input type="hidden" id="alt_hotel" value="${trip.hotel}">
-    <div class="qalts" style="margin-top:12px">${rows}</div>
+    <div class="qalts" style="margin-top:12px">${
+      one?'':`<div class="qahd">Tap Send this option on one car, or send every price below</div>`
+    }${rows}</div>
     <div style="margin-top:12px"><label>Message</label><textarea id="alt_note" rows="5">${esc(defaultNote)}</textarea></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="act" onclick="sendAlternateQuotes('${qid}','${requestedCarId}')">Send prices</button>
+      ${one
+        ? `<button class="act" onclick="${sendOne}">Send this car</button>
+           <button class="ghost" onclick="alternateQuotesNotice('${qid}','${requestedCarId}')">See all open cars</button>`
+        : `<button class="act" onclick="${sendAll}">${alts.length===1?'Send this price':`Send all ${alts.length} prices`}</button>`}
       <button class="ghost" onclick="quoteBuilder('${qid}')">Back</button>
     </div>
   `);
 }
 
-async function sendAlternateQuotes(qid, requestedCarId){
+async function sendAlternateQuotes(qid, requestedCarId, chosenCarId){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
   const evDate=window._quoteEventDate||q.event_date;
   const requestedCar=carById(requestedCarId);
   const trip=quoteTripInputs();
   const noteEl=document.getElementById('alt_note');
   const note=noteEl?noteEl.value:(document.getElementById('q_note')&&document.getElementById('q_note').value)||'';
-  const alts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate);
-  if(!alts.length){ toast('No other cars are open that day'); return; }
-  if(!confirm(`Email ${alts.length} priced car${alts.length===1?'':'s'} to ${q.customer_email}?`)) return;
+  const allAlts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate);
+  const alts=choosePricedAlternates(allAlts, chosenCarId||null);
+  if(!alts.length){ toast(chosenCarId?'That car is not an open alternate':'No other cars are open that day'); return; }
+  const one=alts.length===1;
+  const chosen=one?alts[0]:null;
+  const confirmMsg=one
+    ? `Email the ${chosen.name} quote ($${Number(chosen.total).toFixed(2)}) to ${q.customer_email}?`
+    : `Email ${alts.length} priced car${alts.length===1?'':'s'} to ${q.customer_email}?`;
+  if(!confirm(confirmMsg)) return;
   const nowIso=new Date().toISOString();
   const expiresStr=new Date(Date.now()+QUOTE_VALID_DAYS*86400000).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  await SB.from('quote_requests').update({
+  const patch={
     hours:trip.hours, miles:trip.miles, hotel_fee:trip.hotel,
     quote_notes:note||null, status:'sent', sent_at:nowIso
-  }).eq('id',qid);
+  };
+  if(one){
+    patch.car_id=chosen.id;
+    patch.base_rate=chosen.base_rate;
+    patch.overage=chosen.overage;
+    patch.travel=chosen.travel;
+    patch.subtotal=chosen.subtotal;
+    patch.tax=chosen.tax;
+    patch.total=chosen.total;
+  }
+  await SB.from('quote_requests').update(patch).eq('id',qid);
   try{
     const r=await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       type:'quote_alternatives', to:q.customer_email,
       book_url:'https://www.chanceclassics.com/book-online?referral=quote_email',
       quote:{customer_name:q.customer_name, car_name:requestedCar?requestedCar.name:'', event_date:q.event_date,
         event_location:q.event_location, hours:trip.hours, miles:trip.miles, hotel_fee:trip.hotel,
-        note, expires:expiresStr, alternatives:alts.map(a=>({name:a.name, total:a.total, book_url:a.book_url}))}
+        note, expires:expiresStr, alternatives:alts.map(alternateEmailFields)}
     })});
     const out=await r.json().catch(()=>({}));
     if(out.error) throw new Error(out.error);
-    toast('Priced options sent');
+    toast(one?`${chosen.name} quote sent`:'Priced options sent');
   }catch(e){ toast('Saved, but email failed: '+(e.message||e)); }
   closeModal();await loadAll();
 }
@@ -1806,8 +1863,8 @@ function quoteRecalc(){
         if(altsEl){
           if(others.length){
             const priced=pricedAlternateQuotes(carId, hours, miles, hotelOn?HOTEL_FEE:0, evDate);
-            altsEl.innerHTML=`<div class="qalts"><div class="qahd">Open that day — same trip, each car priced</div>${
-              priced.map(a=>`<div class="qalt"><span>${esc(a.name)}</span><b>${m(a.total)}</b></div>`).join('')
+            altsEl.innerHTML=`<div class="qalts"><div class="qahd">Open that day — tap Send this option on one car, or send all prices</div>${
+              priced.map(a=>alternateOfferRowHtml(qid, carId, a, hasEmail)).join('')
             }</div>`;
           } else {
             altsEl.innerHTML='';
@@ -1823,7 +1880,7 @@ function quoteRecalc(){
   if(sendRow && qid){
     if(clash && others.length){
       sendRow.innerHTML=`
-        <button class="act" ${hasEmail?'':`disabled title="No email on file"`} onclick="alternateQuotesNotice('${qid}','${carId}')">Send prices for ${others.length} open car${others.length===1?'':'s'}</button>
+        <button class="act" ${hasEmail?'':`disabled title="No email on file"`} onclick="alternateQuotesNotice('${qid}','${carId}')">${others.length===1?'Send this price':`Send all ${others.length} prices`}</button>
         <button class="ghost" onclick="saveQuoteDraft('${qid}')">Save draft</button>`;
     } else if(clash && !others.length){
       sendRow.innerHTML=`
@@ -1837,7 +1894,7 @@ function quoteRecalc(){
   }
 
   const breakHint=clash
-    ? `<div class="meta" style="margin-bottom:8px">Requested car (already booked). Pick an open car in the list to send one quote, or send all open-car prices.</div>`
+    ? `<div class="meta" style="margin-bottom:8px">Requested car (already booked). Tap Send this option on one open car, or send all open-car prices.</div>`
     : '';
   document.getElementById('q_breakdown').innerHTML=`
     ${breakHint}
