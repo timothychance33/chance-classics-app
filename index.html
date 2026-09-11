@@ -2058,10 +2058,11 @@ function renderSchedule(){
     const all=[...DATA.bookings].filter(b=>b.status!=='cancelled')
       .sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
     const wk=weekBounds();
-    const todayStr2=new Date().toISOString().slice(0,10);
-    const thisWeek=all.filter(b=>b.event_date && b.event_date>=wk.start && b.event_date<=wk.end);
+    const todayIso=chicagoToday().iso;
+    // This Week / needs-attention: still in the current week window, and not before today (America/Chicago).
+    const thisWeek=all.filter(b=>inThisWeekNeedsAttention(b, wk, todayIso));
     // Upcoming = today or later (or no date). Past goes to its own tab.
-    const upcoming=all.filter(b=>!b.event_date || b.event_date>=todayStr2);
+    const upcoming=all.filter(b=>!b.event_date || b.event_date>=todayIso);
 
     let h=`<div class="sectionhead"><div><div class="kicker">Owner view</div><h2 class="display">Schedule</h2></div><span class="line"></span>${addBtn}</div>`;
 
@@ -2147,8 +2148,8 @@ function renderSchedule(){
   }
 
   // ----- CREW: filtered flat list -----
-  const todayStr3=new Date().toISOString().slice(0,10);
-  let list=[...DATA.bookings].filter(b=>b.status!=='cancelled' && (!b.event_date || b.event_date>=todayStr3));
+  const todayIso=chicagoToday().iso;
+  let list=[...DATA.bookings].filter(b=>b.status!=='cancelled' && (!b.event_date || b.event_date>=todayIso));
   const mine=myStaffId();
   const me=myStaff();
   const iAmMechanic = me && hasRole(me,'mechanic');
@@ -2240,6 +2241,12 @@ function calDay(day){
 }
 
 // PREP BOARD (mechanic-centric)
+// This Week / needs-attention: keep the existing Mon–Sun window, but drop dates before today.
+function inThisWeekNeedsAttention(b, week, todayIso){
+  if(!b || !b.event_date || !week || !todayIso) return false;
+  return b.event_date>=week.start && b.event_date<=week.end && b.event_date>=todayIso;
+}
+
 function weekBounds(){
   const now=new Date();
   const day=now.getDay();              // 0=Sun..6=Sat
