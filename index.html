@@ -499,6 +499,9 @@ const STATUSES=['new','confirmed','prepping','ready','out','completed','cancelle
 // How many days before an event a booking enters the "ready to release to drivers" window.
 // Change to 180 for a 6-month window.
 const RELEASE_WINDOW_DAYS=90;
+// Quote auto-match runs after first paint. Cap awaited updates so a hung PATCH cannot stall forever.
+const AUTO_MATCH_TIMEOUT_MS=8000;
+const AUTO_MATCH_MAX_UPDATES=25;
 const CAR_STATUSES=['available','prep','out','maintenance'];
 const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
@@ -660,29 +663,75 @@ async function loadAll(){
     ]);
     for(const r of [c,s,b,p,t]) if(r.error) throw r.error;
     DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data,quotes:(q&&!q.error)?q.data:[]};
-    if(isAdmin()) await autoMatchQuotes();
+    // Paint Schedule/Calendar/etc. before quote matching. A hung PATCH used to
+    // block renderAll entirely — chrome showed, panels stayed blank.
     renderAll();
+    if(isAdmin()) scheduleAutoMatchQuotes();
   }catch(e){const msg=e?.message||e?.error_description||e?.hint||JSON.stringify(e);toast('Load error: '+msg);console.error('Load error detail:',e)}
+}
+
+function withTimeout(promise, ms, label){
+  let t;
+  const p=Promise.resolve(promise);
+  p.catch(()=>{}); // swallow late rejection after we already timed out
+  return Promise.race([
+    p,
+    new Promise((_,rej)=>{ t=setTimeout(()=>rej(new Error(label||'timeout')), ms); })
+  ]).finally(()=>clearTimeout(t));
+}
+
+function scheduleAutoMatchQuotes(){
+  const later=()=>{ void autoMatchQuotesAfterPaint(); };
+  if(typeof requestAnimationFrame==='function') requestAnimationFrame(()=>setTimeout(later,0));
+  else setTimeout(later,0);
+}
+
+async function autoMatchQuotesAfterPaint(){
+  try{
+    const changed=await autoMatchQuotes();
+    if(changed){
+      try{ renderQuotes(); }
+      catch(e){ console.error('renderQuotes after autoMatch failed',e); }
+    }
+  }catch(e){ console.error('autoMatchQuotes failed',e); }
 }
 
 // If a sent quote's customer email matches a real booking, mark it booked.
 async function autoMatchQuotes(){
   const sent=(DATA.quotes||[]).filter(q=>q.status==='sent' && q.customer_email);
-  if(!sent.length) return;
+  if(!sent.length) return false;
   let anyChanged=false;
+  let updates=0;
   for(const q of sent){
+    if(updates>=AUTO_MATCH_MAX_UPDATES) break;
     const email=q.customer_email.toLowerCase().trim();
     const match=DATA.bookings.find(b=>b.customer_email && b.customer_email.toLowerCase().trim()===email);
-    if(match){
-      await SB.from('quote_requests').update({status:'booked'}).eq('id',q.id);
+    if(!match) continue;
+    try{
+      await withTimeout(
+        SB.from('quote_requests').update({status:'booked'}).eq('id',q.id),
+        AUTO_MATCH_TIMEOUT_MS,
+        'autoMatchQuotes update timeout'
+      );
       q.status='booked'; // update in-memory copy too, avoids a second full reload
       anyChanged=true;
+      updates++;
+    }catch(e){
+      console.error('autoMatchQuotes update failed', e);
+      break; // a hung/slow update must not block remaining matches forever
     }
   }
   if(anyChanged){
-    const {data}=await SB.from('quote_requests').select('*').order('created_at',{ascending:false});
-    if(data) DATA.quotes=data;
+    try{
+      const {data}=await withTimeout(
+        SB.from('quote_requests').select('*').order('created_at',{ascending:false}),
+        AUTO_MATCH_TIMEOUT_MS,
+        'autoMatchQuotes refresh timeout'
+      );
+      if(data) DATA.quotes=data;
+    }catch(e){ console.error('autoMatchQuotes refresh failed', e); }
   }
+  return anyChanged;
 }
 
 // ---------- helpers ----------
@@ -1225,7 +1274,21 @@ async function approveRelease(bid){
 
 // ---------- renderers ----------
 let calView=new Date(); // currently displayed month in the calendar tab
-function renderAll(){setupRoleUI();renderSchedule();renderCalendar();renderPrep();renderCars();renderStaff();renderQuotes();renderEarnings()}
+function renderAll(){
+  const steps=[setupRoleUI,renderSchedule,renderCalendar,renderPrep,renderCars,renderStaff,renderQuotes,renderEarnings];
+  const failed=[];
+  for(const fn of steps){
+    try{ fn(); }
+    catch(e){
+      console.error('renderAll failed:', fn.name, e);
+      failed.push(fn.name||'panel');
+    }
+  }
+  if(failed.length){
+    try{ toast('Display error: '+failed.join(', ')); }
+    catch(e){ console.error('toast failed', e); }
+  }
+}
 
 function setEarnMonth(year, month){
   earnMonth={year:+year, month:+month};
