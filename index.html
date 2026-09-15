@@ -505,7 +505,7 @@ const AUTO_MATCH_MAX_UPDATES=25;
 const CAR_STATUSES=['available','prep','out','maintenance'];
 const MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+function toast(m,ms){const t=document.getElementById('toast');if(!t)return;t.textContent=m;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),ms||2600)}
 function esc(s){return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 
 const isAdmin=()=>MYROLE.includes('admin');
@@ -651,23 +651,76 @@ function setupRoleUI(){
   if(!owner && current && !STAFF_TABS.includes(current)) activateTab('schedule');
 }
 
-async function loadAll(){
+function loadSpecs(){
+  return [
+    {key:'cars', table:'cars'},
+    {key:'staff', table:'staff'},
+    {key:'bookings', table:'bookings'},
+    {key:'prep', table:'booking_prep_tasks'},
+    {key:'templates', table:'car_prep_templates'},
+    {key:'quotes', table:'quote_requests'},
+  ];
+}
+function loadTableQuery(table){
+  const q=SB.from(table).select('*');
+  if(table==='quote_requests') return q.order('created_at',{ascending:false});
+  if(table==='bookings') return q.order('event_date');
+  if(table==='booking_prep_tasks'||table==='car_prep_templates') return q.order('sort_order');
+  return q.order('name');
+}
+function isTransientLoadError(e){
+  const m=String((e&&(e.message||e.error_description))||e||'');
+  return /load failed|failed to fetch|networkerror|network request failed|offline/i.test(m);
+}
+function loadErrorLabel(e, which){
+  const name=e&&e.name&&e.name!=='Error'?e.name+': ':'';
+  const msg=e?.message||e?.error_description||e?.hint||String(e);
+  return (which?which+' — ':'')+name+msg;
+}
+function formatLoadFailures(failed){
+  if(!failed.length) return '';
+  if(failed.length===1) return loadErrorLabel(failed[0].error, failed[0].key);
+  const msg0=String(failed[0].error&&failed[0].error.message||'');
+  const same=failed.every(f=>String(f.error&&f.error.message||'')===msg0);
+  const names=failed.map(f=>f.key).join(', ');
+  if(same) return loadErrorLabel(failed[0].error)+' ('+names+')';
+  return failed.map(f=>loadErrorLabel(f.error,f.key)).join('; ');
+}
+async function loadOneSpec(spec){
+  const {data,error}=await loadTableQuery(spec.table);
+  if(error) throw error;
+  return data||[];
+}
+async function loadOneSpecRetry(spec){
   try{
-    const [c,s,b,p,t,q]=await Promise.all([
-      SB.from('cars').select('*').order('name'),
-      SB.from('staff').select('*').order('name'),
-      SB.from('bookings').select('*').order('event_date'),
-      SB.from('booking_prep_tasks').select('*').order('sort_order'),
-      SB.from('car_prep_templates').select('*').order('sort_order'),
-      SB.from('quote_requests').select('*').order('created_at',{ascending:false}),
-    ]);
-    for(const r of [c,s,b,p,t]) if(r.error) throw r.error;
-    DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data,quotes:(q&&!q.error)?q.data:[]};
-    // Paint Schedule/Calendar/etc. before quote matching. A hung PATCH used to
-    // block renderAll entirely — chrome showed, panels stayed blank.
-    renderAll();
-    if(isAdmin()) scheduleAutoMatchQuotes();
-  }catch(e){const msg=e?.message||e?.error_description||e?.hint||JSON.stringify(e);toast('Load error: '+msg);console.error('Load error detail:',e)}
+    return await loadOneSpec(spec);
+  }catch(e){
+    if(!isTransientLoadError(e)) throw e;
+    await new Promise(r=>setTimeout(r,350));
+    return await loadOneSpec(spec);
+  }
+}
+
+async function loadAll(){
+  const specs=loadSpecs();
+  const settled=await Promise.allSettled(specs.map(s=>loadOneSpecRetry(s)));
+  const next={cars:[],staff:[],bookings:[],prep:[],templates:[],quotes:[]};
+  const failed=[];
+  settled.forEach((r,i)=>{
+    const key=specs[i].key;
+    if(r.status==='fulfilled') next[key]=r.value;
+    else { failed.push({key,error:r.reason}); console.error('Load failed:',key,r.reason); }
+  });
+  DATA=next;
+  // Paint before quote matching. Also paint after a partial/failed fetch so
+  // a Safari TypeError "Load failed" cannot leave empty <div class="panel"> shells.
+  try{ renderAll(); }
+  catch(e){ console.error('renderAll after load failed',e); }
+  if(isAdmin()) scheduleAutoMatchQuotes();
+  if(failed.length){
+    try{ toast('Load error: '+formatLoadFailures(failed),8000); }
+    catch(e){ console.error(e); }
+  }
 }
 
 function withTimeout(promise, ms, label){
@@ -3009,18 +3062,54 @@ function bootOwnerPreview(){
   };
   showApp(); setupRoleUI(); renderAll();
 }
+function isIOSDevice(){
+  const ua=navigator.userAgent||'';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+}
+function sessionFlag(key, val){
+  try{
+    if(arguments.length===1) return sessionStorage.getItem(key);
+    sessionStorage.setItem(key, val);
+    return val;
+  }catch(e){ return null; }
+}
+async function clearChanceClassicsPWA(){
+  if(!('serviceWorker' in navigator)) return false;
+  let had=false;
+  const regs=await navigator.serviceWorker.getRegistrations();
+  if(regs.length){ had=true; await Promise.all(regs.map(r=>r.unregister())); }
+  if(window.caches){
+    const keys=await caches.keys();
+    const ours=keys.filter(k=>String(k).indexOf('chance-classics-')===0);
+    if(ours.length){ had=true; await Promise.all(ours.map(k=>caches.delete(k))); }
+  }
+  return had;
+}
+async function bootApp(){
+  // iOS Add to Home Screen does not need a service worker. A SW installed from
+  // Private Safari can claim the standalone app mid-fetch; Safari then throws
+  // TypeError: Load failed from supabase-js and loadAll used to leave panels blank.
+  if(isIOSDevice() && 'serviceWorker' in navigator){
+    try{
+      const controlled=!!navigator.serviceWorker.controller;
+      await clearChanceClassicsPWA();
+      if(controlled && !sessionFlag('cc_ios_sw_cleared')){
+        sessionFlag('cc_ios_sw_cleared','1');
+        location.reload();
+        return;
+      }
+    }catch(e){ console.log('PWA cleanup skipped', e); }
+  }
+  await init();
+  if(!isIOSDevice() && 'serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(e=>console.log('SW skipped:',e.message));
+  }
+}
 if(isOwnerPreview()) bootOwnerPreview();
-else init();
+else bootApp();
 
 // Use the same embedded logo on the login screen
 (function(){const hl=document.querySelector('.logo-img');const ll=document.getElementById('loginLogo');if(hl&&ll)ll.src=hl.src;})();
-
-// PWA service worker registration
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js').catch(e=>console.log('SW skipped:',e.message));
-  });
-}
 </script>
 </body>
 </html>
