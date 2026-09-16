@@ -17,6 +17,9 @@ assert.match(html, /driver_paid_at/, 'reuses bookings.driver_paid_at — no seco
 assert.match(html, /You owe/, 'card shows what Tim owes the driver');
 assert.match(html, /Upcoming bookings/, 'card lists upcoming bookings');
 assert.match(html, /function showOwnerCustomerAmount/, 'customer amount is owner-gated');
+assert.match(html, /function ownerCustomerAmountEditorHtml/, 'owner can add or edit the customer amount');
+assert.match(html, /id="f_amount"/, 'booking edit has an owner customer-amount field');
+assert.match(html, /showOwnerCustomerAmount\(\)\?ownerCustomerAmountEditorHtml/, 'booking detail editor is owner-gated');
 assert.match(html, /function isOwnerView/, 'owner chrome uses isAdmin plus ROLE');
 assert.match(html, /OWNER_ONLY_TABS=\[\'staff\',\'earnings\',\'quotes\'\]/, 'Quotes, Earnings, and Drivers are owner-only tabs');
 assert.match(html, /STAFF_TABS=\[\'schedule\',\'calendar\',\'prep\',\'cars\'\]/, 'staff nav is Schedule, Calendar, Prep, Cars');
