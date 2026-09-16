@@ -133,9 +133,12 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .earncard .elbl,.car-earn .plbl{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .car-earn .period{cursor:pointer}
 .earnjob{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:8px}
-.earnadd{display:flex;gap:8px;align-items:center;margin-top:10px}
-.earnadd input{max-width:150px;margin:0}
-.earnadd .act{flex:none}
+.earnadd{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.earnadd input{max-width:160px;margin:0;flex:1;min-width:120px}
+.earnadd .act,.earnadd .ghost{flex:none;min-height:40px}
+.earn-missing{background:#fff8ec;border:1px solid var(--amber);border-radius:10px;padding:14px;margin:0 0 18px}
+.amtbox{margin-bottom:14px}
+.amtbox .earnadd{margin-top:6px}
 .earncard .elbl{font:700 11px/1 "Inter",sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#6b6052}
 .ecount{font:600 10px/1.2 "Inter",sans-serif;letter-spacing:.02em;text-transform:none;color:#8a7d6e;white-space:nowrap}
 .earncard .eamt{font:800 26px/1 "Playfair Display",serif;margin:8px 0 4px;color:var(--ink)}
@@ -977,10 +980,20 @@ function parseMoneyInput(raw){
 }
 // Write the customer amount onto the booking as the same Wix Price line
 // earnings already reads. Replace that line only — never wipe other notes.
+function notesWithoutPrice(notes){
+  if(!notes) return '';
+  return String(notes).split('\n').filter(line=>!/^\s*Price:\s*\$/i.test(line)).join('\n').trim();
+}
+function storedCustomerAmount(b){
+  return wixPriceFromNotes(b&&b.notes);
+}
 function setWixPriceInNotes(notes, amount){
   const n=Number(amount);
   if(!Number.isFinite(n) || n<0) return notes;
-  const line=`Price: $${n.toFixed(2)}`;
+  const prev=wixPriceDetailsFromNotes(notes);
+  const line=prev&&prev.due!=null
+    ? `Price: $${n.toFixed(2)} ($${Number(prev.due).toFixed(2)} due)`
+    : `Price: $${n.toFixed(2)}`;
   const text=notes==null?'':String(notes);
   if(!text.trim()) return line;
   let replaced=false;
@@ -997,10 +1010,16 @@ function showOwnerCustomerAmount(){
 function notesForViewer(notes){
   if(!notes) return notes;
   if(showOwnerCustomerAmount()) return notes;
-  return String(notes).split('\n').filter(line=>!/^\s*Price:\s*\$/i.test(line)).join('\n').trim();
+  return notesWithoutPrice(notes);
+}
+function bookingIdKey(id){
+  return String(id||'').replace(/[^a-zA-Z0-9_-]/g,'');
+}
+function findBooking(id){
+  return (DATA.bookings||[]).find(x=>x.id===id || String(x.id)===String(id))||null;
 }
 function bookingGrossAmount(b, quoteMap){
-  const fromNotes=wixPriceFromNotes(b&&b.notes);
+  const fromNotes=storedCustomerAmount(b);
   if(fromNotes!=null) return fromNotes;
   const q=quoteMap&&b?quoteMap[b.id]:null;
   if(q && q.total!=null && !Number.isNaN(Number(q.total))) return Number(q.total);
@@ -1023,6 +1042,28 @@ function ownerCustomerAmountTagHtml(b){
   if(!showOwnerCustomerAmount()) return '';
   const label=ownerCustomerAmountLabel(b);
   return label?`<span class="amttag">${esc(label)}</span>`:'';
+}
+function ownerCustomerAmountEditorHtml(b, after){
+  if(!showOwnerCustomerAmount()||!b) return '';
+  const stored=storedCustomerAmount(b);
+  const charge=bookingCustomerCharge(b);
+  const sid=bookingIdKey(b.id);
+  const inputId='custAmt-'+sid+'-'+String(after||'edit');
+  const prefill=stored!=null?stored.toFixed(2):(charge&&charge.amount!=null?Number(charge.amount).toFixed(2):'');
+  const hint=stored==null
+    ? (charge&&charge.source==='quote'
+      ? `Quote total ${moneyFmt(charge.amount)} is in Earnings until you save the listed amount here.`
+      : 'Not in Earnings totals until you save.')
+    : '';
+  const afterArg=String(after||'earnings').replace(/[^a-zA-Z]/g,'');
+  return `<div class="amtbox">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052">Customer amount</div>
+    <div class="earnadd">
+      <input id="${inputId}" inputmode="decimal" placeholder="$0.00" value="${esc(prefill)}" aria-label="Customer amount for ${esc(b.customer_name||'booking')}">
+      <button class="act tinybtn" type="button" onclick="saveOwnerCustomerAmount('${esc(String(b.id))}','${inputId}','${afterArg}')">${stored==null?'Save':'Update'}</button>
+    </div>
+    ${hint?`<small class="hint">${esc(hint)}</small>`:''}
+  </div>`;
 }
 // Pair each booking with at most one quote. Same email match autoMatchQuotes already
 // uses to mark a quote booked; prefer email+date, then email+car, then email.
@@ -1321,7 +1362,7 @@ function openEarnWindow(kind, carId){
     if(au!==bu) return au-bu;
     return (a.event_date||'').localeCompare(b.event_date||'');
   });
-  let body=`<div class="meta" style="margin:-4px 0 12px">${esc(earnBookingCountText(roll))}. Jobs with no stored amount stay unknown until you enter dollars — nothing is invented.</div>`;
+  let body=`<div class="meta" style="margin:-4px 0 12px">${esc(earnBookingCountText(roll))}. Add a missing amount or update a wrong one — Earnings uses the Price line on the booking. Nothing is invented.</div>`;
   if(!jobs.length){
     body+=`<div class="empty"><div class="big">No counted bookings</div>Nothing in this window.</div>`;
   }else{
@@ -1332,42 +1373,44 @@ function openEarnWindow(kind, carId){
       const c=carById(b.car_id);
       const dc=fmtDate(b.event_date);
       const known=g!=null;
-      const sid=String(b.id).replace(/[^a-zA-Z0-9_-]/g,'');
+      const stored=storedCustomerAmount(b);
       body+=`<div class="earnjob">
         <div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span></div>
-        <div class="meta">${esc(dc.m)} ${esc(dc.d)}, ${esc(dc.y)}${c?' · '+esc(c.name):' · no car'}</div>
+        <div class="meta">${esc(dc.m)} ${esc(dc.d)}, ${esc(dc.y)}${c?' · '+esc(c.name):' · no car'}${stored==null&&known?' · quote estimate':''}</div>
         <div class="pvals" style="margin-top:8px">
           <span>Gross <b>${known?moneyFmt(g):'—'}</b></span>
           <span>Driver pay <b>${moneyFmt(pay)}</b></span>
         </div>
-        ${known?'':`<div class="earnadd">
-          <input id="earnAmt-${sid}" inputmode="decimal" placeholder="$0.00" aria-label="Customer amount for ${esc(b.customer_name||'booking')}">
-          <button class="act tinybtn" type="button" onclick="saveEarnBookingAmount('${sid}')">Save</button>
-        </div>`}
+        ${ownerCustomerAmountEditorHtml(b,'drill')}
       </div>`;
     }
     body+='</div>';
   }
   openModal(title, body);
 }
-async function saveEarnBookingAmount(bid){
+async function saveOwnerCustomerAmount(bid, inputId, after){
   if(!isOwnerView()){ toast('Owner only'); return; }
-  const sid=String(bid||'').replace(/[^a-zA-Z0-9_-]/g,'');
-  const input=document.getElementById('earnAmt-'+sid);
+  const input=document.getElementById(inputId);
   const amount=parseMoneyInput(input&&input.value);
   if(amount==null){ toast('Enter the customer amount'); return; }
-  const local=DATA.bookings.find(x=>x.id===bid);
+  const local=findBooking(bid);
   if(!local){ toast('Booking not found'); return; }
+  const hadStored=storedCustomerAmount(local)!=null;
   const notes=setWixPriceInNotes(local.notes, amount);
   const prev=local.notes;
   local.notes=notes;
   if(typeof SB!=='undefined' && SB){
-    const {error}=await SB.from('bookings').update({notes}).eq('id',bid);
+    const {error}=await SB.from('bookings').update({notes}).eq('id',local.id);
     if(error){ local.notes=prev; toast(error.message); return; }
   }
-  toast('Customer amount saved');
+  toast(hadStored?'Customer amount updated':'Customer amount saved');
   renderEarnings();
-  if(earnDrill) openEarnWindow(earnDrill.kind, earnDrill.carId);
+  if(after==='drill' && earnDrill) openEarnWindow(earnDrill.kind, earnDrill.carId);
+  else if(after==='detail') bookingDetail(local.id);
+}
+async function saveEarnBookingAmount(bid){
+  const sid=bookingIdKey(bid);
+  return saveOwnerCustomerAmount(bid, 'earnAmt-'+sid, 'drill');
 }
 function renderEarnings(){
   const el=document.getElementById('panel-earnings');
@@ -1381,8 +1424,24 @@ function renderEarnings(){
   const monthLabel=`${monthNames[report.month.month-1]} ${report.month.year}`;
   const monthOpts=monthNames.map((name,i)=>`<option value="${i+1}" ${report.month.month===i+1?'selected':''}>${name} ${today.year}</option>`).join('');
   let h=`<div class="sectionhead"><div><div class="kicker">Owner view · America/Chicago</div><h2 class="display">Earnings</h2></div><span class="line"></span></div>`;
-  h+=`<div class="meta" style="margin:-8px 0 14px">Gross is the customer amount Wix already writes on the booking (<em>Price: $X</em> in notes). If that line is missing, a matching quote total is the fallback. Driver pay is the same tier × scale as “Pay driver $X”. Net is only calculated when a job has a customer amount — missing amounts are not treated as $0. Each booking is attributed to its assigned car (one car per booking). <em>This year</em> is every counted job dated Jan 1–Dec 31 in America/Chicago, including upcoming jobs later this year. Tap a company total or a car window to see the jobs and add a missing customer amount.</div>`;
+  h+=`<div class="meta" style="margin:-8px 0 14px">Gross is the customer amount Wix already writes on the booking (<em>Price: $X</em> in notes). If that line is missing, a matching quote total is the fallback. Driver pay is the same tier × scale as “Pay driver $X”. Net is only calculated when a job has a customer amount — missing amounts are not treated as $0. Each booking is attributed to its assigned car (one car per booking). <em>This year</em> is every counted job dated Jan 1–Dec 31 in America/Chicago, including upcoming jobs later this year. Missing amounts are listed below so you can type dollars here. Tap a company total or a car window to open every job in that slice and fix an amount that is wrong.</div>`;
   h+=`<div class="meta" style="margin:-6px 0 12px">${report.jobCount} counted job${report.jobCount===1?'':'s'} (confirmed / in progress / completed, plus accepted or collected <em>new</em> imports). Cancelled jobs are out.${report.missingAmount?` ${report.missingAmount} counted booking${report.missingAmount===1?' has':'s have'} no stored customer amount.`:' All counted bookings have a customer amount.'}${report.unassignedCount?` ${report.unassignedCount} counted booking${report.unassignedCount===1?' has':'s have'} no car assigned — in company totals only.`:''}</div>`;
+  const missingJobs=[...(report.company.allTime.list||[])].filter(b=>bookingGrossAmount(b, report.quoteMap)==null)
+    .sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
+  if(missingJobs.length){
+    h+=`<div class="earn-missing"><div class="schsechd" style="margin-bottom:8px">Needs a customer amount</div>
+      <div class="meta" style="margin-bottom:10px">These counted jobs are not in gross yet. Save the price the customer paid — same field Earnings already reads.</div>`;
+    for(const b of missingJobs){
+      const c=carById(b.car_id);
+      const dc=fmtDate(b.event_date);
+      h+=`<div class="earnjob">
+        <div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span></div>
+        <div class="meta">${esc(dc.m)} ${esc(dc.d)}, ${esc(dc.y)}${c?' · '+esc(c.name):' · no car'}</div>
+        ${ownerCustomerAmountEditorHtml(b,'earnings')}
+      </div>`;
+    }
+    h+='</div>';
+  }
   h+=`<div class="earnstats">
     ${earnPeriodHtml('All-time', report.company.allTime, 'allTime')}
     ${earnPeriodHtml(`${today.year} this year`, report.company.ytd, 'ytd')}
@@ -2530,7 +2589,11 @@ function bookingModal(id){
       </select></div>
     </div>
     <small class="hint">Setting a tier offers this job to drivers, starting with priority #1.</small>
-    <div><label>Notes</label><textarea id="f_notes">${esc(b.notes)}</textarea></div>
+    ${isOwnerView()?`<div><label>Customer amount</label>
+      <input id="f_amount" inputmode="decimal" placeholder="$0.00" value="${storedCustomerAmount(b)!=null?esc(storedCustomerAmount(b).toFixed(2)):''}">
+      <small class="hint">What the customer paid / listed booking amount. Earnings uses this Price line. Staff never see it.</small>
+    </div>`:''}
+    <div><label>Notes</label><textarea id="f_notes">${esc(notesWithoutPrice(b.notes))}</textarea></div>
     <label class="toggle"><input type="checkbox" id="f_trailer" ${b.needs_trailer?'checked':''}><span class="toggleslide"></span><span>🚛 Car needs to be trailered</span></label>
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="act" onclick="saveBooking('${id||''}')">Save</button>
@@ -2542,11 +2605,16 @@ function bookingModal(id){
 async function saveBooking(id){
   const v=x=>document.getElementById(x).value||null;
   const tier=document.getElementById('f_tier').value?parseInt(document.getElementById('f_tier').value):null;
+  const existing=id?findBooking(id):null;
+  let notes=notesWithoutPrice(v('f_notes'));
+  const typedAmt=isOwnerView()?parseMoneyInput(document.getElementById('f_amount')&&document.getElementById('f_amount').value):null;
+  const keepAmt=typedAmt!=null?typedAmt:storedCustomerAmount(existing);
+  if(keepAmt!=null) notes=setWixPriceInNotes(notes, keepAmt);
   const rec={customer_name:v('f_cust'),event_type:v('f_evt'),event_date:v('f_date'),
     start_time:v('f_start'),end_time:v('f_end'),customer_phone:v('f_phone'),customer_email:v('f_email'),
     pickup_location:v('f_pick'),return_location:v('f_ret'),car_id:v('f_car'),driver_id:v('f_drv'),
     status:v('f_status')||'new',payment_status:v('f_pay')||'unpaid',pay_tier:tier,
-    needs_trailer:document.getElementById('f_trailer').checked,notes:v('f_notes')};
+    needs_trailer:document.getElementById('f_trailer').checked,notes:notes||null};
   // Warn if assigning a driver who already has a booking that day (different booking).
   if(rec.driver_id && rec.event_date){
     const clash=DATA.bookings.find(x=>x.id!==id && x.driver_id===rec.driver_id
@@ -2559,7 +2627,6 @@ async function saveBooking(id){
     }
   }
   // If a tier is set, no driver yet, and the waterfall hasn't started, launch it at rank 1.
-  const existing=id?DATA.bookings.find(x=>x.id===id):null;
   let justOffered=false;
   if(tier && !rec.driver_id){
     const startedBefore=existing && existing.offer_rank;
@@ -2661,7 +2728,7 @@ function bookingDetail(bid){
   openModal('Booking details',`
     ${isOwnerView()?ownerPayPillHtml(b,'margin-bottom:14px;font-size:16px'):''}
     ${!isOwnerView()&&pay!=null?`<div class="paypill" style="margin-bottom:14px">You earn $${pay}</div>`:''}
-    ${showOwnerCustomerAmount()&&ownerCustomerAmountLabel(b)?row('Customer amount', ownerCustomerAmountLabel(b)):''}
+    ${showOwnerCustomerAmount()?ownerCustomerAmountEditorHtml(b,'detail'):''}
     ${isOwnerView()?row('Payment', b.payment_status==='paid'?'Paid in full':b.payment_status==='deposit'?'Deposit':'Unpaid'):''}
     ${row('Customer', b.customer_name)}
     ${row('Event', b.event_type)}
@@ -2673,7 +2740,7 @@ function bookingDetail(bid){
     ${row('Phone', b.customer_phone)}
     ${row('Email', b.customer_email)}
     ${b.needs_trailer?`<div style="margin-bottom:10px"><span class="trailertag">🚛 Car must be trailered</span></div>`:''}
-    ${row('Notes', notesForViewer(b.notes))}
+    ${row('Notes', notesWithoutPrice(b.notes))}
     ${isOwnerView()?waterfallStatusHtml(b):''}
     ${isOwnerView()?driverPayStatusHtml(b):''}
     ${claimBtns}

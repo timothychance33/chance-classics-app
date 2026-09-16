@@ -31,8 +31,14 @@ assert.match(html, /function bookingsInCalendarYear/, 'year window is the full c
 assert.match(html, /function earnBookingCountText/, 'booking count helper exists');
 assert.match(html, /function openEarnWindow/, 'tapping a window opens the job list');
 assert.match(html, /function saveEarnBookingAmount/, 'owner can save a missing customer amount');
+assert.match(html, /function saveOwnerCustomerAmount/, 'owner can add or update a customer amount');
+assert.match(html, /function ownerCustomerAmountEditorHtml/, 'add/edit dollars share one owner editor');
+assert.match(html, /function storedCustomerAmount/, 'stored amount is the booking Price line');
+assert.match(html, /function notesWithoutPrice/, 'Price line is stripped from staff notes and the notes box');
 assert.match(html, /function setWixPriceInNotes/, 'amount is written onto the booking Price line');
 assert.match(html, /function parseMoneyInput/, 'typed dollars are parsed, not invented');
+assert.match(html, /Needs a customer amount/, 'Earnings lists jobs with no stored amount');
+assert.match(html, /id="f_amount"/, 'booking form has an owner customer-amount field');
 assert.match(html, /Tap a company total or a car window/, 'copy tells Tim to tap a rollup');
 assert.match(html, /This year<\/em> is every counted job dated Jan 1/, 'copy says this year is the full calendar year');
 assert.match(html, /\$\{today\.year\} this year/, 'company and car labels say this year, not through today');
@@ -89,10 +95,20 @@ function parseMoneyInput(raw){
   if(!Number.isFinite(n) || n<0) return null;
   return Math.round(n*100)/100;
 }
+function notesWithoutPrice(notes){
+  if(!notes) return '';
+  return String(notes).split('\n').filter(line=>!/^\s*Price:\s*\$/i.test(line)).join('\n').trim();
+}
+function storedCustomerAmount(b){
+  return wixPriceFromNotes(b&&b.notes);
+}
 function setWixPriceInNotes(notes, amount){
   const n=Number(amount);
   if(!Number.isFinite(n) || n<0) return notes;
-  const line=`Price: $${n.toFixed(2)}`;
+  const prev=wixPriceDetailsFromNotes(notes);
+  const line=prev&&prev.due!=null
+    ? `Price: $${n.toFixed(2)} ($${Number(prev.due).toFixed(2)} due)`
+    : `Price: $${n.toFixed(2)}`;
   const text=notes==null?'':String(notes);
   if(!text.trim()) return line;
   let replaced=false;
@@ -117,7 +133,7 @@ function ownerCustomerAmountLabel(charge){
   return moneyFmt(charge.amount)+(charge.due!=null?` · ${moneyFmt(charge.due)} due`:'');
 }
 function bookingGrossAmount(b, quoteMap){
-  const fromNotes=wixPriceFromNotes(b&&b.notes);
+  const fromNotes=storedCustomerAmount(b);
   if(fromNotes!=null) return fromNotes;
   const q=quoteMap&&b?quoteMap[b.id]:null;
   if(q && q.total!=null && !Number.isNaN(Number(q.total))) return Number(q.total);
@@ -338,6 +354,25 @@ assert.equal(setWixPriceInNotes('Price: $100\nEvent Location: chapel', 220), 'Pr
 assert.equal(setWixPriceInNotes('', 50), 'Price: $50.00');
 assert.equal(wixPriceFromNotes(setWixPriceInNotes('Event Location: chapel', 1420.25)), 1420.25);
 assert.equal(setWixPriceInNotes('Keep me', -1), 'Keep me', 'invalid amount does not invent a Price line');
+assert.equal(setWixPriceInNotes('Price: $764.75 ($514.75 due)', 900),
+  'Price: $900.00 ($514.75 due)', 'edit keeps the remaining-due part of the Wix line');
+assert.equal(notesWithoutPrice('Event Location: chapel\nPrice: $880 ($200 due)'), 'Event Location: chapel');
+assert.equal(storedCustomerAmount({notes:'Price: $660'}), 660);
+assert.equal(storedCustomerAmount({notes:'Event Location: Benton'}), null);
+
+// Booking form: typed dollars write the Price line; blank field keeps the stored amount
+function mergeBookingNotes(existingNotes, typedNotes, typedAmount){
+  let notes=notesWithoutPrice(typedNotes);
+  const keepAmt=typedAmount!=null?typedAmount:storedCustomerAmount({notes:existingNotes});
+  if(keepAmt!=null) notes=setWixPriceInNotes(notes, keepAmt);
+  return notes||null;
+}
+assert.equal(mergeBookingNotes('Event Location: Benton', 'Event Location: Benton', 880),
+  'Event Location: Benton\nPrice: $880.00');
+assert.equal(mergeBookingNotes('Price: $550\nChapel', 'Chapel', null),
+  'Chapel\nPrice: $550.00', 'empty amount field does not wipe a stored Price');
+assert.equal(mergeBookingNotes('Price: $550\nChapel', 'Chapel', 600),
+  'Chapel\nPrice: $600.00', 'typed amount updates a wrong stored Price');
 
 const missing=phyllisData.bookings.find(b=>b.id==='p1');
 missing.notes=setWixPriceInNotes(missing.notes, 100);
@@ -349,5 +384,13 @@ assert.equal(afterRow.allTime.gross, 1420.25+100, 'saved amount lands in all-tim
 assert.equal(afterRow.ytd.unknown, 2);
 assert.equal(afterRow.ytd.known, 2);
 assert.equal(afterRow.ytd.net, (1420.25+100)-600-80);
+
+const later=phyllisData.bookings.find(b=>b.id==='p4');
+later.notes=setWixPriceInNotes(later.notes, 1500);
+const afterEdit=buildOwnerEarnings(phyllisData, {year:2026, month:9}, today);
+const afterEditRow=afterEdit.perCar.find(r=>r.car.id==='phyllis');
+assert.equal(afterEditRow.month.gross, 1500, 'editing a stored amount updates September');
+assert.equal(afterEditRow.ytd.gross, 1500+100, 'editing a stored amount updates this year');
+assert.equal(wixPriceFromNotes(later.notes), 1500);
 
 console.log('owner-earnings tests passed');
