@@ -1,0 +1,18 @@
+# Edge Function gateway settings for deploys from this repo.
+# quote-capture is a Wix webhook. Wix does not send a user JWT.
+# Auth is WIX_SYNC_SECRET, checked inside the function.
+#
+# Deploy only quote-capture. A bare `supabase functions deploy` also uploads
+# send-notification and scheduled-tasks from this repo and can overwrite
+# newer code that is live but not committed here.
+
+[functions.quote-capture]
+verify_jwt = false
+
+# Keep JWT off if these are ever deployed from here. They authenticate with
+# their own shared secrets. Prefer not to deploy them from this repo.
+[functions.send-notification]
+verify_jwt = false
+
+[functions.scheduled-tasks]
+verify_jwt = false
