@@ -1171,6 +1171,31 @@ async function persistDriverPaid(bid, paid){
   }
   return true;
 }
+// Follow-up email flags (owner-only). Setting these stops the matching reminder
+// email from send-followups-next: reviewed_at → review reminder, photos_received_at → photo reminder.
+const FOLLOWUP_FLAG_COLS=['reviewed_at','photos_received_at'];
+async function persistFollowupFlag(bid, col, on){
+  if(!FOLLOWUP_FLAG_COLS.includes(col)) return false;
+  const when=on?new Date().toISOString():null;
+  const local=DATA.bookings.find(x=>x.id===bid);
+  const prev=local?local[col]:null;
+  if(local) local[col]=when;
+  if(typeof SB!=='undefined' && SB){
+    const {error}=await SB.from('bookings').update({[col]:when}).eq('id',bid);
+    if(error){ if(local) local[col]=prev; toast(error.message); return false }
+  }
+  return true;
+}
+async function toggleFollowupFlag(bid, col, on, el){
+  if(!isOwnerView()) return;
+  const ok=await persistFollowupFlag(bid,col,on);
+  if(!ok){ if(el) el.checked=!on; return }
+  toast((col==='reviewed_at'?'Reviewed':'Photos received')+(on?' ✓':' cleared'));
+}
+function followupFlagsHtml(b){
+  const box=(col,label)=>`<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:15px;cursor:pointer"><input type="checkbox" style="width:auto" ${b[col]?'checked':''} onchange="toggleFollowupFlag('${b.id}','${col}',this.checked,this)"> ${label}</label>`;
+  return `<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052;margin-bottom:6px">Follow-up</div>${box('reviewed_at','Reviewed')}${box('photos_received_at','Photos received')}</div>`;
+}
 async function markDriverPaid(bid){
   if(!await persistDriverPaid(bid,true)) return;
   toast('Marked as paid ✓');
@@ -2741,6 +2766,7 @@ function bookingDetail(bid){
     ${row('Email', b.customer_email)}
     ${b.needs_trailer?`<div style="margin-bottom:10px"><span class="trailertag">🚛 Car must be trailered</span></div>`:''}
     ${row('Notes', notesWithoutPrice(b.notes))}
+    ${isOwnerView()?followupFlagsHtml(b):''}
     ${isOwnerView()?waterfallStatusHtml(b):''}
     ${isOwnerView()?driverPayStatusHtml(b):''}
     ${claimBtns}
