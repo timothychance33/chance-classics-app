@@ -56,4 +56,18 @@ assert.equal(isFinishedJob(upcomingAccepted), false);
 const owed = [finishedUnpaid].filter(b=>isFinishedJob(b)&&!b.driver_paid_at).length;
 assert.equal(owed, 1);
 
+
+// Follow-up flags: owner-only Reviewed / Photos received checkboxes in Booking details
+assert.match(html, /function followupFlagsHtml/, 'booking detail renders follow-up flag checkboxes');
+assert.match(html, /\$\{isOwnerView\(\)\?followupFlagsHtml\(b\):''\}/, 'follow-up checkboxes are owner-only');
+assert.match(html, /FOLLOWUP_FLAG_COLS=\['reviewed_at','photos_received_at'\]/, 'only reviewed_at / photos_received_at can be toggled');
+assert.match(html, /SB\.from\('bookings'\)\.update\(\{\[col\]:when\}\)\.eq\('id',bid\)/, 'flags set/clear the bookings column like driver_paid_at');
+assert.match(html, />\s*\$\{label\}<\/label>/, 'checkbox label text is rendered');
+assert.match(html, /box\('reviewed_at','Reviewed'\)\}\$\{box\('photos_received_at','Photos received'\)/, 'labels are Reviewed and Photos received');
+
+// Same set/clear rule as persistFollowupFlag: checked → timestamp, unchecked → null
+function followupFlagValue(on, now){ return on ? now : null; }
+assert.equal(followupFlagValue(true, '2026-10-01T18:00:00.000Z'), '2026-10-01T18:00:00.000Z');
+assert.equal(followupFlagValue(false, '2026-10-01T18:00:00.000Z'), null);
+
 console.log('owner-views tests passed');
