@@ -605,6 +605,7 @@ p { margin: 0 0 1em; }
   object-fit: cover;
   margin-bottom: 8px;
 }
+.occasions a img.parade-card { object-position: center 62%; }
 .occasions a:hover, .occasion-cars a:hover { outline: 2px solid var(--btn); outline-offset: 3px; }
 .occasions span, .occasion-cars span span { display: block; color: var(--ink-soft); font-size: 14px; }
 .occasion-cars { display: grid; gap: 12px; }
