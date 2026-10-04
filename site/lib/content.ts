@@ -115,8 +115,8 @@ export function serviceDescription(service: Service) {
     .replaceAll("seperately", "separately")
     .replaceAll("cahrged", "charged")
     .replaceAll(
-      "locations outside of the radius will be charged an additional $3/mile",
-      "a pickup 30 miles or less from Benton has no mileage fee; a farther pickup is $3 per mile for Benton to pickup plus pickup to drop-off",
+      "(chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile)",
+      "(chauffeured). Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport)",
     );
   if (service.car === "Elsa") text = text.replace("$500 for 2 hour", "$600 for 2 hour");
   if (service.car === "Rosie") text = text.replace("$500 for 2 hour", "$700 for 2 hour");
@@ -335,7 +335,7 @@ export const posts: Post[] = [
         items: [
           "Vehicle choice. Our more valuble and higher demand cars cost more than others.",
           "Rental duration. A quick photo-and-exit rental costs less than a full-day booking that covers ceremony, photos, and reception.",
-          "Distance from Benton. A pickup 30 miles or less from Benton has no mileage fee, no matter how far the drop-off is. A farther pickup is $3 per mile for the drive from Benton to pickup plus pickup to drop-off. The return to Benton is not included.",
+          "Distance from Benton. Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport).",
           "Season and date. Peak wedding season (spring and fall) books up faster, though pricing itself doesn't change seasonally.",
         ],
       },

@@ -35,15 +35,14 @@ export function QuoteForm() {
   }
 
   useEffect(() => {
-    if (location.trim().length < 4 || dropoff.trim().length < 4) {
+    if (location.trim().length < 4) {
       setMileageNote("");
       return;
     }
     let ignore = false;
     const timer = setTimeout(() => {
-      const params = new URLSearchParams({ pickup: location, dropoff });
+      const params = new URLSearchParams({ pickup: location });
       if (placeId) params.set("pickupPlaceId", placeId);
-      if (dropoffPlaceId) params.set("dropoffPlaceId", dropoffPlaceId);
       fetch(`/api/mileage/?${params}`)
         .then((response) => response.json())
         .then((data) => {
@@ -57,7 +56,7 @@ export function QuoteForm() {
       ignore = true;
       clearTimeout(timer);
     };
-  }, [location, placeId, dropoff, dropoffPlaceId]);
+  }, [location, placeId]);
 
   return (
     <form className="quote-form" onSubmit={onSubmit} noValidate={false}>
@@ -125,7 +124,7 @@ export function QuoteForm() {
           }}
         />
       </label>
-      {location.trim().length >= 4 && dropoff.trim().length >= 4 && (
+      {location.trim().length >= 4 && (
         <p className="mileage-line" data-mileage>{mileageNote || "Checking mileage…"}</p>
       )}
       <label className="field">

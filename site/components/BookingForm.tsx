@@ -18,8 +18,6 @@ import {
 
 type MileagePreview = {
   needsReview: boolean;
-  toPickup: number | null;
-  between: number | null;
   miles: number | null;
   fee: number | null;
   message: string;
@@ -51,29 +49,28 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const money = quoteTotal(basePrice, hours, mileage?.fee ?? 0);
 
   useEffect(() => {
-    if (pickup.trim().length < 4 || dropoff.trim().length < 4) {
+    if (pickup.trim().length < 4) {
       setMileage(null);
       return;
     }
     let ignore = false;
     const timer = setTimeout(() => {
-      const params = new URLSearchParams({ pickup, dropoff });
+      const params = new URLSearchParams({ pickup });
       if (pickupPlaceId) params.set("pickupPlaceId", pickupPlaceId);
-      if (dropoffPlaceId) params.set("dropoffPlaceId", dropoffPlaceId);
       fetch(`/api/mileage/?${params}`)
         .then((response) => response.json())
         .then((data) => {
           if (!ignore) setMileage(data);
         })
         .catch(() => {
-          if (!ignore) setMileage({ needsReview: true, toPickup: null, between: null, miles: null, fee: null, message: "We'll confirm mileage." });
+          if (!ignore) setMileage({ needsReview: true, miles: null, fee: null, message: "We'll confirm mileage." });
         });
     }, 400);
     return () => {
       ignore = true;
       clearTimeout(timer);
     };
-  }, [pickup, pickupPlaceId, dropoff, dropoffPlaceId]);
+  }, [pickup, pickupPlaceId]);
 
   useEffect(() => {
     let ignore = false;
@@ -120,7 +117,6 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           pickup,
           pickupPlaceId,
           dropoff,
-          dropoffPlaceId,
           waiver,
           reliability,
         }),
@@ -241,8 +237,8 @@ export function BookingForm({ car, carName, basePrice }: Props) {
       <div className="mileage-line" data-mileage>
         <p>{MILEAGE_RULE_TEXT}</p>
         <p>
-          {pickup.trim().length < 4 || dropoff.trim().length < 4
-            ? "Enter the pickup and drop-off addresses to calculate mileage."
+          {pickup.trim().length < 4
+            ? "Enter the pickup address to calculate mileage."
             : mileage?.message || "Checking mileage…"}
         </p>
         <p className="price">

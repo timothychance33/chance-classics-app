@@ -47,8 +47,6 @@ export async function POST(request: Request) {
   const mileage = await quoteDrivingMileage({
     pickupPlaceId: String(raw.pickupPlaceId || "").slice(0, 300),
     pickup: value.pickup,
-    dropoffPlaceId: String(raw.dropoffPlaceId || "").slice(0, 300),
-    dropoff: value.dropoff,
   });
   const money = quoteTotal(service.price, value.hours, mileage.fee ?? 0);
   const payments = stripeReady({
@@ -102,7 +100,7 @@ export async function POST(request: Request) {
       `Listing total: $${money.listing}`,
       mileage.needsReview
         ? "Mileage: We'll confirm mileage. Flagged for review."
-        : `Mileage: Benton to pickup ${mileage.toPickup} miles, pickup to drop-off ${mileage.between} miles, total ${mileage.miles} miles, fee $${mileage.fee}, billed with the balance. Return to Benton is not included.`,
+        : `Mileage: ${mileage.miles} miles from Benton to pickup, fee $${mileage.fee}, billed with the balance.`,
       `Deposit due: $${money.deposit}`,
       `Balance billed separately: $${money.balance}`,
       "Waiver accepted: Yes",
@@ -125,17 +123,13 @@ export async function POST(request: Request) {
       payment_status: "unpaid",
       source,
       notes,
-      mileage_to_pickup_miles: mileage.toPickup,
-      mileage_between_miles: mileage.between,
       mileage_miles: mileage.miles,
       mileage_fee_usd: mileage.fee,
       mileage_needs_review: mileage.needsReview,
     };
     let inserted = await db.from("bookings").insert(row).select("id").single();
     if (inserted.error && /mileage_/i.test(inserted.error.message || "")) {
-      const { mileage_to_pickup_miles, mileage_between_miles, mileage_miles, mileage_fee_usd, mileage_needs_review, ...withoutMileage } = row;
-      void mileage_to_pickup_miles;
-      void mileage_between_miles;
+      const { mileage_miles, mileage_fee_usd, mileage_needs_review, ...withoutMileage } = row;
       void mileage_miles;
       void mileage_fee_usd;
       void mileage_needs_review;
