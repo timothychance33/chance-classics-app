@@ -59,7 +59,30 @@ export type Agreement = {
   blocks: AgreementBlock[];
 };
 
-export const services = servicesData as Service[];
+/** First model year in a name or caption. Cars with no year sort after the dated ones. */
+export function modelYear(text: string | null | undefined): number | null {
+  const match = String(text || "").match(/\b(?:18|19|20)\d{2}\b/);
+  return match ? Number(match[0]) : null;
+}
+
+/** Oldest model year first. Same year, then car name A to Z. */
+export function byModelYear<T>(items: readonly T[], label: (item: T) => string, name: (item: T) => string): T[] {
+  return [...items].sort((a, b) => {
+    const yearA = modelYear(label(a));
+    const yearB = modelYear(label(b));
+    if (yearA == null && yearB == null) return name(a).localeCompare(name(b), "en");
+    if (yearA == null) return 1;
+    if (yearB == null) return -1;
+    if (yearA !== yearB) return yearA - yearB;
+    return name(a).localeCompare(name(b), "en");
+  });
+}
+
+export const services = byModelYear(
+  servicesData as Service[],
+  (service) => service.name,
+  (service) => service.car,
+);
 export const galleries = galleriesData as Record<string, Gallery>;
 export const agreements = agreementsData as Record<string, Agreement>;
 export const home = homeData as {
@@ -73,19 +96,11 @@ export const servicePhotos = servicesPageData as Img[];
 export const portfolioCovers = portfolioData as { alt: string; href: string; image: Img }[];
 export const thanksImage = thanksData as Img;
 
-export const portfolioOrder = [
-  "bonnie",
-  "elsa",
-  "patsy",
-  "phyllis",
-  "brenda",
-  "carmen",
-  "black-betty",
-  "sylvia",
-  "veronica",
-  "rosie",
-  "others",
-];
+export const portfolioOrder = byModelYear(
+  Object.values(galleries),
+  (gallery) => gallery.subtitle,
+  (gallery) => gallery.title,
+).map((gallery) => gallery.slug);
 
 /** Terms submenu, in the live menu order. */
 export const termsNav = [
@@ -156,18 +171,22 @@ export function pageMeta(opts: {
   };
 }
 
-export const quoteServices = [
-  "Patsy - 1953 Packard Limo",
-  "Brenda - 1961 Buick Invicta Convertible",
-  "Phyllis - 1941 Buick Super Convertible",
-  "Rosie - 1960 Chevrolet Corvette",
-  "Black Betty - 1950 Ford Custom Convertible",
-  "Veronica - 1957 Chevrolet Bel Air",
-  "Sylvia - 1970 Chevelle SS454",
-  "Elsa - 1954 Packard Caribbean (White)",
-  "Carmen - 1976 Cadillac Eldorado",
-  "Bonnie - 1937 Cadillac Fleetwood 75",
-];
+export const quoteServices = byModelYear(
+  [
+    "Patsy - 1953 Packard Limo",
+    "Brenda - 1961 Buick Invicta Convertible",
+    "Phyllis - 1941 Buick Super Convertible",
+    "Rosie - 1960 Chevrolet Corvette",
+    "Black Betty - 1950 Ford Custom Convertible",
+    "Veronica - 1957 Chevrolet Bel Air",
+    "Sylvia - 1970 Chevelle SS454",
+    "Elsa - 1954 Packard Caribbean (White)",
+    "Carmen - 1976 Cadillac Eldorado",
+    "Bonnie - 1937 Cadillac Fleetwood 75",
+  ],
+  (option) => option,
+  (option) => option.split(" - ")[0].trim(),
+);
 
 export const faqs = [
   {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
-import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, home, pageMeta, services } from "@/lib/content";
+import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, byModelYear, home, pageMeta, services } from "@/lib/content";
 import { occasions } from "@/lib/occasions";
 
 export const metadata = pageMeta({
@@ -22,7 +22,7 @@ export default function HomePage() {
         </p>
       </section>
       <section className="wrap fleet" aria-label="The cars">
-        {home.fleet.map((car) => {
+        {byModelYear(home.fleet, (car) => car.caption, (car) => car.name).map((car) => {
           const service = services.find((item) => item.car === car.name);
           const model = car.caption.split(" / ")[0];
           const price = service?.price;
