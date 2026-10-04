@@ -605,9 +605,10 @@ p { margin: 0 0 1em; }
   object-fit: cover;
   margin-bottom: 8px;
 }
-.occasions a img.parade-card { object-position: center 62%; }
 .occasions a:hover, .occasion-cars a:hover { outline: 2px solid var(--btn); outline-offset: 3px; }
 .occasions span, .occasion-cars span span { display: block; color: var(--ink-soft); font-size: 14px; }
+.occasion-hero { display: block; width: auto; height: auto; max-width: 100%; max-height: min(80vh, 760px); margin: 0 auto 1em; }
+.occasion-hero.portrait { width: 100%; max-width: 600px; aspect-ratio: 1 / 1; max-height: none; object-fit: cover; }
 .occasion-cars { display: grid; gap: 12px; }
 .occasion-cars a { flex-direction: row; align-items: center; gap: 14px; }
 .occasion-cars img { width: 120px; height: 90px; object-fit: cover; }

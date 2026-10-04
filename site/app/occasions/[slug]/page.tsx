@@ -30,7 +30,15 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
   return (
     <article className="wrap page">
       <h1>{occasion.title}</h1>
-      {occasion.image && <Picture image={occasion.image} alt={occasion.alt} />}
+      {occasion.image && (
+        <Picture
+          image={occasion.image}
+          alt={occasion.alt}
+          className={occasion.image.h > occasion.image.w ? "occasion-hero portrait" : "occasion-hero"}
+          position={occasion.heroPosition}
+          priority
+        />
+      )}
       <p>{occasion.text}</p>
       {occasion.slug === "weddings" && <Reviews wedding />}
       <h2>What’s included</h2>

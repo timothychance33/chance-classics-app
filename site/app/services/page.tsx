@@ -25,6 +25,7 @@ const blocks = [
     href: "/occasions/weddings/",
     image: weddings.image,
     alt: weddings.alt,
+    position: weddings.cardPosition,
     reverse: true,
     text: "Every rental includes a professional chauffeur. You don’t drive the car yourself. Drivers know wedding timelines and photo stops. Photo-only bookings are available, not just transportation.",
   },
@@ -33,6 +34,7 @@ const blocks = [
     href: "/occasions/photo-shoots/",
     image: photos.image,
     alt: photos.alt,
+    position: photos.cardPosition,
     reverse: false,
     text: "Our classic car rental photo sessions are the perfect way to capture lasting memories. We provide classic cars that create the perfect backdrop for your pictures, whether it's for a wedding, engagement, senior or any other special occasion. Let us help you create a unique and memorable experience with our classic car rental photo session.",
   },
@@ -41,6 +43,7 @@ const blocks = [
     href: "/occasions/parades-and-special-events/",
     image: parades.image,
     alt: parades.alt,
+    position: parades.cardPosition,
     reverse: true,
     text: "Our classic car rental service for parades is the perfect way to make a grand entrance. Our cars and drivers will make you feel like royalty in a chariot, no matter what the occasion. Whether you're attending a homecoming parade, other homecoming parades, a festival parade, or a beauty pageant, our classic cars will ensure you make a lasting impression.",
   },
@@ -52,7 +55,7 @@ export default function ServicesPage() {
       <h1>Services</h1>
       {blocks.map((block) => (
         <section key={block.title} className={block.reverse ? "svc-row reverse" : "svc-row"}>
-          <Picture image={block.image} alt={block.alt} />
+          <Picture image={block.image} alt={block.alt} position={block.position} />
           <div>
             <h2>{block.title}</h2>
             <p>{block.text}</p>

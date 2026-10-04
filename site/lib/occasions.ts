@@ -51,12 +51,26 @@ function photo(src: string): Img {
   return { src, alt: "", w: size?.w || 1600, h: size?.h || 1066 };
 }
 
-export const occasions = [
+export const occasions: {
+  slug: string;
+  title: string;
+  image: Img;
+  alt: string;
+  /** object-position for cropped views of the photo (home cards, services rows). */
+  cardPosition?: string;
+  /** object-position for the occasion page hero when a portrait photo is shown as a square. */
+  heroPosition?: string;
+  text: string;
+}[] = [
   {
     slug: "weddings",
     title: "Weddings",
-    image: photo("/images/cars-phyllis_gallery_13.webp"),
-    alt: "Bride and groom beside Phyllis, the 1941 Buick convertible, as guests wave sparklers",
+    image: photo("/images/occasion-weddings-packard.webp"),
+    alt: "Bride and groom on the back of a light-blue classic Packard convertible",
+    /** Portrait photo in a 4:3 card: keep the couple and the spare-tire emblem in frame. */
+    cardPosition: "center 70%",
+    /** Square hero trims the trees above and keeps the couple through the license plate. */
+    heroPosition: "center 85%",
     text: "Every rental includes a professional chauffeur. You don’t drive the car yourself. Drivers know wedding timelines and photo stops. Photo-only bookings are available, not just transportation. Weddings make up the majority of bookings, typically for the ceremony exit or reception getaway.",
   },
   {
@@ -69,11 +83,13 @@ export const occasions = [
   {
     slug: "parades-and-special-events",
     title: "Parades and Special Events",
-    image: photo("/images/services_weddings_02.webp"),
-    alt: "Rosie, the red 1959 Corvette, carrying a homecoming court maid in a parade",
+    image: photo("/images/occasion-parades-homecoming.webp"),
+    alt: "Homecoming queen waving from a blue classic convertible in a downtown parade",
+    /** Wide photo in a 4:3 card: keep the car's front, the flowers, and the waving rider in frame. */
+    cardPosition: "5% center",
     text: "Our classic car rental service for parades is the perfect way to make a grand entrance. Whether you're attending a homecoming parade, other homecoming parades, a festival parade, or a beauty pageant, the car and driver are part of the rental. Other special occasions use the same cars and the same listing price.",
   },
-] as const;
+];
 
 export function occasionBySlug(slug: string) {
   return occasions.find((item) => item.slug === slug);

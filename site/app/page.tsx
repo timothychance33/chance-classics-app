@@ -54,7 +54,7 @@ export default function HomePage() {
               <Link href={`/occasions/${occasion.slug}/`}>
                 {occasion.image && (
                   <img
-                    className={occasion.slug === "parades-and-special-events" ? "parade-card" : undefined}
+                    style={occasion.cardPosition ? { objectPosition: occasion.cardPosition } : undefined}
                     src={occasion.image.src}
                     alt={occasion.alt}
                     width={occasion.image.w || 640}
