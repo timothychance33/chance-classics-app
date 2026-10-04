@@ -47,7 +47,6 @@ export const RELIABILITY_TEXT =
 
 export const OCCASIONS = [
   "Wedding",
-  "Prom",
   "Homecoming",
   "Photo shoot",
   "Parade",

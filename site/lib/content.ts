@@ -180,7 +180,7 @@ export const faqs = [
   },
   {
     q: "What occasions do you provide cars for?",
-    a: "Chance Classics provides vintage car rentals for weddings, anniversaries, proms, engagements, photo shoots, and other special occasions. Weddings make up the majority of our bookings, typically for the ceremony exit or reception getaway.",
+    a: "Chance Classics provides vintage car rentals for weddings, anniversaries, engagements, photo shoots, parades, and other special occasions. Weddings make up the majority of our bookings, typically for the ceremony exit or reception getaway.",
   },
   {
     q: "How much does it cost to rent a classic car for a wedding in Louisiana?",

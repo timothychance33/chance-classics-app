@@ -32,13 +32,6 @@ export const occasions = [
     text: "Every rental includes a professional chauffeur. You don’t drive the car yourself. Drivers know wedding timelines and photo stops. Photo-only bookings are available, not just transportation. Weddings make up the majority of bookings, typically for the ceremony exit or reception getaway.",
   },
   {
-    slug: "prom-and-homecoming",
-    title: "Prom and Homecoming",
-    image: null,
-    alt: "",
-    text: "Chance Classics provides vintage car rentals for proms and for homecoming parades. The car comes with a chauffeur. You don’t drive it yourself.",
-  },
-  {
     slug: "photo-shoots",
     title: "Photo Shoots",
     image: photo("/images/home_main_02.webp"),
@@ -50,7 +43,7 @@ export const occasions = [
     title: "Parades and Special Events",
     image: photo("/images/services_photo-sessions_01.webp"),
     alt: "A classic car in a parade",
-    text: "Our classic car rental service for parades is the perfect way to make a grand entrance. Whether you're attending a homecoming parade, a festival parade, or a beauty pageant, the car and driver are part of the rental. Other special occasions use the same cars and the same listing price.",
+    text: "Our classic car rental service for parades is the perfect way to make a grand entrance. Whether you're attending a homecoming parade, other homecoming parades, a festival parade, or a beauty pageant, the car and driver are part of the rental. Other special occasions use the same cars and the same listing price.",
   },
 ] as const;
 

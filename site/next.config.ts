@@ -6,6 +6,15 @@ const nextConfig: NextConfig = {
   images: { unoptimized: true },
   trailingSlash: true,
   reactStrictMode: true,
+  async redirects() {
+    return [
+      {
+        source: "/occasions/prom-and-homecoming",
+        destination: "/occasions/parades-and-special-events/",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

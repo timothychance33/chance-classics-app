@@ -9,30 +9,40 @@ export const metadata = pageMeta({
   path: "/services",
 });
 
+function occasion(slug: string) {
+  const item = occasions.find((entry) => entry.slug === slug);
+  if (!item) throw new Error(`Missing occasion ${slug}`);
+  return item;
+}
+
+const weddings = occasion("weddings");
+const photos = occasion("photo-shoots");
+const parades = occasion("parades-and-special-events");
+
 const blocks = [
   {
     title: "Weddings",
     href: "/occasions/weddings/",
-    image: occasions[0].image,
-    alt: occasions[0].alt,
+    image: weddings.image,
+    alt: weddings.alt,
     reverse: true,
     text: "Every rental includes a professional chauffeur. You don’t drive the car yourself. Drivers know wedding timelines and photo stops. Photo-only bookings are available, not just transportation.",
   },
   {
     title: "Photo Sessions",
     href: "/occasions/photo-shoots/",
-    image: occasions[2].image,
-    alt: occasions[2].alt,
+    image: photos.image,
+    alt: photos.alt,
     reverse: false,
     text: "Our classic car rental photo sessions are the perfect way to capture lasting memories. We provide classic cars that create the perfect backdrop for your pictures, whether it's for a wedding, engagement, senior or any other special occasion. Let us help you create a unique and memorable experience with our classic car rental photo session.",
   },
   {
     title: "Parades",
     href: "/occasions/parades-and-special-events/",
-    image: occasions[3].image,
-    alt: occasions[3].alt,
+    image: parades.image,
+    alt: parades.alt,
     reverse: true,
-    text: "Our classic car rental service for parades is the perfect way to make a grand entrance. Our cars and drivers will make you feel like royalty in a chariot, no matter what the occasion. Whether you're attending a homecoming parade, a festival parade, or a beauty pageant, our classic cars will ensure you make a lasting impression.",
+    text: "Our classic car rental service for parades is the perfect way to make a grand entrance. Our cars and drivers will make you feel like royalty in a chariot, no matter what the occasion. Whether you're attending a homecoming parade, other homecoming parades, a festival parade, or a beauty pageant, our classic cars will ensure you make a lasting impression.",
   },
 ];
 

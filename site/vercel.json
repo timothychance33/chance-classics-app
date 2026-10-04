@@ -204,6 +204,11 @@
       "source": "/portfolio-collections/my-portfolio/daisy",
       "destination": "/portfolio/",
       "permanent": true
+    },
+    {
+      "source": "/occasions/prom-and-homecoming",
+      "destination": "/occasions/parades-and-special-events/",
+      "permanent": true
     }
   ]
 }
