@@ -1,0 +1,8 @@
+# This file lives in the chance-classics-site Root Directory.
+# Vercel uses a .vercelignore in the project root instead of the
+# repo-root file, so the root ignore of "site" does not apply here.
+# https://vercel.com/docs/deployments/vercel-ignore#monorepos
+node_modules
+.next
+out
+*.tsbuildinfo
