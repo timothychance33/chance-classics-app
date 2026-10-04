@@ -42,7 +42,7 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
       <h2>Extras and rules</h2>
       <ul>
         <li>${EXTRA_HOUR_USD} for each additional hour, from the service listing.</li>
-        <li>${EXTRA_MILE_USD.toFixed(2)} per mile outside a {MILE_RADIUS}-mile radius from Benton, LA.</li>
+        <li>Events beyond 30 miles include additional mileage charges: ${EXTRA_MILE_USD.toFixed(2)} per mile outside a {MILE_RADIUS}-mile radius from Benton, LA.</li>
         <li>A ${DEPOSIT_USD} non-refundable retainer is due when you book. The balance is billed separately.</li>
         <li>Reservations must be made at least {MIN_LEAD_DAYS} days in advance.</li>
         <li>If cancellation occurs {CANCEL_HOURS} hours or less prior to the booked event, the client forfeits all retainers and fees paid for services.</li>

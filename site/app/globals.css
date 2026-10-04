@@ -400,6 +400,52 @@ p { margin: 0 0 1em; }
   font-family: var(--sans);
 }
 .quote-submit:hover { background: var(--blue); color: #fff; }
+.mileage-callout {
+  background: #e7f0fc;
+  border: 2px solid var(--blue);
+  padding: 16px;
+}
+.mileage-callout label {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.mileage-callout input[type="checkbox"] {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  margin: 1px 0 0;
+  accent-color: var(--blue);
+  flex: 0 0 auto;
+}
+.mileage-callout span {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.mileage-callout.is-error {
+  background: #fbf4f2;
+  border-color: #8a1f11;
+}
+.mileage-error {
+  margin: 10px 0 0 42px;
+  color: #8a1f11;
+  font-weight: 700;
+  font-size: 15px;
+}
+@media (max-width: 760px) {
+  .mileage-callout { padding: 14px; }
+  .mileage-callout input[type="checkbox"] {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+  .mileage-callout span { font-size: 16px; }
+  .mileage-error { margin-left: 46px; }
+}
 
 /* FAQ */
 .faq { max-width: 760px; margin: 0 auto; }

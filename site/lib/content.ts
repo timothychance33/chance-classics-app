@@ -331,7 +331,7 @@ export const posts: Post[] = [
         items: [
           "Vehicle choice. Our more valuble and higher demand cars cost more than others.",
           "Rental duration. A quick photo-and-exit rental costs less than a full-day booking that covers ceremony, photos, and reception.",
-          "Distance from Benton. Venues within 30 miles are included in the base price; farther locations may include a travel fee.",
+          "Distance from Benton. Venues within 30 miles are included in the base price. Events beyond 30 miles include additional mileage charges.",
           "Season and date. Peak wedding season (spring and fall) books up faster, though pricing itself doesn't change seasonally.",
         ],
       },

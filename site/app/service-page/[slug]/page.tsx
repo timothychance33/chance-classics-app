@@ -54,7 +54,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
           <li>${service.price} for the first 2 hours, then ${EXTRA_HOUR_USD} for each additional hour.</li>
           <li>A chauffeur is included. You don’t drive the car.</li>
           {carCapacity(service.portfolioSlug) && <li>{carCapacity(service.portfolioSlug)}</li>}
-          <li>Within {MILE_RADIUS} miles of Benton, LA. Outside that radius, ${EXTRA_MILE_USD.toFixed(2)} per mile.</li>
+          <li>Events beyond 30 miles include additional mileage charges. Within {MILE_RADIUS} miles of Benton, LA is included. Outside that radius, ${EXTRA_MILE_USD.toFixed(2)} per mile.</li>
           <li>${DEPOSIT_USD} non-refundable deposit when you book. The balance is billed separately.</li>
         </ul>
       </section>

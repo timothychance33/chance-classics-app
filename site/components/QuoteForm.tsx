@@ -6,6 +6,9 @@ import { quoteServices } from "@/lib/content";
 
 const hear = ["Google / Search Engine", "Wedding Planning Site", "Event Planner", "Event Venue", "Friend / Family", "Other"];
 
+const MILEAGE_TEXT =
+  "I understand that Chance Classics is located in Northwest Louisiana, and any events outside of a thirty mile radius include additional mileage charges";
+
 /**
  * Phase 1 stub. Submit shows the thanks page and does not store the request.
  * Phase 2 should post this payload into the Classics app quote-capture flow.
@@ -13,11 +16,15 @@ const hear = ["Google / Search Engine", "Wedding Planning Site", "Event Planner"
 export function QuoteForm() {
   const router = useRouter();
   const [other, setOther] = useState(false);
+  const [mileageError, setMileageError] = useState(false);
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
-    if (!data.get("mileage")) return;
+    if (!data.get("mileage")) {
+      setMileageError(true);
+      return;
+    }
     router.push("/registrationthanks/");
   }
 
@@ -91,10 +98,30 @@ export function QuoteForm() {
           </label>
         )}
       </fieldset>
-      <label className="check">
-        <input name="mileage" type="checkbox" required />
-        <span>I understand that Chance Classics is located in Northwest Louisiana and any events outside of a 30 mile radius include additional mileage charges.</span>
-      </label>
+      <div className={mileageError ? "mileage-callout is-error" : "mileage-callout"}>
+        <label>
+          <input
+            name="mileage"
+            type="checkbox"
+            required
+            aria-invalid={mileageError}
+            aria-describedby={mileageError ? "mileage-error" : undefined}
+            onChange={(event) => {
+              if (event.target.checked) setMileageError(false);
+            }}
+            onInvalid={(event) => {
+              event.preventDefault();
+              setMileageError(true);
+            }}
+          />
+          <span>{MILEAGE_TEXT}</span>
+        </label>
+        {mileageError && (
+          <p id="mileage-error" className="mileage-error" role="alert">
+            Check this box to confirm the mileage charges before requesting a quote.
+          </p>
+        )}
+      </div>
       <button className="quote-submit" type="submit">Request a Quote</button>
     </form>
   );
