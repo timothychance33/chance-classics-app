@@ -251,6 +251,21 @@ p { margin: 0 0 1em; }
   padding: 20px 0 40px;
 }
 .split img { width: 100%; height: auto; }
+.family-photo {
+  width: min(100%, 480px);
+  height: auto;
+  margin: 12px auto 48px;
+}
+.bio {
+  width: min(100%, 640px);
+  margin: 0 auto 56px;
+}
+.bio img {
+  width: min(100%, 420px);
+  height: auto;
+  margin: 0 auto 18px;
+  display: block;
+}
 .contact-block { padding: 10px 0 40px; }
 .contact-block a { text-decoration: none; }
 .contact-block a:hover { text-decoration: underline; }
