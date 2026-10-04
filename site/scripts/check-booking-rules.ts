@@ -2,6 +2,7 @@ import {
   addDays,
   bookingSource,
   earliestBookableDate,
+  mileageCharge,
   openStartTimes,
   quoteTotal,
   rangesOverlap,
@@ -19,7 +20,22 @@ assert(open.includes("08:00") && open.includes("12:00"), "edges stay open");
 assert(rangesOverlap(60, 120, 90, 150) && !rangesOverlap(60, 120, 120, 180), "range math");
 
 const money = quoteTotal(500, 4);
-assert(money.total === 700 && money.deposit === 250 && money.balance === 450, "listing price");
+assert(money.listing === 700 && money.total === 700 && money.deposit === 250 && money.balance === 450, "listing price");
+const withMileage = quoteTotal(500, 2, 93);
+assert(withMileage.deposit === 250 && withMileage.balance === 343 && withMileage.total === 593, "mileage stays on the balance");
+
+const miles = [
+  [29.6, 30, 0],
+  [30, 30, 0],
+  [30.2, 31, 93],
+  [31, 31, 93],
+  [75, 75, 225],
+] as const;
+for (const [raw, rounded, fee] of miles) {
+  const charge = mileageCharge(raw);
+  assert(charge.miles === rounded && charge.fee === fee, `mileage ${raw}`);
+}
+assert(mileageCharge(16, "round-trip").miles === 32 && mileageCharge(16, "round-trip").fee === 96, "round trip setting");
 
 const early = validateBooking({
   car: "1953-packard-limo",

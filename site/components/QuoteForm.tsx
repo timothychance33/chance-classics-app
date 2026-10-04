@@ -1,13 +1,14 @@
 "use client";
 
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { AddressField } from "@/components/AddressField";
+import { MILEAGE_ACK } from "@/lib/booking-rules";
 import { quoteServices } from "@/lib/content";
 
 const hear = ["Google / Search Engine", "Wedding Planning Site", "Event Planner", "Event Venue", "Friend / Family", "Other"];
 
-const MILEAGE_TEXT =
-  "I understand that Chance Classics is located in Northwest Louisiana, and any events outside of a thirty mile radius include additional mileage charges";
+const MILEAGE_TEXT = MILEAGE_ACK;
 
 /**
  * Phase 1 stub. Submit shows the thanks page and does not store the request.
@@ -17,6 +18,9 @@ export function QuoteForm() {
   const router = useRouter();
   const [other, setOther] = useState(false);
   const [mileageError, setMileageError] = useState(false);
+  const [location, setLocation] = useState("");
+  const [placeId, setPlaceId] = useState("");
+  const [mileageNote, setMileageNote] = useState("");
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -27,6 +31,30 @@ export function QuoteForm() {
     }
     router.push("/registrationthanks/");
   }
+
+  useEffect(() => {
+    if (location.trim().length < 4) {
+      setMileageNote("");
+      return;
+    }
+    let ignore = false;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ address: location });
+      if (placeId) params.set("placeId", placeId);
+      fetch(`/api/mileage/?${params}`)
+        .then((response) => response.json())
+        .then((data) => {
+          if (!ignore) setMileageNote(data.message || "We'll confirm mileage.");
+        })
+        .catch(() => {
+          if (!ignore) setMileageNote("We'll confirm mileage.");
+        });
+    }, 400);
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [location, placeId]);
 
   return (
     <form className="quote-form" onSubmit={onSubmit} noValidate={false}>
@@ -68,8 +96,21 @@ export function QuoteForm() {
       </label>
       <label className="field">
         <span>Event Location (With Address)</span>
-        <input name="location" required autoComplete="street-address" />
+        <AddressField
+          name="location"
+          required
+          value={location}
+          placeId={placeId}
+          placeholder="Event or pickup address"
+          onValue={(next, id) => {
+            setLocation(next);
+            setPlaceId(id);
+          }}
+        />
       </label>
+      {location.trim().length >= 4 && (
+        <p className="mileage-line" data-mileage>{mileageNote || "Checking mileage…"}</p>
+      )}
       <label className="field">
         <span>Give us more details</span>
         <textarea name="details" placeholder="Drop off location, Additional time requested, Multiple stops, etc." />

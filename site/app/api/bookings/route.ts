@@ -9,6 +9,7 @@ import {
   validateBooking,
 } from "@/lib/booking-rules";
 import { serviceBySlug } from "@/lib/content";
+import { quoteDrivingMileage } from "@/lib/mileage";
 import { rentalDb } from "@/lib/rental-db";
 import { busyRanges, carIdForName, releaseStaleHolds } from "@/lib/site-booking";
 
@@ -43,7 +44,11 @@ export async function POST(request: Request) {
     stripeSecret: process.env.STRIPE_SECRET_KEY,
     vercelEnv: process.env.VERCEL_ENV,
   });
-  const money = quoteTotal(service.price, value.hours);
+  const mileage = await quoteDrivingMileage({
+    placeId: String(raw.pickupPlaceId || "").slice(0, 300),
+    address: value.pickup,
+  });
+  const money = quoteTotal(service.price, value.hours, mileage.fee ?? 0);
   const payments = stripeReady({
     secret: process.env.STRIPE_SECRET_KEY,
     webhook: process.env.STRIPE_WEBHOOK_SECRET,
@@ -54,7 +59,10 @@ export async function POST(request: Request) {
       code: "payments_not_connected",
       error: "Payments aren’t connected yet. Nothing was charged and this time was not reserved.",
       total: money.total,
+      listing: money.listing,
       deposit: money.deposit,
+      balance: money.balance,
+      mileage,
     });
   }
 
@@ -89,7 +97,10 @@ export async function POST(request: Request) {
       `Car: ${service.car} (${service.name})`,
       `Occasion: ${value.occasion}`,
       `Duration: ${value.hours} hours`,
-      `Listing total: $${money.total}`,
+      `Listing total: $${money.listing}`,
+      mileage.needsReview
+        ? "Mileage: We'll confirm mileage. Flagged for review."
+        : `Mileage: ${mileage.miles} miles, fee $${mileage.fee}, billed with the balance.`,
       `Deposit due: $${money.deposit}`,
       `Balance billed separately: $${money.balance}`,
       "Waiver accepted: Yes",
@@ -97,26 +108,33 @@ export async function POST(request: Request) {
       `Confirmed only after the $${money.deposit} deposit is paid.`,
     ].join("\n");
 
-    const inserted = await db
-      .from("bookings")
-      .insert({
-        customer_name: value.name,
-        customer_email: value.email,
-        customer_phone: value.phone,
-        event_type: value.occasion,
-        event_date: value.date,
-        start_time: value.start,
-        end_time: value.end,
-        pickup_location: value.pickup,
-        return_location: value.dropoff,
-        car_id: carId,
-        status: "hold",
-        payment_status: "unpaid",
-        source,
-        notes,
-      })
-      .select("id")
-      .single();
+    const row = {
+      customer_name: value.name,
+      customer_email: value.email,
+      customer_phone: value.phone,
+      event_type: value.occasion,
+      event_date: value.date,
+      start_time: value.start,
+      end_time: value.end,
+      pickup_location: value.pickup,
+      return_location: value.dropoff,
+      car_id: carId,
+      status: "hold",
+      payment_status: "unpaid",
+      source,
+      notes,
+      mileage_miles: mileage.miles,
+      mileage_fee_usd: mileage.fee,
+      mileage_needs_review: mileage.needsReview,
+    };
+    let inserted = await db.from("bookings").insert(row).select("id").single();
+    if (inserted.error && /mileage_/i.test(inserted.error.message || "")) {
+      const { mileage_miles, mileage_fee_usd, mileage_needs_review, ...withoutMileage } = row;
+      void mileage_miles;
+      void mileage_fee_usd;
+      void mileage_needs_review;
+      inserted = await db.from("bookings").insert(withoutMileage).select("id").single();
+    }
 
     if (inserted.error || !inserted.data) {
       const code = inserted.error?.code;
@@ -143,7 +161,7 @@ export async function POST(request: Request) {
               unit_amount: money.deposit * 100,
               product_data: {
                 name: `$${money.deposit} non-refundable deposit — ${service.car}`,
-                description: `${service.name}, ${value.date} ${value.start}–${value.end}. Listing total $${money.total}.`,
+                description: `${service.name}, ${value.date} ${value.start}–${value.end}. Listing $${money.listing}. ${mileage.message} Balance $${money.balance} is billed separately.`,
               },
             },
           },

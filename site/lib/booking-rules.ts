@@ -10,6 +10,25 @@ export const HOLD_MINUTES = 30;
 export const MILE_RADIUS = 30;
 export const EXTRA_MILE_USD = 3;
 
+/** One-way driving distance from the shop. Switch to "round-trip" to double it before the threshold and the fee. */
+export const MILEAGE_TRIP = "one-way" as "one-way" | "round-trip";
+export const MILE_RATE_USD = EXTRA_MILE_USD;
+export const MILE_THRESHOLD = MILE_RADIUS;
+export const SHOP_ADDRESS = "118 5th St E, Benton, LA 71006";
+export const MILEAGE_REVIEW_TEXT = "We'll confirm mileage.";
+export const MILEAGE_RULE_TEXT = `Events more than ${MILE_THRESHOLD} miles from Benton are charged $${MILE_RATE_USD} per mile for the full distance (trailer transport).`;
+export const MILEAGE_ACK = `I understand that events more than ${MILE_THRESHOLD} miles from Benton are charged $${MILE_RATE_USD} per mile for the full distance (trailer transport).`;
+
+export type MileageCharge = { miles: number; fee: number };
+
+/** Round the trip miles up, then charge the full distance only when it is over the threshold. */
+export function mileageCharge(oneWayMiles: number, trip: "one-way" | "round-trip" = MILEAGE_TRIP): MileageCharge {
+  const measured = trip === "round-trip" ? oneWayMiles * 2 : oneWayMiles;
+  const miles = Math.ceil(measured - 1e-6);
+  const fee = miles > MILE_THRESHOLD ? miles * MILE_RATE_USD : 0;
+  return { miles, fee };
+}
+
 /** Shop hours are not listed in the capture. Slots are every 30 minutes, 8:00 AM–8:00 PM Central, and must finish the same day. */
 export const DAY_START_MIN = 8 * 60;
 export const LAST_START_MIN = 20 * 60;
@@ -67,12 +86,16 @@ export function fromMinutes(minutes: number) {
   return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
-export function quoteTotal(basePrice: number, hours: number) {
+export function quoteTotal(basePrice: number, hours: number, mileageFee = 0) {
   const extraHours = Math.max(0, hours - BASE_HOURS);
-  const total = basePrice + extraHours * EXTRA_HOUR_USD;
+  const listing = basePrice + extraHours * EXTRA_HOUR_USD;
+  const fee = Math.max(0, mileageFee);
+  const total = listing + fee;
   return {
     hours,
     extraHours,
+    listing,
+    mileageFee: fee,
     total,
     deposit: DEPOSIT_USD,
     balance: total - DEPOSIT_USD,

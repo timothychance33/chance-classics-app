@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
-import { EXTRA_HOUR_USD, DEPOSIT_USD, EXTRA_MILE_USD, MILE_RADIUS, MIN_LEAD_DAYS, CANCEL_HOURS } from "@/lib/booking-rules";
+import { EXTRA_HOUR_USD, DEPOSIT_USD, MILEAGE_RULE_TEXT, MIN_LEAD_DAYS, CANCEL_HOURS } from "@/lib/booking-rules";
 import { occasionBySlug, occasions } from "@/lib/occasions";
 import { pageMeta, services } from "@/lib/content";
 
@@ -37,12 +37,12 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
       <ul>
         <li>A professional chauffeur. You don’t drive the car yourself.</li>
         <li>The car’s listing price covers the first 2 hours.</li>
-        <li>Pickup and drop-off within {MILE_RADIUS} miles of Benton, LA.</li>
+        <li>Driving within 30 miles of Benton is included in the listing price.</li>
       </ul>
       <h2>Extras and rules</h2>
       <ul>
         <li>${EXTRA_HOUR_USD} for each additional hour, from the service listing.</li>
-        <li>Events beyond 30 miles include additional mileage charges: ${EXTRA_MILE_USD.toFixed(2)} per mile outside a {MILE_RADIUS}-mile radius from Benton, LA.</li>
+        <li>{MILEAGE_RULE_TEXT}</li>
         <li>A ${DEPOSIT_USD} non-refundable retainer is due when you book. The balance is billed separately.</li>
         <li>Reservations must be made at least {MIN_LEAD_DAYS} days in advance.</li>
         <li>If cancellation occurs {CANCEL_HOURS} hours or less prior to the booked event, the client forfeits all retainers and fees paid for services.</li>

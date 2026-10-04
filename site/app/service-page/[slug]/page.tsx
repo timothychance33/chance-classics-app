@@ -4,7 +4,7 @@ import { BookingForm } from "@/components/BookingForm";
 import { EventPhotos } from "@/components/EventPhotos";
 import { Reviews } from "@/components/Reviews";
 import { StickyBookBar } from "@/components/StickyBookBar";
-import { DEPOSIT_USD, EXTRA_HOUR_USD, EXTRA_MILE_USD, MILE_RADIUS } from "@/lib/booking-rules";
+import { DEPOSIT_USD, EXTRA_HOUR_USD, MILEAGE_RULE_TEXT } from "@/lib/booking-rules";
 import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, pageMeta, serviceBySlug, serviceDescription, services } from "@/lib/content";
 import { carCapacity } from "@/lib/terms";
 
@@ -54,7 +54,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
           <li>${service.price} for the first 2 hours, then ${EXTRA_HOUR_USD} for each additional hour.</li>
           <li>A chauffeur is included. You don’t drive the car.</li>
           {carCapacity(service.portfolioSlug) && <li>{carCapacity(service.portfolioSlug)}</li>}
-          <li>Events beyond 30 miles include additional mileage charges. Within {MILE_RADIUS} miles of Benton, LA is included. Outside that radius, ${EXTRA_MILE_USD.toFixed(2)} per mile.</li>
+          <li>{MILEAGE_RULE_TEXT}</li>
           <li>${DEPOSIT_USD} non-refundable deposit when you book. The balance is billed separately.</li>
         </ul>
       </section>

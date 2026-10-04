@@ -2,17 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { AddressField } from "@/components/AddressField";
 import {
   BASE_HOURS,
   DEPOSIT_USD,
   earliestBookableDate,
   EXTRA_HOUR_USD,
+  MILEAGE_RULE_TEXT,
   OCCASIONS,
   openStartTimes,
   quoteTotal,
   RELIABILITY_TEXT,
   WAIVER_TEXT,
 } from "@/lib/booking-rules";
+
+type MileagePreview = { needsReview: boolean; miles: number | null; fee: number | null; message: string };
 
 type Props = { car: string; carName: string; basePrice: number };
 
@@ -28,13 +32,39 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const [phone, setPhone] = useState("");
   const [occasion, setOccasion] = useState("");
   const [pickup, setPickup] = useState("");
+  const [pickupPlaceId, setPickupPlaceId] = useState("");
+  const [mileage, setMileage] = useState<MileagePreview | null>(null);
   const [dropoff, setDropoff] = useState("");
   const [waiver, setWaiver] = useState(false);
   const [reliability, setReliability] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const money = quoteTotal(basePrice, hours);
+  const money = quoteTotal(basePrice, hours, mileage?.fee ?? 0);
+
+  useEffect(() => {
+    if (pickup.trim().length < 4) {
+      setMileage(null);
+      return;
+    }
+    let ignore = false;
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ address: pickup });
+      if (pickupPlaceId) params.set("placeId", pickupPlaceId);
+      fetch(`/api/mileage/?${params}`)
+        .then((response) => response.json())
+        .then((data) => {
+          if (!ignore) setMileage(data);
+        })
+        .catch(() => {
+          if (!ignore) setMileage({ needsReview: true, miles: null, fee: null, message: "We'll confirm mileage." });
+        });
+    }, 400);
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [pickup, pickupPlaceId]);
 
   useEffect(() => {
     let ignore = false;
@@ -79,6 +109,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           phone,
           occasion,
           pickup,
+          pickupPlaceId,
           dropoff,
           waiver,
           reliability,
@@ -159,8 +190,18 @@ export function BookingForm({ car, carName, basePrice }: Props) {
         </label>
       </div>
       <label>
-        Pickup
-        <input name="pickup" required value={pickup} onChange={(event) => setPickup(event.target.value)} />
+        Pickup address
+        <AddressField
+          name="pickup"
+          required
+          value={pickup}
+          placeId={pickupPlaceId}
+          placeholder="Event or pickup address"
+          onValue={(next, id) => {
+            setPickup(next);
+            setPickupPlaceId(id);
+          }}
+        />
       </label>
       <label>
         Drop-off
@@ -177,9 +218,17 @@ export function BookingForm({ car, carName, basePrice }: Props) {
         <input type="checkbox" checked={reliability} onChange={(event) => setReliability(event.target.checked)} required />
         <span>{RELIABILITY_TEXT}</span>
       </label>
-      <p className="price">
-        Listing total ${money.total}. Deposit due now ${money.deposit}. Balance ${money.balance} is billed separately.
-      </p>
+      <div className="mileage-line" data-mileage>
+        <p>{MILEAGE_RULE_TEXT}</p>
+        <p>
+          {pickup.trim().length < 4
+            ? "Enter the pickup address to calculate mileage."
+            : mileage?.message || "Checking mileage…"}
+        </p>
+        <p className="price">
+          Listing ${money.listing}. Mileage {mileage?.fee == null ? "to be confirmed" : `$${mileage.fee}`}. Deposit due now ${money.deposit}. Balance ${money.balance} is billed separately.
+        </p>
+      </div>
       {message && <p className="form-error" role="alert">{message}</p>}
       <p className="book-actions">
         <button className="btn" type="submit" disabled={busy}>{busy ? "Please wait…" : `Book with $${DEPOSIT_USD} deposit`}</button>

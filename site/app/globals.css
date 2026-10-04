@@ -636,6 +636,32 @@ p { margin: 0 0 1em; }
 .slot input { width: auto; min-height: 0; margin: 0; }
 .check { display: flex; gap: 10px; align-items: flex-start; }
 .check input { width: auto; min-height: 0; margin-top: 6px; }
+.address-field { position: relative; }
+.address-suggest {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.address-suggest button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 0;
+  padding: 10px 12px;
+  min-height: 44px;
+  cursor: pointer;
+  font: inherit;
+}
+.address-suggest button:hover, .address-suggest button:focus-visible { background: #f4f7fb; }
+.mileage-line { margin: 12px 0; }
 .book-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
 .form-error { color: #8a1f11; }
 .book-bar {
