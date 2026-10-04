@@ -10,28 +10,59 @@ const hear = ["Google / Search Engine", "Wedding Planning Site", "Event Planner"
 
 const MILEAGE_TEXT = MILEAGE_ACK;
 
-/**
- * Phase 1 stub. Submit shows the thanks page and does not store the request.
- * Phase 2 should post this payload into the Classics app quote-capture flow.
- */
+/** Saves into rental.quote_requests, the same table the garage Quotes tab reads. */
 export function QuoteForm() {
   const router = useRouter();
   const [other, setOther] = useState(false);
   const [mileageError, setMileageError] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [location, setLocation] = useState("");
   const [placeId, setPlaceId] = useState("");
   const [dropoff, setDropoff] = useState("");
   const [dropoffPlaceId, setDropoffPlaceId] = useState("");
   const [mileageNote, setMileageNote] = useState("");
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
     if (!data.get("mileage")) {
       setMileageError(true);
       return;
     }
-    router.push("/registrationthanks/");
+    setFormError("");
+    setBusy(true);
+    try {
+      const response = await fetch("/api/quotes/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: data.get("first_name"),
+          lastName: data.get("last_name"),
+          email: data.get("email"),
+          phone: data.get("phone"),
+          service: data.get("service"),
+          eventType: data.get("event_type"),
+          when: data.get("when"),
+          pickup: location,
+          dropoff,
+          details: data.get("details"),
+          planner: data.get("planner"),
+          heard: data.get("hear"),
+          heardOther: data.get("hear_other"),
+        }),
+      });
+      const saved = await response.json();
+      if (!response.ok || !saved.ok) {
+        setFormError(saved.error || "The quote request could not be saved.");
+        return;
+      }
+      router.push("/registrationthanks/");
+    } catch {
+      setFormError("The quote request could not be saved.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -179,7 +210,8 @@ export function QuoteForm() {
           </p>
         )}
       </div>
-      <button className="quote-submit" type="submit">Request a Quote</button>
+      {formError && <p className="form-error" role="alert">{formError}</p>}
+      <button className="quote-submit" type="submit" disabled={busy}>{busy ? "Please wait…" : "Request a Quote"}</button>
     </form>
   );
 }

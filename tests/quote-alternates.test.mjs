@@ -156,6 +156,14 @@ assert.match(html, /return \(DATA\.cars\|\|\[\]\)\.map\(c=>/, 'car dropdown stil
 const quoteCarOptsFn = html.match(/function quoteCarOptions\([\s\S]*?\n\}/);
 assert.ok(quoteCarOptsFn, 'quoteCarOptions is present');
 assert.doesNotMatch(quoteCarOptsFn[0], /isElviraCar/, 'dropdown does not hide Elvira');
+assert.match(html, /\/book\/quote\//, 'quote builder builds a book-quote link');
+assert.match(html, /Copy link/, 'quote builder can copy the Book Now link');
+assert.match(html, /id="q_book_url"/, 'Book Now url is shown');
+assert.match(html, /id="q_valid_days"/, 'link expiry days are editable');
+assert.match(html, /id="q_price"/, 'Tim can edit the quoted price');
+assert.match(html, /id="q_mileage_fee"/, 'Tim can edit the mileage fee');
+assert.match(html, /id="q_items"/, 'custom line items have a home');
+assert.match(html, /custom_items:f\.line_items/, 'sent quote email includes custom line items');
 assert.match(html, /OWNER_ONLY_TABS=\['staff','earnings','quotes'\]/, 'Quotes stays owner-only');
 assert.match(html, /if\(!isOwnerView\(\)\)\{ el\.innerHTML=`<div class="empty"><div class="big">Quotes<\/div>Owner only\./, 'staff still see Quotes as owner only');
 assert.doesNotMatch(html, /service_role/, 'no service_role in the browser app');
@@ -172,6 +180,10 @@ assert.match(notify, /Book \$\{esc\(chosenName\)\}/, 'one-car email books only t
 assert.match(notify, /doesn't hold a date/, 'alternate email does not pretend to reserve');
 assert.match(notify, /if you want this car/, 'one-car footer talks about that car only');
 assert.match(notify, /type === "quote"/, 'normal quote type is unchanged');
+assert.match(notify, /Book Now/, 'locked quote email button says Book Now');
+assert.match(notify, /q\.custom_items/, 'quote email lists custom line items');
+assert.match(notify, /can be used once/, 'quote email says the link is single use');
+assert.match(notify, /does not reserve your date/, 'a generic book link still does not reserve the date');
 assert.match(notify, /type === "unavailable"/, 'unavailable type is unchanged');
 assert.match(notify, /api\.resend\.com\/emails/, 'still Resend');
 assert.doesNotMatch(notify, /service_role/);

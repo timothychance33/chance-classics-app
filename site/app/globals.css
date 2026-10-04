@@ -662,6 +662,10 @@ p { margin: 0 0 1em; }
 }
 .address-suggest button:hover, .address-suggest button:focus-visible { background: #f4f7fb; }
 .mileage-line { margin: 12px 0; }
+.quote-lock { margin: 18px 0; }
+.quote-lock div { display: grid; grid-template-columns: 110px 1fr; gap: 8px; margin: 6px 0; }
+.quote-lock dt { font-weight: 700; }
+.quote-lock dd { margin: 0; }
 .book-actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
 .form-error { color: #8a1f11; }
 .book-bar {

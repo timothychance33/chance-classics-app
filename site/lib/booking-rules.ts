@@ -152,6 +152,113 @@ export function stripeReady(env: { secret?: string; webhook?: string; publishabl
   return Boolean(env.secret && env.webhook && env.publishable);
 }
 
+export const QUOTE_LINK_DAYS = 7;
+export const QUOTE_LINK_EXPIRED = "This quote has expired or was already booked.";
+
+export type QuoteLine = { label: string; amount: number };
+
+export function quoteCheckoutMoney(total: number) {
+  const amount = Math.max(0, Number(total) || 0);
+  const deposit = Math.min(DEPOSIT_USD, amount);
+  return { total: amount, deposit, balance: Math.max(0, amount - deposit) };
+}
+
+/** A link is open until its expiry and until it is booked once. Missing expiry uses 7 days from send or create. */
+export function quoteLinkOpen(
+  quote: {
+    status?: string | null;
+    booking_id?: string | null;
+    book_expires_at?: string | null;
+    sent_at?: string | null;
+    created_at?: string | null;
+  } | null,
+  now = new Date(),
+) {
+  if (!quote) return { ok: false as const, message: QUOTE_LINK_EXPIRED };
+  if (quote.booking_id || quote.status === "booked") return { ok: false as const, message: QUOTE_LINK_EXPIRED };
+  const explicit = quote.book_expires_at ? new Date(quote.book_expires_at) : null;
+  const anchor = quote.sent_at || quote.created_at;
+  const fallback = anchor ? new Date(new Date(anchor).getTime() + QUOTE_LINK_DAYS * 86400000) : null;
+  const exp = explicit && !Number.isNaN(explicit.getTime()) ? explicit : fallback;
+  if (!exp || Number.isNaN(exp.getTime()) || exp.getTime() <= now.getTime()) {
+    return { ok: false as const, message: QUOTE_LINK_EXPIRED };
+  }
+  return { ok: true as const };
+}
+
+export function quoteCheckoutLines(quote: {
+  car_name?: string | null;
+  base_rate?: number | null;
+  overage?: number | null;
+  extra_hours?: number | null;
+  travel?: number | null;
+  miles?: number | null;
+  hotel_fee?: number | null;
+  tax?: number | null;
+  line_items?: unknown;
+}): QuoteLine[] {
+  const lines: QuoteLine[] = [];
+  const add = (label: string, amount: number) => {
+    if (amount) lines.push({ label, amount });
+  };
+  add(`${quote.car_name || "Classic car"} — base (up to 2 hours)`, Number(quote.base_rate) || 0);
+  if (Number(quote.overage) > 0) add(`Additional hours (${quote.extra_hours || ""})`.trim(), Number(quote.overage));
+  lines.push({
+    label: Number(quote.miles) ? `Mileage fee (${quote.miles} mi from Benton)` : "Mileage fee",
+    amount: Number(quote.travel) || 0,
+  });
+  if (Number(quote.hotel_fee) > 0) add("Overnight hotel accommodation", Number(quote.hotel_fee));
+  if (Array.isArray(quote.line_items)) {
+    for (const item of quote.line_items) {
+      if (!item || typeof item !== "object") continue;
+      const label = String((item as { label?: unknown }).label || "").trim();
+      const amount = Number((item as { amount?: unknown }).amount) || 0;
+      if (label) lines.push({ label, amount });
+    }
+  }
+  if (Number(quote.tax)) add("Tax", Number(quote.tax));
+  return lines;
+}
+
+/** Same fields quote-capture writes, plus the drop-off address in the details the garage already shows. */
+export function quoteRequestRecord(input: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  service: string;
+  eventType: string;
+  when: string;
+  pickup: string;
+  dropoff: string;
+  details: string;
+  planner: string;
+  heard: string;
+}) {
+  const name = [input.firstName, input.lastName].map((part) => part.trim()).filter(Boolean).join(" ");
+  const when = input.when.trim();
+  const date = when.slice(0, 10);
+  const time = when.length >= 16 ? when.slice(11, 16) : "";
+  const details = [
+    input.dropoff.trim() ? `Drop-off: ${input.dropoff.trim()}` : "",
+    input.heard.trim() ? `Heard about us: ${input.heard.trim()}` : "",
+    input.details.trim(),
+  ].filter(Boolean).join("\n");
+  return {
+    customer_name: name,
+    customer_email: input.email.trim(),
+    customer_phone: input.phone.trim() || null,
+    service_name: input.service.trim() || null,
+    event_type: input.eventType.trim() || null,
+    event_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
+    event_time: time || null,
+    event_location: input.pickup.trim() || null,
+    details: details || null,
+    planner: input.planner.trim() || null,
+    status: "new" as const,
+  };
+}
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type BookingInput = {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { confirmPaidQuote } from "@/lib/quote-booking";
 import { rentalDb } from "@/lib/rental-db";
 
 export const runtime = "nodejs";
@@ -29,11 +30,28 @@ export async function POST(request: Request) {
   if (session.payment_status !== "paid") {
     return NextResponse.json({ received: true, pending: true });
   }
-  const bookingId = session.metadata?.booking_id || session.client_reference_id;
-  if (!bookingId) return NextResponse.json({ error: "Missing booking." }, { status: 400 });
-
   const db = rentalDb();
   if (!db) return NextResponse.json({ error: "Calendar isn’t connected." }, { status: 503 });
+
+  const quoteId = session.metadata?.quote_id;
+  if (quoteId && !session.metadata?.booking_id) {
+    try {
+      const confirmed = await confirmPaidQuote(db, quoteId, {
+        stripeSecret: secret,
+        vercelEnv: process.env.VERCEL_ENV,
+      });
+      if (!confirmed.ok && "error" in confirmed && confirmed.status >= 400) {
+        return NextResponse.json({ error: confirmed.error }, { status: confirmed.status });
+      }
+      return NextResponse.json({ received: true, ...confirmed });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The quote booking could not be saved.";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  const bookingId = session.metadata?.booking_id || session.client_reference_id;
+  if (!bookingId) return NextResponse.json({ error: "Missing booking." }, { status: 400 });
 
   const existing = await db.from("bookings").select("id,status,notes,car_id").eq("id", bookingId).maybeSingle();
   if (existing.error) return NextResponse.json({ error: existing.error.message }, { status: 500 });
