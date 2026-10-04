@@ -1,0 +1,55 @@
+import Link from "next/link";
+import { Picture } from "@/components/Picture";
+import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, home, pageMeta } from "@/lib/content";
+
+export const metadata = pageMeta({
+  title: "Classic Car Rental for Weddings & Photos | Chance Classics",
+  description:
+    "Vintage car rental for weddings, photo shoots, and special occasions in Benton and the Shreveport/Bossier area. Ten cars. Call 318-344-5001.",
+  path: "/",
+});
+
+export default function HomePage() {
+  return (
+    <>
+      <Picture image={home.hero} alt="Classic cars from the Chance Classics collection" priority className="hero" />
+      <section className="wrap home-intro center">
+        <h1>Classic Car Rental for Weddings and Photo Shoots</h1>
+        <p className="lede center">
+          Serving Benton, Shreveport, Bossier, and surrounding areas. Whether it’s your wedding day, anniversary, birthday, engagement, photo shoot, or any special occasion, Chance Classics can transport you in style.
+        </p>
+      </section>
+      <section className="wrap fleet" aria-label="The cars">
+        {home.fleet.map((car) => {
+          const [model, price] = car.caption.split(" / ");
+          return (
+            <Link key={car.name} href={car.href.endsWith("/") ? car.href : `${car.href}/`} className="tile">
+              <img src={car.image.src} alt="" width={640} height={640} loading="lazy" decoding="async" />
+              <span className="cap">
+                <strong>{car.name}</strong>
+                <span>{model}</span>
+                <span>{price}</span>
+              </span>
+            </Link>
+          );
+        })}
+      </section>
+      <section className="wrap split">
+        <div>
+          <h2>Who we are</h2>
+          <p>
+            Chance Classic Car Rental consists of 2 generations of &quot;car guys&quot; (Tim Chance and Carl Chance) who have spent the past 4 decades building and collecting classic cars. After being asked over and over if we would be willing to rent our cars for events or photo shoots, we decided to offer a select few from the collection to help people create the perfect event or photo shoot.
+          </p>
+        </div>
+        <Picture image={home.portrait} alt="Tim and Carl Chance with one of the cars" />
+      </section>
+      <section className="wrap contact-block center">
+        <h2>Contact</h2>
+        <p>{ADDRESS}</p>
+        <p><a href={`mailto:${EMAIL}`}>{EMAIL}</a></p>
+        <p><a href={`tel:${PHONE_TEL}`}>{PHONE_DISPLAY}</a></p>
+      </section>
+      <Picture image={home.wedding} alt="A wedding party with a Chance Classics car" className="band" />
+    </>
+  );
+}
