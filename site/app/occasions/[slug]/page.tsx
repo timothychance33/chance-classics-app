@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
-import { EXTRA_HOUR_USD, DEPOSIT_USD, MILEAGE_RULE_TEXT, MIN_LEAD_DAYS, CANCEL_HOURS } from "@/lib/booking-rules";
+import { EXTRA_HOUR_USD, DEPOSIT_USD, MILE_THRESHOLD, MILEAGE_RULE_TEXT, MIN_LEAD_DAYS, CANCEL_HOURS } from "@/lib/booking-rules";
 import { occasionBySlug, occasions } from "@/lib/occasions";
 import { pageMeta, services } from "@/lib/content";
 
@@ -37,7 +37,7 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
       <ul>
         <li>A professional chauffeur. You don’t drive the car yourself.</li>
         <li>The car’s listing price covers the first 2 hours.</li>
-        <li>Driving within 30 miles of Benton is included in the listing price.</li>
+        <li>A pickup {MILE_THRESHOLD} miles or less from Benton has no mileage fee.</li>
       </ul>
       <h2>Extras and rules</h2>
       <ul>

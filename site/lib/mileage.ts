@@ -1,4 +1,4 @@
-import { MILEAGE_REVIEW_TEXT, SHOP_ADDRESS, mileageCharge } from "@/lib/booking-rules";
+import { MILE_THRESHOLD, MILEAGE_REVIEW_TEXT, SHOP_ADDRESS, mileageCharge } from "@/lib/booking-rules";
 
 const METERS_PER_MILE = 1609.344;
 
@@ -28,7 +28,7 @@ export function legMiles(body: unknown, row: number, col: number): number | null
 
 export function mileageMessage(charge: { toPickup: number; between: number; miles: number; fee: number }) {
   const legs = `Benton to pickup: ${charge.toPickup} miles. Pickup to drop-off: ${charge.between} miles. Total: ${charge.miles} miles.`;
-  if (charge.fee <= 0) return `${legs} No mileage fee.`;
+  if (charge.fee <= 0) return `${legs} No mileage fee. The pickup is ${MILE_THRESHOLD} miles or less from Benton.`;
   return `${legs} Mileage fee $${charge.fee}, billed with the balance.`;
 }
 

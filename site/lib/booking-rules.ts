@@ -16,8 +16,8 @@ export const MILE_RATE_USD = EXTRA_MILE_USD;
 export const MILE_THRESHOLD = MILE_RADIUS;
 export const SHOP_ADDRESS = "118 5th St E, Benton, LA 71006";
 export const MILEAGE_REVIEW_TEXT = "We'll confirm mileage.";
-export const MILEAGE_RULE_TEXT = `Mileage is the drive from Benton to pickup plus the drive from pickup to drop-off. The return to Benton is not included. Over ${MILE_THRESHOLD} miles, the fee is $${MILE_RATE_USD} per mile for that full distance (trailer transport).`;
-export const MILEAGE_ACK = `I understand that mileage is the drive from Benton to pickup plus pickup to drop-off, not the return to Benton, and that more than ${MILE_THRESHOLD} miles is charged $${MILE_RATE_USD} per mile for that full distance (trailer transport).`;
+export const MILEAGE_RULE_TEXT = `If the pickup is ${MILE_THRESHOLD} miles or less from Benton, there is no mileage fee, no matter how far the drop-off is. If the pickup is farther, the fee is $${MILE_RATE_USD} per mile for the drive from Benton to pickup plus the drive from pickup to drop-off. The return to Benton is not included (trailer transport).`;
+export const MILEAGE_ACK = `I understand that a pickup ${MILE_THRESHOLD} miles or less from Benton has no mileage fee, no matter how far the drop-off is, and that a farther pickup is charged $${MILE_RATE_USD} per mile for the drive from Benton to pickup plus pickup to drop-off. The return to Benton is not included (trailer transport).`;
 
 export type MileageCharge = { toPickup: number; between: number; miles: number; fee: number };
 
@@ -25,12 +25,12 @@ function wholeMiles(value: number) {
   return Math.ceil(value - 1e-6);
 }
 
-/** Round each leg up, then charge $3 times the total only when that total is over 30. */
+/** Round each leg up. A pickup of 30 miles or less has no fee. Farther than that, the fee is $3 times both legs. */
 export function mileageCharge(toPickupMiles: number, pickupToDropoffMiles: number): MileageCharge {
   const toPickup = wholeMiles(toPickupMiles);
   const between = wholeMiles(pickupToDropoffMiles);
   const miles = toPickup + between;
-  const fee = miles > MILE_THRESHOLD ? miles * MILE_RATE_USD : 0;
+  const fee = toPickup > MILE_THRESHOLD ? miles * MILE_RATE_USD : 0;
   return { toPickup, between, miles, fee };
 }
 
