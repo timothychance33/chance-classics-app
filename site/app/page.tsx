@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Picture } from "@/components/Picture";
-import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, home, pageMeta } from "@/lib/content";
+import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, home, pageMeta, services } from "@/lib/content";
 
 export const metadata = pageMeta({
   title: "Classic Car Rental for Weddings & Photos | Chance Classics",
@@ -21,14 +21,24 @@ export default function HomePage() {
       </section>
       <section className="wrap fleet" aria-label="The cars">
         {home.fleet.map((car) => {
-          const [model, price] = car.caption.split(" / ");
+          const service = services.find((item) => item.car === car.name);
+          const model = car.caption.split(" / ")[0];
+          const price = service?.price;
+          const href = service ? `/service-page/${service.slug}/` : `${car.href.replace(/\/$/, "")}/`;
           return (
-            <Link key={car.name} href={car.href.endsWith("/") ? car.href : `${car.href}/`} className="tile">
-              <img src={car.image.src} alt="" width={640} height={640} loading="lazy" decoding="async" />
+            <Link key={car.name} href={href} className="tile">
+              <img
+                src={car.image.src}
+                alt={`Photo of ${car.name}, ${model}`}
+                width={640}
+                height={640}
+                loading="lazy"
+                decoding="async"
+              />
               <span className="cap">
                 <strong>{car.name}</strong>
-                <span>{model}</span>
-                <span>{price}</span>
+                <span className="model">{model}</span>
+                {price != null && <span className="price">Starting at ${price}</span>}
               </span>
             </Link>
           );

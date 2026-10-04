@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { galleries, portfolioCovers, portfolioOrder } from "@/lib/content";
+import { galleries, portfolioCovers, portfolioOrder, serviceByPortfolio } from "@/lib/content";
 
 export function CarsGrid({ showDaisy = true }: { showDaisy?: boolean }) {
   const covers = portfolioCovers.map((cover) => {
@@ -21,12 +21,29 @@ export function CarsGrid({ showDaisy = true }: { showDaisy?: boolean }) {
 
   return (
     <div className="car-grid">
-      {ordered.map((car) => (
-        <Link key={car.slug} href={`${car.href.endsWith("/") ? car.href : car.href + "/"}`}>
-          <img src={car.image.src} alt="" width={640} height={640} loading="lazy" decoding="async" />
-          <span>{car.title}</span>
-        </Link>
-      ))}
+      {ordered.map((car) => {
+        const service = serviceByPortfolio(car.slug);
+        const galleryHref = `${car.href.endsWith("/") ? car.href : `${car.href}/`}`;
+        const href = service ? `/service-page/${service.slug}/` : galleryHref;
+        const subtitle = galleries[car.slug]?.subtitle;
+        return (
+          <Link key={car.slug} href={href} className="tile">
+            <img
+              src={car.image.src}
+              alt={subtitle ? `Photo of ${car.title}, ${subtitle}` : `Photo of ${car.title}`}
+              width={640}
+              height={640}
+              loading="lazy"
+              decoding="async"
+            />
+            <span className="cap">
+              <strong>{car.title}</strong>
+              {subtitle && <span className="model">{subtitle}</span>}
+              {service && <span className="price">Starting at ${service.price}</span>}
+            </span>
+          </Link>
+        );
+      })}
     </div>
   );
 }

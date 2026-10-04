@@ -192,33 +192,57 @@ p { margin: 0 0 1em; }
 .fleet {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  padding-bottom: 36px;
+  gap: 28px 16px;
+  padding-bottom: 48px;
+  align-items: start;
 }
 .tile {
-  position: relative;
-  display: block;
-  aspect-ratio: 1;
-  overflow: hidden;
-  color: #fff;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
   text-decoration: none;
+  background: #fff;
+  height: 100%;
 }
-.tile img { width: 100%; height: 100%; object-fit: cover; }
+.tile img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  background: #f7f7f7;
+}
 .tile .cap {
-  position: absolute;
-  inset: auto 0 0 0;
-  padding: 36px 8px 12px;
-  background: linear-gradient(transparent, rgba(0,0,0,.75));
+  display: block;
+  padding: 12px 4px 0;
   text-align: center;
+  color: var(--ink);
 }
 .tile strong {
   display: block;
   font-family: var(--serif);
   font-weight: 400;
-  font-size: clamp(16px, 1.6vw, 26px);
-  line-height: 1.15;
+  font-size: clamp(18px, 1.5vw, 26px);
+  line-height: 1.2;
+  color: var(--ink);
 }
-.tile span { display: block; font-size: 12px; line-height: 1.35; font-weight: 300; }
+.tile .model,
+.tile .price {
+  display: block;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 300;
+  color: var(--ink-soft);
+}
+.tile:hover,
+.tile:focus-visible {
+  outline: 2px solid var(--btn);
+  outline-offset: 4px;
+}
+.tile:hover strong,
+.tile:focus-visible strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .split {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -248,29 +272,10 @@ p { margin: 0 0 1em; }
 .car-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  gap: 32px 18px;
+  align-items: start;
 }
-.car-grid a {
-  position: relative;
-  display: block;
-  aspect-ratio: 1;
-  overflow: hidden;
-  text-decoration: none;
-  color: #fff;
-}
-.car-grid img { width: 100%; height: 100%; object-fit: cover; transition: transform .35s ease; }
-.car-grid a:hover img { transform: scale(1.04); }
-.car-grid span {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  padding: 28px 8px 10px;
-  background: linear-gradient(transparent, rgba(0,0,0,.65));
-  text-align: center;
-  font-family: var(--serif);
-  font-size: 22px;
-  opacity: 0;
-}
-.car-grid a:hover span, .car-grid a:focus-visible span { opacity: 1; }
+.car-grid .tile strong { font-size: clamp(22px, 2vw, 28px); }
 .note {
   background: #f7f7f7;
   padding: 12px 16px;
@@ -443,6 +448,8 @@ p { margin: 0 0 1em; }
 }
 
 @media (max-width: 760px) {
+  .fleet, .car-grid { gap: 22px 12px; }
+  .tile strong { font-size: 18px; }
   .menu-btn { display: block; }
   .site-nav { display: none; text-align: left; padding: 8px 0 16px; }
   .site-nav.open { display: block; }
