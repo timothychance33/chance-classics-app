@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Picture } from "@/components/Picture";
 import { pageMeta, servicePhotos } from "@/lib/content";
 
@@ -10,6 +11,7 @@ export const metadata = pageMeta({
 const blocks = [
   {
     title: "Weddings",
+    href: "/occasions/weddings/",
     image: servicePhotos[0],
     alt: "A wedding couple with a classic car",
     reverse: true,
@@ -17,6 +19,7 @@ const blocks = [
   },
   {
     title: "Photo Sessions",
+    href: "/occasions/photo-shoots/",
     image: servicePhotos[1],
     alt: "Classic car set up for a photo session",
     reverse: false,
@@ -24,6 +27,7 @@ const blocks = [
   },
   {
     title: "Parades",
+    href: "/occasions/parades-and-special-events/",
     image: servicePhotos[2],
     alt: "A classic car in a parade",
     reverse: true,
@@ -41,6 +45,7 @@ export default function ServicesPage() {
           <div>
             <h2>{block.title}</h2>
             <p>{block.text}</p>
+          <p><Link href={block.href}>See cars and pricing</Link></p>
           </div>
         </section>
       ))}

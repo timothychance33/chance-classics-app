@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
-import { SITE_URL, portfolioOrder, posts, services, termsNav } from "@/lib/content";
+import { SITE_URL, portfolioOrder, posts, services } from "@/lib/content";
+import { occasions } from "@/lib/occasions";
 
 export const dynamic = "force-static";
 
@@ -16,8 +17,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/book-online",
     ...services.map((service) => `/service-page/${service.slug}`),
     ...services.map((service) => `/booking-calendar/${service.slug}`),
-    "/termsandconditions",
-    ...termsNav.map((car) => `/terms/${car.slug}`),
+    "/rental-terms",
+    ...occasions.map((occasion) => `/occasions/${occasion.slug}`),
     "/faq",
     "/blog",
     ...posts.map((post) => `/post/${post.slug}`),

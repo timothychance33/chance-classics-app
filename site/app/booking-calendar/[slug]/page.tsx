@@ -12,7 +12,7 @@ export function generateMetadata({ params }: { params: Promise<{ slug: string }>
     if (!service) return {};
     return pageMeta({
       title: `${service.name} - Chance Classics, Classic Car Rental`,
-      description: `Schedule ${service.tagLine}. Online checkout still runs on the current Chance Classics booking page.`,
+      description: `Book ${service.tagLine} on the car page. Choose an open time and pay the deposit.`,
       path: `/booking-calendar/${service.slug}`,
       image: service.image.src,
     });
@@ -30,11 +30,9 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
       <p>{service.tagLine}</p>
       <p className="price">${service.price}</p>
       <p className="dur">2 hr · Central Time</p>
+      <p>Choose the date and start time on the car page. The old Wix calendar is no longer the booking path.</p>
       <p>
-        Choosing a date still happens on the live booking calendar. This page will be replaced by the in-app scheduler in phase 2.
-      </p>
-      <p>
-        <a className="btn" href={service.wixBookUrl}>Book Now</a>
+        <Link className="btn" href={`/service-page/${service.slug}/#book`}>Book {service.car}</Link>
       </p>
       <p><Link href={`/service-page/${service.slug}/`}>Back to {service.name}</Link></p>
     </article>

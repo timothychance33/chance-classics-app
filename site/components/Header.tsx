@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { FACEBOOK, FACEBOOK_ICON, LOGO, termsNav } from "@/lib/content";
+import { FACEBOOK, FACEBOOK_ICON, LOGO } from "@/lib/content";
 
 const links = [
   { href: "/", label: "Home" },
@@ -69,20 +69,10 @@ export function Header() {
               Book Online
             </Link>
           </li>
-          <li className={sub === "terms" ? "has-sub open" : "has-sub"}>
-            <Link href="/termsandconditions/" aria-current={current(pathname, "/termsandconditions/") || current(pathname, "/terms/") ? "page" : undefined} onClick={close}>
+          <li>
+            <Link href="/rental-terms/" aria-current={current(pathname, "/rental-terms/") ? "page" : undefined} onClick={close}>
               Terms and Conditions
             </Link>
-            <button className="caret" aria-expanded={sub === "terms"} aria-label="Car agreements" onClick={() => setSub(sub === "terms" ? null : "terms")}>
-              ▾
-            </button>
-            <ul className="sub">
-              {termsNav.map((car) => (
-                <li key={car.slug}>
-                  <Link href={`/terms/${car.slug}/`} onClick={close}>{car.label}</Link>
-                </li>
-              ))}
-            </ul>
           </li>
           <li>
             <Link href="/faq/" aria-current={current(pathname, "/faq/") ? "page" : undefined} onClick={close}>

@@ -1,0 +1,59 @@
+import {
+  HOLD_MINUTES,
+  holdIsFresh,
+  openStartTimes,
+  type Busy,
+} from "@/lib/booking-rules";
+import type { rentalDb } from "@/lib/rental-db";
+
+type Db = NonNullable<ReturnType<typeof rentalDb>>;
+
+type Row = {
+  id: string;
+  start_time: string | null;
+  end_time: string | null;
+  status: string | null;
+  source: string | null;
+  created_at: string | null;
+};
+
+export async function carIdForName(db: Db, name: string) {
+  const { data, error } = await db.from("cars").select("id,name").ilike("name", name);
+  if (error) throw new Error(error.message);
+  const hit = (data || []).find((car) => String(car.name).trim().toLowerCase() === name.trim().toLowerCase());
+  return hit?.id ? String(hit.id) : null;
+}
+
+export async function releaseStaleHolds(db: Db, carId: string) {
+  const cutoff = new Date(Date.now() - HOLD_MINUTES * 60 * 1000).toISOString();
+  const { error } = await db
+    .from("bookings")
+    .update({ status: "cancelled", notes: "Website hold expired before the deposit was paid." })
+    .eq("car_id", carId)
+    .eq("status", "hold")
+    .in("source", ["site-test", "site"])
+    .lt("created_at", cutoff);
+  if (error) throw new Error(error.message);
+}
+
+export async function busyRanges(db: Db, carId: string, date: string, now = new Date()): Promise<Busy[]> {
+  const { data, error } = await db
+    .from("bookings")
+    .select("id,start_time,end_time,status,source,created_at")
+    .eq("car_id", carId)
+    .eq("event_date", date)
+    .neq("status", "cancelled");
+  if (error) throw new Error(error.message);
+  return ((data || []) as Row[])
+    .filter((row) => {
+      if (row.status === "hold" && row.created_at && !holdIsFresh(row.created_at, now)) return false;
+      return Boolean(row.start_time && row.end_time);
+    })
+    .map((row) => ({ start: String(row.start_time), end: String(row.end_time) }));
+}
+
+export async function openTimesForCar(db: Db, carId: string, date: string, hours: number) {
+  await releaseStaleHolds(db, carId);
+  const busy = await busyRanges(db, carId, date);
+  return openStartTimes(hours, busy);
+}

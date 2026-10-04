@@ -23,7 +23,7 @@ export default function BookOnlinePage() {
             <p><Link className="more" href={`/service-page/${service.slug}/`}>Read More</Link></p>
             <p className="price">${service.price}</p>
             <p className="dur">2 hr</p>
-            <a className="btn" href={service.wixBookUrl}>Book Now</a>
+            <Link className="btn" href={`/service-page/${service.slug}/#book`}>Book</Link>
           </article>
         ))}
         {daisy?.hero && (

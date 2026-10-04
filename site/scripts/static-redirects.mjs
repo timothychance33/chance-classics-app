@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const vercel = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));
 const out = path.join(root, "out");
+if (!fs.existsSync(out)) {
+  console.log("no static export; Vercel redirects in vercel.json cover the old paths");
+  process.exit(0);
+}
 
 function html(destination) {
   const href = destination.startsWith("http") ? destination : destination;

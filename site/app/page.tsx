@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Picture } from "@/components/Picture";
+import { Reviews } from "@/components/Reviews";
 import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, home, pageMeta, services } from "@/lib/content";
+import { occasions } from "@/lib/occasions";
 
 export const metadata = pageMeta({
   title: "Classic Car Rental for Weddings & Photos | Chance Classics",
@@ -44,6 +46,20 @@ export default function HomePage() {
           );
         })}
       </section>
+      <section className="wrap occasions" aria-label="Occasions">
+        <h2>Plan by occasion</h2>
+        <ul>
+          {occasions.map((occasion) => (
+            <li key={occasion.slug}>
+              <Link href={`/occasions/${occasion.slug}/`}>
+                <strong>{occasion.title}</strong>
+                <span>See the cars, the listing price, and what’s included.</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <Reviews />
       <section className="wrap split">
         <div>
           <h2>Who we are</h2>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LightboxGallery } from "@/components/Lightbox";
 import { Picture } from "@/components/Picture";
+import { StickyBookBar } from "@/components/StickyBookBar";
 import { galleries, pageMeta, portfolioOrder, serviceByPortfolio } from "@/lib/content";
 
 export function generateStaticParams() {
@@ -44,12 +45,13 @@ export default async function CarGalleryPage({ params }: { params: Promise<{ slu
         {gallery.note && <p className="note">{gallery.note}</p>}
         <p className="center">
           {service ? (
-            <a href={service.wixBookUrl}>Book Now</a>
+            <Link href={`/service-page/${service.slug}/#book`}>Book</Link>
           ) : (
             <Link href="/quoterequest/">Request a Quote</Link>
           )}
         </p>
         {photos.length > 0 && <LightboxGallery images={photos} />}
+        <StickyBookBar bookHref={service ? `/service-page/${service.slug}/#book` : undefined} />
         <nav className="pager" aria-label="More cars">
           <Link href={`/portfolio-collections/my-portfolio/${prev}/`}>Previous project</Link>
           <Link href={`/portfolio-collections/my-portfolio/${next}/`}>Next project</Link>

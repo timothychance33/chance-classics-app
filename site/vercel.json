@@ -17,7 +17,7 @@
     },
     {
       "source": "/general-5",
-      "destination": "/termsandconditions/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
@@ -27,52 +27,52 @@
     },
     {
       "source": "/general-5-1",
-      "destination": "/terms/patsy/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
       "source": "/copy-of-patsy",
-      "destination": "/terms/brenda/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
       "source": "/copy-of-patsy-4",
-      "destination": "/terms/phyllis/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
       "source": "/copy-of-phyllis",
-      "destination": "/terms/bonnie/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
       "source": "/copy-of-brenda",
-      "destination": "/terms/elsa/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
       "source": "/copy-of-patsy-3",
-      "destination": "/terms/black-betty/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
       "source": "/copy-of-sylvia",
-      "destination": "/terms/carmen/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
       "source": "/copy-of-patsy-5",
-      "destination": "/terms/rosie/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
       "source": "/copy-of-patsy-2",
-      "destination": "/terms/veronica/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
       "source": "/copy-of-patsy-1",
-      "destination": "/terms/sylvia/",
+      "destination": "/rental-terms/",
       "permanent": true
     },
     {
@@ -188,6 +188,16 @@
     {
       "source": "/blog/categories/:path*",
       "destination": "/blog/",
+      "permanent": true
+    },
+    {
+      "source": "/terms/:slug",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/termsandconditions",
+      "destination": "/rental-terms/",
       "permanent": true
     }
   ]
