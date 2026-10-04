@@ -16,7 +16,14 @@ import {
   WAIVER_TEXT,
 } from "@/lib/booking-rules";
 
-type MileagePreview = { needsReview: boolean; miles: number | null; fee: number | null; message: string };
+type MileagePreview = {
+  needsReview: boolean;
+  toPickup: number | null;
+  between: number | null;
+  miles: number | null;
+  fee: number | null;
+  message: string;
+};
 
 type Props = { car: string; carName: string; basePrice: number };
 
@@ -35,6 +42,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const [pickupPlaceId, setPickupPlaceId] = useState("");
   const [mileage, setMileage] = useState<MileagePreview | null>(null);
   const [dropoff, setDropoff] = useState("");
+  const [dropoffPlaceId, setDropoffPlaceId] = useState("");
   const [waiver, setWaiver] = useState(false);
   const [reliability, setReliability] = useState(false);
   const [message, setMessage] = useState("");
@@ -43,28 +51,29 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const money = quoteTotal(basePrice, hours, mileage?.fee ?? 0);
 
   useEffect(() => {
-    if (pickup.trim().length < 4) {
+    if (pickup.trim().length < 4 || dropoff.trim().length < 4) {
       setMileage(null);
       return;
     }
     let ignore = false;
     const timer = setTimeout(() => {
-      const params = new URLSearchParams({ address: pickup });
-      if (pickupPlaceId) params.set("placeId", pickupPlaceId);
+      const params = new URLSearchParams({ pickup, dropoff });
+      if (pickupPlaceId) params.set("pickupPlaceId", pickupPlaceId);
+      if (dropoffPlaceId) params.set("dropoffPlaceId", dropoffPlaceId);
       fetch(`/api/mileage/?${params}`)
         .then((response) => response.json())
         .then((data) => {
           if (!ignore) setMileage(data);
         })
         .catch(() => {
-          if (!ignore) setMileage({ needsReview: true, miles: null, fee: null, message: "We'll confirm mileage." });
+          if (!ignore) setMileage({ needsReview: true, toPickup: null, between: null, miles: null, fee: null, message: "We'll confirm mileage." });
         });
     }, 400);
     return () => {
       ignore = true;
       clearTimeout(timer);
     };
-  }, [pickup, pickupPlaceId]);
+  }, [pickup, pickupPlaceId, dropoff, dropoffPlaceId]);
 
   useEffect(() => {
     let ignore = false;
@@ -111,6 +120,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           pickup,
           pickupPlaceId,
           dropoff,
+          dropoffPlaceId,
           waiver,
           reliability,
         }),
@@ -204,8 +214,18 @@ export function BookingForm({ car, carName, basePrice }: Props) {
         />
       </label>
       <label>
-        Drop-off
-        <input name="dropoff" required value={dropoff} onChange={(event) => setDropoff(event.target.value)} />
+        Drop-off address
+        <AddressField
+          name="dropoff"
+          required
+          value={dropoff}
+          placeId={dropoffPlaceId}
+          placeholder="Drop-off address"
+          onValue={(next, id) => {
+            setDropoff(next);
+            setDropoffPlaceId(id);
+          }}
+        />
       </label>
       <label className="check">
         <input type="checkbox" checked={waiver} onChange={(event) => setWaiver(event.target.checked)} required />
@@ -221,8 +241,8 @@ export function BookingForm({ car, carName, basePrice }: Props) {
       <div className="mileage-line" data-mileage>
         <p>{MILEAGE_RULE_TEXT}</p>
         <p>
-          {pickup.trim().length < 4
-            ? "Enter the pickup address to calculate mileage."
+          {pickup.trim().length < 4 || dropoff.trim().length < 4
+            ? "Enter the pickup and drop-off addresses to calculate mileage."
             : mileage?.message || "Checking mileage…"}
         </p>
         <p className="price">

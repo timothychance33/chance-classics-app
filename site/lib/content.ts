@@ -331,7 +331,7 @@ export const posts: Post[] = [
         items: [
           "Vehicle choice. Our more valuble and higher demand cars cost more than others.",
           "Rental duration. A quick photo-and-exit rental costs less than a full-day booking that covers ceremony, photos, and reception.",
-          "Distance from Benton. Venues within 30 miles are included in the base price. Events more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport).",
+          "Distance from Benton. Mileage is the drive from Benton to pickup plus pickup to drop-off. The return to Benton is not included. Over 30 miles, the fee is $3 per mile for that full distance.",
           "Season and date. Peak wedding season (spring and fall) books up faster, though pricing itself doesn't change seasonally.",
         ],
       },

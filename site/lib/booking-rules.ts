@@ -10,23 +10,28 @@ export const HOLD_MINUTES = 30;
 export const MILE_RADIUS = 30;
 export const EXTRA_MILE_USD = 3;
 
-/** One-way driving distance from the shop. Switch to "round-trip" to double it before the threshold and the fee. */
-export const MILEAGE_TRIP = "one-way" as "one-way" | "round-trip";
+/** One-way only. Billable miles do not include the drive from the drop-off back to Benton. */
+export const MILEAGE_TRIP = "one-way" as const;
 export const MILE_RATE_USD = EXTRA_MILE_USD;
 export const MILE_THRESHOLD = MILE_RADIUS;
 export const SHOP_ADDRESS = "118 5th St E, Benton, LA 71006";
 export const MILEAGE_REVIEW_TEXT = "We'll confirm mileage.";
-export const MILEAGE_RULE_TEXT = `Events more than ${MILE_THRESHOLD} miles from Benton are charged $${MILE_RATE_USD} per mile for the full distance (trailer transport).`;
-export const MILEAGE_ACK = `I understand that events more than ${MILE_THRESHOLD} miles from Benton are charged $${MILE_RATE_USD} per mile for the full distance (trailer transport).`;
+export const MILEAGE_RULE_TEXT = `Mileage is the drive from Benton to pickup plus the drive from pickup to drop-off. The return to Benton is not included. Over ${MILE_THRESHOLD} miles, the fee is $${MILE_RATE_USD} per mile for that full distance (trailer transport).`;
+export const MILEAGE_ACK = `I understand that mileage is the drive from Benton to pickup plus pickup to drop-off, not the return to Benton, and that more than ${MILE_THRESHOLD} miles is charged $${MILE_RATE_USD} per mile for that full distance (trailer transport).`;
 
-export type MileageCharge = { miles: number; fee: number };
+export type MileageCharge = { toPickup: number; between: number; miles: number; fee: number };
 
-/** Round the trip miles up, then charge the full distance only when it is over the threshold. */
-export function mileageCharge(oneWayMiles: number, trip: "one-way" | "round-trip" = MILEAGE_TRIP): MileageCharge {
-  const measured = trip === "round-trip" ? oneWayMiles * 2 : oneWayMiles;
-  const miles = Math.ceil(measured - 1e-6);
+function wholeMiles(value: number) {
+  return Math.ceil(value - 1e-6);
+}
+
+/** Round each leg up, then charge $3 times the total only when that total is over 30. */
+export function mileageCharge(toPickupMiles: number, pickupToDropoffMiles: number): MileageCharge {
+  const toPickup = wholeMiles(toPickupMiles);
+  const between = wholeMiles(pickupToDropoffMiles);
+  const miles = toPickup + between;
   const fee = miles > MILE_THRESHOLD ? miles * MILE_RATE_USD : 0;
-  return { miles, fee };
+  return { toPickup, between, miles, fee };
 }
 
 /** Shop hours are not listed in the capture. Slots are every 30 minutes, 8:00 AM–8:00 PM Central, and must finish the same day. */

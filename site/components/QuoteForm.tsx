@@ -20,6 +20,8 @@ export function QuoteForm() {
   const [mileageError, setMileageError] = useState(false);
   const [location, setLocation] = useState("");
   const [placeId, setPlaceId] = useState("");
+  const [dropoff, setDropoff] = useState("");
+  const [dropoffPlaceId, setDropoffPlaceId] = useState("");
   const [mileageNote, setMileageNote] = useState("");
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -33,14 +35,15 @@ export function QuoteForm() {
   }
 
   useEffect(() => {
-    if (location.trim().length < 4) {
+    if (location.trim().length < 4 || dropoff.trim().length < 4) {
       setMileageNote("");
       return;
     }
     let ignore = false;
     const timer = setTimeout(() => {
-      const params = new URLSearchParams({ address: location });
-      if (placeId) params.set("placeId", placeId);
+      const params = new URLSearchParams({ pickup: location, dropoff });
+      if (placeId) params.set("pickupPlaceId", placeId);
+      if (dropoffPlaceId) params.set("dropoffPlaceId", dropoffPlaceId);
       fetch(`/api/mileage/?${params}`)
         .then((response) => response.json())
         .then((data) => {
@@ -54,7 +57,7 @@ export function QuoteForm() {
       ignore = true;
       clearTimeout(timer);
     };
-  }, [location, placeId]);
+  }, [location, placeId, dropoff, dropoffPlaceId]);
 
   return (
     <form className="quote-form" onSubmit={onSubmit} noValidate={false}>
@@ -108,7 +111,21 @@ export function QuoteForm() {
           }}
         />
       </label>
-      {location.trim().length >= 4 && (
+      <label className="field">
+        <span>Drop-off address</span>
+        <AddressField
+          name="dropoff"
+          required
+          value={dropoff}
+          placeId={dropoffPlaceId}
+          placeholder="Drop-off address"
+          onValue={(next, id) => {
+            setDropoff(next);
+            setDropoffPlaceId(id);
+          }}
+        />
+      </label>
+      {location.trim().length >= 4 && dropoff.trim().length >= 4 && (
         <p className="mileage-line" data-mileage>{mileageNote || "Checking mileage…"}</p>
       )}
       <label className="field">

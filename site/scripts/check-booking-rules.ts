@@ -24,18 +24,13 @@ assert(money.listing === 700 && money.total === 700 && money.deposit === 250 && 
 const withMileage = quoteTotal(500, 2, 93);
 assert(withMileage.deposit === 250 && withMileage.balance === 343 && withMileage.total === 593, "mileage stays on the balance");
 
-const miles = [
-  [29.6, 30, 0],
-  [30, 30, 0],
-  [30.2, 31, 93],
-  [31, 31, 93],
-  [75, 75, 225],
-] as const;
-for (const [raw, rounded, fee] of miles) {
-  const charge = mileageCharge(raw);
-  assert(charge.miles === rounded && charge.fee === fee, `mileage ${raw}`);
-}
-assert(mileageCharge(16, "round-trip").miles === 32 && mileageCharge(16, "round-trip").fee === 96, "round trip setting");
+const noFee = mileageCharge(10, 15);
+assert(noFee.toPickup === 10 && noFee.between === 15 && noFee.miles === 25 && noFee.fee === 0, "10+15 has no fee");
+const charged = mileageCharge(20, 15);
+assert(charged.toPickup === 20 && charged.between === 15 && charged.miles === 35 && charged.fee === 105, "20+15 is $105");
+assert(mileageCharge(29.6, 0).miles === 30 && mileageCharge(29.6, 0).fee === 0, "29.6 rounds to 30");
+assert(mileageCharge(30, 0).miles === 30 && mileageCharge(30, 0).fee === 0, "30 has no fee");
+assert(mileageCharge(14.2, 16.1).toPickup === 15 && mileageCharge(14.2, 16.1).between === 17 && mileageCharge(14.2, 16.1).miles === 32 && mileageCharge(14.2, 16.1).fee === 96, "each leg rounds up");
 
 const early = validateBooking({
   car: "1953-packard-limo",
