@@ -85,7 +85,6 @@ export const portfolioOrder = [
   "veronica",
   "rosie",
   "others",
-  "daisy",
 ];
 
 /** Terms submenu, in the live menu order. */
@@ -132,6 +131,7 @@ export function pageMeta(opts: {
   description?: string;
   path: string;
   image?: string;
+  noindex?: boolean;
 }): Metadata {
   const description = opts.description || undefined;
   const url = `${SITE_URL}${opts.path === "/" ? "/" : opts.path}`;
@@ -140,6 +140,7 @@ export function pageMeta(opts: {
     title: opts.title,
     description,
     alternates: { canonical: url },
+    ...(opts.noindex ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       title: opts.title,
       description,
@@ -160,7 +161,6 @@ export const quoteServices = [
   "Veronica - 1957 Chevrolet Bel Air",
   "Sylvia - 1970 Chevelle SS454",
   "Elsa - 1954 Packard Caribbean (White)",
-  "Daisy - 1954 Packard (Yellow)",
   "Carmen - 1976 Cadillac Eldorado",
   "Bonnie - 1937 Cadillac Fleetwood 75",
 ];

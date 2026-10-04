@@ -502,6 +502,8 @@ p { margin: 0 0 1em; }
   font-weight: 600;
 }
 .review-badge:hover { text-decoration: underline; }
+.review-all { margin: 16px 0 0; }
+.review-all a { font-weight: 600; }
 .review-grid {
   list-style: none;
   padding: 0;
@@ -550,6 +552,12 @@ p { margin: 0 0 1em; }
   border: 1px solid var(--line);
   padding: 16px;
   height: 100%;
+}
+.occasions a img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  margin-bottom: 8px;
 }
 .occasions a:hover, .occasion-cars a:hover { outline: 2px solid var(--btn); outline-offset: 3px; }
 .occasions span, .occasion-cars span span { display: block; color: var(--ink-soft); font-size: 14px; }

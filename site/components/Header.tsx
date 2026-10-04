@@ -20,11 +20,9 @@ function current(pathname: string, href: string) {
 export function Header() {
   const pathname = usePathname() || "/";
   const [open, setOpen] = useState(false);
-  const [sub, setSub] = useState<string | null>(null);
 
   function close() {
     setOpen(false);
-    setSub(null);
   }
 
   return (
@@ -51,18 +49,10 @@ export function Header() {
               </Link>
             </li>
           ))}
-          <li className={sub === "quote" ? "has-sub open" : "has-sub"}>
+          <li>
             <Link href="/quoterequest/" aria-current={current(pathname, "/quoterequest/") ? "page" : undefined} onClick={close}>
               Request a Quote
             </Link>
-            <button className="caret" aria-expanded={sub === "quote"} aria-label="Quote pages" onClick={() => setSub(sub === "quote" ? null : "quote")}>
-              ▾
-            </button>
-            <ul className="sub">
-              <li>
-                <Link href="/registrationthanks/" onClick={close}>Thanks for your Quote Request</Link>
-              </li>
-            </ul>
           </li>
           <li>
             <Link href="/book-online/" aria-current={current(pathname, "/book-online/") ? "page" : undefined} onClick={close}>

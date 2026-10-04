@@ -5,6 +5,7 @@ export const metadata = pageMeta({
   title: "Booking received | Chance Classics",
   description: "The deposit checkout is finished. The booking is confirmed after Stripe reports the payment.",
   path: "/booking/confirmed",
+  noindex: true,
 });
 
 export default function BookingConfirmedPage() {

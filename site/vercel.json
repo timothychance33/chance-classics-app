@@ -199,6 +199,11 @@
       "source": "/termsandconditions",
       "destination": "/rental-terms/",
       "permanent": true
+    },
+    {
+      "source": "/portfolio-collections/my-portfolio/daisy",
+      "destination": "/portfolio/",
+      "permanent": true
     }
   ]
 }

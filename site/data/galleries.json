@@ -1755,28 +1755,5 @@
         "file": "cars-others_gallery_04.png"
       }
     ]
-  },
-  "daisy": {
-    "slug": "daisy",
-    "title": "Daisy",
-    "subtitle": "1954 Packard Convertible",
-    "hero": {
-      "src": "/images/cars-others_gallery_01.webp",
-      "alt": "IMG_9679.HEIC",
-      "w": 5712,
-      "h": 4284,
-      "file": "cars-others_gallery_01.png"
-    },
-    "images": [
-      {
-        "src": "/images/cars-others_gallery_01.webp",
-        "alt": "IMG_9679.HEIC",
-        "w": 5712,
-        "h": 4284,
-        "file": "cars-others_gallery_01.png"
-      }
-    ],
-    "bookable": false,
-    "note": "Daisy is part of the collection and is not offered as an online booking. The live Wix site had no Daisy gallery; this photo is the yellow 1954 Packard from the Others album."
   }
 }

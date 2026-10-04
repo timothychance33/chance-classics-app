@@ -5,6 +5,7 @@ export const metadata = pageMeta({
   title: "Booking Form | Chance Classics, Classic Car Rental",
   description: "The booking form opens from a car’s Book Now button on the live booking calendar.",
   path: "/booking-form",
+  noindex: true,
 });
 
 export default function BookingFormPage() {

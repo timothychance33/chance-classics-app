@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Picture } from "@/components/Picture";
-import { pageMeta, servicePhotos } from "@/lib/content";
+import { pageMeta } from "@/lib/content";
+import { occasions } from "@/lib/occasions";
 
 export const metadata = pageMeta({
   title: "Wedding, Photo & Parade Rentals | Chance Classics",
@@ -12,24 +13,24 @@ const blocks = [
   {
     title: "Weddings",
     href: "/occasions/weddings/",
-    image: servicePhotos[0],
-    alt: "A wedding couple with a classic car",
+    image: occasions[0].image,
+    alt: occasions[0].alt,
     reverse: true,
     text: "Every rental includes a professional chauffeur. You don’t drive the car yourself. Drivers know wedding timelines and photo stops. Photo-only bookings are available, not just transportation.",
   },
   {
     title: "Photo Sessions",
     href: "/occasions/photo-shoots/",
-    image: servicePhotos[1],
-    alt: "Classic car set up for a photo session",
+    image: occasions[2].image,
+    alt: occasions[2].alt,
     reverse: false,
     text: "Our classic car rental photo sessions are the perfect way to capture lasting memories. We provide classic cars that create the perfect backdrop for your pictures, whether it's for a wedding, engagement, senior or any other special occasion. Let us help you create a unique and memorable experience with our classic car rental photo session.",
   },
   {
     title: "Parades",
     href: "/occasions/parades-and-special-events/",
-    image: servicePhotos[2],
-    alt: "A classic car in a parade",
+    image: occasions[3].image,
+    alt: occasions[3].alt,
     reverse: true,
     text: "Our classic car rental service for parades is the perfect way to make a grand entrance. Our cars and drivers will make you feel like royalty in a chariot, no matter what the occasion. Whether you're attending a homecoming parade, a festival parade, or a beauty pageant, our classic cars will ensure you make a lasting impression.",
   },

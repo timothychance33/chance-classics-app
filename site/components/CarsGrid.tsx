@@ -1,20 +1,11 @@
 import Link from "next/link";
 import { galleries, portfolioCovers, portfolioOrder, serviceByPortfolio } from "@/lib/content";
 
-export function CarsGrid({ showDaisy = true }: { showDaisy?: boolean }) {
+export function CarsGrid() {
   const covers = portfolioCovers.map((cover) => {
     const slug = cover.href.split("/").filter(Boolean).pop() || "";
     return { ...cover, slug, title: galleries[slug]?.title || cover.alt };
   });
-  if (showDaisy && galleries.daisy?.hero) {
-    covers.push({
-      alt: "Daisy, 1954 Packard Convertible",
-      href: "/portfolio-collections/my-portfolio/daisy",
-      image: galleries.daisy.hero,
-      slug: "daisy",
-      title: "Daisy",
-    });
-  }
   const ordered = portfolioOrder
     .map((slug) => covers.find((c) => c.slug === slug))
     .filter((c): c is NonNullable<typeof c> => Boolean(c));

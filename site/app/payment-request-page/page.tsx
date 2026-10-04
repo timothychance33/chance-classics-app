@@ -5,6 +5,7 @@ export const metadata = pageMeta({
   title: "Payment Request Page | Chance Classics, Classic Car Rental",
   description: "Payment links are sent with a booking. This page is the placeholder for a missing pay link.",
   path: "/payment-request-page",
+  noindex: true,
 });
 
 export default function PaymentPage() {

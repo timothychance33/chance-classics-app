@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { galleries, pageMeta, services } from "@/lib/content";
+import { pageMeta, services } from "@/lib/content";
 
 export const metadata = pageMeta({
   title: "Book Online | Chance Classics, Classic Car Rental",
@@ -8,7 +8,6 @@ export const metadata = pageMeta({
 });
 
 export default function BookOnlinePage() {
-  const daisy = galleries.daisy;
   return (
     <article className="wrap page">
       <h1 className="center">Our Services</h1>
@@ -26,17 +25,6 @@ export default function BookOnlinePage() {
             <Link className="btn" href={`/service-page/${service.slug}/#book`}>Book</Link>
           </article>
         ))}
-        {daisy?.hero && (
-          <article className="book-card">
-            <Link href="/portfolio-collections/my-portfolio/daisy/">
-              <img src={daisy.hero.src} alt="" width={daisy.hero.w || 900} height={daisy.hero.h || 600} />
-            </Link>
-            <h2><Link href="/portfolio-collections/my-portfolio/daisy/">Daisy</Link></h2>
-            <p className="tag">1954 Packard Convertible</p>
-            <p>Part of the collection. Not offered as an online booking.</p>
-            <p><Link className="more" href="/quoterequest/">Request a Quote</Link></p>
-          </article>
-        )}
       </div>
     </article>
   );

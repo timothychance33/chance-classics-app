@@ -6,6 +6,7 @@ export const metadata = pageMeta({
   description: "Thanks for your inquiry. A Chance Classics team member will follow up within 24 hours.",
   path: "/registrationthanks",
   image: thanksImage.src,
+  noindex: true,
 });
 
 export default function ThanksPage() {

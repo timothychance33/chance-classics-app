@@ -52,6 +52,9 @@ export default function HomePage() {
           {occasions.map((occasion) => (
             <li key={occasion.slug}>
               <Link href={`/occasions/${occasion.slug}/`}>
+                {occasion.image && (
+                  <img src={occasion.image.src} alt={occasion.alt} width={occasion.image.w || 640} height={occasion.image.h || 480} />
+                )}
                 <strong>{occasion.title}</strong>
                 <span>See the cars, the listing price, and what’s included.</span>
               </Link>

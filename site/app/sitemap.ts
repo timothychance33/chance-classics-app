@@ -13,7 +13,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/portfolio-collections/my-portfolio",
     ...portfolioOrder.map((slug) => `/portfolio-collections/my-portfolio/${slug}`),
     "/quoterequest",
-    "/registrationthanks",
     "/book-online",
     ...services.map((service) => `/service-page/${service.slug}`),
     ...services.map((service) => `/booking-calendar/${service.slug}`),
@@ -23,8 +22,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/blog",
     ...posts.map((post) => `/post/${post.slug}`),
     "/cart-page",
-    "/booking-form",
-    "/payment-request-page",
   ];
   return paths.map((path) => ({
     url: `${SITE_URL}${path === "/" ? "/" : `${path}/`}`,

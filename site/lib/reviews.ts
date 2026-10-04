@@ -9,8 +9,8 @@ const listing = data as {
   reviews: Review[];
 };
 
-/** Home leads with these names. Anyone else with text follows in file order. */
-const HOME_LEAD = ["Ayden McDermott", "Megan Acosta", "J Williams", "Susan", "Rodrick Carter"];
+/** Home shows only these three reviews, in this order. */
+const HOME_NAMES = ["Ayden McDermott", "Megan Acosta", "J Williams"];
 
 /** A review is shown on a car page only when its own words name that car. Sylvia is the Chevelle. */
 const CAR_WORDS: Record<string, string[]> = {
@@ -31,9 +31,7 @@ export function reviewsWithText() {
 
 export function homeReviews() {
   const items = reviewsWithText();
-  const lead = HOME_LEAD.map((name) => items.find((review) => review.name === name)).filter((review): review is Review => Boolean(review));
-  const rest = items.filter((review) => !HOME_LEAD.includes(review.name));
-  return [...lead, ...rest];
+  return HOME_NAMES.map((name) => items.find((review) => review.name === name)).filter((review): review is Review => Boolean(review));
 }
 
 export function reviewsForCar(car: string) {

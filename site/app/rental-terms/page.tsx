@@ -28,7 +28,6 @@ export default function RentalTermsPage() {
           </li>
         ))}
       </ul>
-      <p>Daisy, the 1954 Packard, is not offered as an online booking.</p>
       {sharedTerms().map((block, index) => (
         <p key={index}>{fixCopy(block.type === "p" ? block.text : "")}</p>
       ))}

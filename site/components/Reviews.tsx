@@ -15,6 +15,11 @@ export function Reviews({ car, wedding = false }: { car?: string; wedding?: bool
         </p>
       )}
       <ReviewCards reviews={items} />
+      {!car && !wedding && (
+        <p className="review-all">
+          <a href={reviewsListing.mapsUrl}>Read all reviews on Google</a>
+        </p>
+      )}
     </section>
   );
 }
