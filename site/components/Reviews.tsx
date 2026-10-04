@@ -1,25 +1,20 @@
-import reviews from "@/data/reviews.json";
+import { ReviewCards } from "@/components/ReviewCards";
+import { homeReviews, reviewsForCar, reviewsListing, weddingReviews } from "@/lib/reviews";
 
-type Review = { name?: string; quote?: string; stars?: number; source?: string };
-
-export function Reviews() {
-  const items = (reviews as Review[]).filter((item) => item.quote && item.name);
+export function Reviews({ car, wedding = false }: { car?: string; wedding?: boolean }) {
+  const items = car ? reviewsForCar(car) : wedding ? weddingReviews() : homeReviews();
   if (!items.length) return null;
   return (
-    <section className="wrap reviews" aria-label="Reviews">
+    <section className="reviews" aria-label="Reviews">
       <h2>Reviews</h2>
-      <ul>
-        {items.map((item) => (
-          <li key={`${item.name}-${item.quote}`}>
-            <blockquote>{item.quote}</blockquote>
-            <p>
-              {item.name}
-              {item.source ? ` · ${item.source}` : ""}
-              {item.stars ? ` · ${item.stars} stars` : ""}
-            </p>
-          </li>
-        ))}
-      </ul>
+      {!car && !wedding && (
+        <p>
+          <a className="review-badge" href={reviewsListing.mapsUrl}>
+            {reviewsListing.ratingLabel}
+          </a>
+        </p>
+      )}
+      <ReviewCards reviews={items} />
     </section>
   );
 }

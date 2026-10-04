@@ -1,16 +1,27 @@
 # Reviews and event photos
 
-The home page reviews block and the car-page photo strip stay hidden until these files have real entries. Do not add a name, quote, star rating, or photo that was not on the captured Wix site.
+Do not invent or paraphrase a review. Copy the reviewer’s name, star rating, and text exactly, including typos and emoji. Leave relative dates out of this file; they go stale and the site does not show them.
 
 ## `reviews.json`
 
-An array. Each item:
-
 ```json
-{ "name": "Name as shown on the Wix site", "quote": "The review text, copied", "stars": 5, "source": "Where it appeared, for example the home page" }
+{
+  "listing_name": "Chance Classics",
+  "maps_url": "https://www.google.com/maps/place/...",
+  "overall_rating": 5.0,
+  "review_count": 10,
+  "captured_at": "YYYY-MM-DD",
+  "reviews": [
+    { "name": "Name as on Google", "stars": 5, "text": "Exact review text" }
+  ]
+}
 ```
 
-Leave `stars` off when the capture did not show a rating. An item needs both `name` and `quote` or it stays hidden.
+The home page links `overall_rating` and `review_count` to `maps_url`. A review with an empty `text` counts toward the badge and is not shown as a quote.
+
+Home order leads with Ayden McDermott, Megan Acosta, J Williams, Susan, and Rodrick Carter, then the other written reviews in file order. Long quotes are clamped, with Read more.
+
+A car page shows a review only when the review’s own words name that car: Carmen, Brenda, Phyllis, or Chevelle / Sylvia. The wedding page shows the first two written reviews, in that home order, whose text contains “wedding”.
 
 ## `event-photos.json`
 
@@ -20,4 +31,4 @@ An object keyed by the car's service slug, such as `1953-packard-limo`. Each val
 { "1953-packard-limo": [{ "src": "/images/example.webp", "alt": "What the photo shows" }] }
 ```
 
-Studio or catalog shots of the car alone do not belong here.
+Studio or catalog shots of the car alone do not belong here. An empty list stays hidden.

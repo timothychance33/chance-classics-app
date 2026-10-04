@@ -59,7 +59,9 @@ export default function HomePage() {
           ))}
         </ul>
       </section>
-      <Reviews />
+      <div className="wrap">
+        <Reviews />
+      </div>
       <section className="wrap split">
         <div>
           <h2>Who we are</h2>

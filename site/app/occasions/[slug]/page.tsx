@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Picture } from "@/components/Picture";
+import { Reviews } from "@/components/Reviews";
 import { EXTRA_HOUR_USD, DEPOSIT_USD, EXTRA_MILE_USD, MILE_RADIUS, MIN_LEAD_DAYS, CANCEL_HOURS } from "@/lib/booking-rules";
 import { occasionBySlug, occasions } from "@/lib/occasions";
 import { pageMeta, services } from "@/lib/content";
@@ -31,6 +32,7 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
       <h1>{occasion.title}</h1>
       {occasion.image && <Picture image={occasion.image} alt={occasion.alt} />}
       <p>{occasion.text}</p>
+      {occasion.slug === "weddings" && <Reviews wedding />}
       <h2>What’s included</h2>
       <ul>
         <li>A professional chauffeur. You don’t drive the car yourself.</li>

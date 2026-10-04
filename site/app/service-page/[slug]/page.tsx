@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookingForm } from "@/components/BookingForm";
 import { EventPhotos } from "@/components/EventPhotos";
+import { Reviews } from "@/components/Reviews";
 import { StickyBookBar } from "@/components/StickyBookBar";
 import { DEPOSIT_USD, EXTRA_HOUR_USD, EXTRA_MILE_USD, MILE_RADIUS } from "@/lib/booking-rules";
 import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, pageMeta, serviceBySlug, serviceDescription, services } from "@/lib/content";
@@ -58,6 +59,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
         </ul>
       </section>
       <EventPhotos slug={service.slug} />
+      <Reviews car={service.car} />
       <BookingForm car={service.slug} carName={service.car} basePrice={service.price} />
       {service.gallery.length > 0 && (
         <div className="thumbs">

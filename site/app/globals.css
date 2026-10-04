@@ -493,6 +493,49 @@ p { margin: 0 0 1em; }
   .thumbs img { width: calc(50% - 8px); height: auto; aspect-ratio: 1; }
 }
 
+.reviews { padding: 10px 0 36px; }
+.review-badge {
+  display: inline-block;
+  border: 1px solid var(--btn);
+  padding: 8px 14px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.review-badge:hover { text-decoration: underline; }
+.review-grid {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.review-card {
+  border: 1px solid var(--line);
+  padding: 16px;
+  height: 100%;
+}
+.review-stars { margin: 0 0 8px; letter-spacing: 2px; color: #8a6a2f; }
+.review-text {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.review-text.open { display: block; }
+.review-more {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 44px;
+}
+.review-name { margin: 12px 0 0; font-weight: 600; }
 .occasions ul, .occasion-cars { list-style: none; padding: 0; margin: 0; }
 .occasions ul {
   display: grid;
@@ -565,7 +608,7 @@ p { margin: 0 0 1em; }
     font-family: var(--serif);
   }
   .book-bar a:first-child { background: var(--btn); color: #fff; }
-  .book-grid, .occasions ul { grid-template-columns: 1fr; }
+  .book-grid, .occasions ul, .review-grid { grid-template-columns: 1fr; }
   body:has(.book-bar) { padding-bottom: 64px; }
 }
 
