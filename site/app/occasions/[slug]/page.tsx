@@ -4,7 +4,7 @@ import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
 import { EXTRA_HOUR_USD, DEPOSIT_USD, MILE_THRESHOLD, MILEAGE_RULE_TEXT, MIN_LEAD_DAYS, CANCEL_HOURS } from "@/lib/booking-rules";
 import { occasionBySlug, occasions } from "@/lib/occasions";
-import { pageMeta, services } from "@/lib/content";
+import { carsForOccasion, pageMeta } from "@/lib/content";
 
 export function generateStaticParams() {
   return occasions.map((item) => ({ slug: item.slug }));
@@ -57,7 +57,7 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
       </ul>
       <h2>Cars</h2>
       <ul className="occasion-cars">
-        {services.map((service) => (
+        {carsForOccasion(occasion.slug).map((service) => (
           <li key={service.slug}>
             <Link href={`/service-page/${service.slug}/#book`}>
               <img src={service.image.src} alt="" width={160} height={120} />

@@ -5,14 +5,19 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AddressField } from "@/components/AddressField";
 import {
   BASE_HOURS,
+  DAY_START_MIN,
   DEPOSIT_USD,
   earliestBookableDate,
   EXTRA_HOUR_USD,
+  fromMinutes,
+  LAST_START_MIN,
   MILEAGE_RULE_TEXT,
   OCCASIONS,
   openStartTimes,
   quoteTotal,
   RELIABILITY_TEXT,
+  SLOT_STEP_MIN,
+  toMinutes,
   WAIVER_TEXT,
 } from "@/lib/booking-rules";
 
@@ -30,6 +35,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const [date, setDate] = useState(earliest);
   const [hours, setHours] = useState(BASE_HOURS);
   const [slots, setSlots] = useState<string[]>([]);
+  const [slotsReady, setSlotsReady] = useState(false);
   const [slotNote, setSlotNote] = useState("");
   const [start, setStart] = useState("");
   const [name, setName] = useState("");
@@ -74,32 +80,50 @@ export function BookingForm({ car, carName, basePrice }: Props) {
 
   useEffect(() => {
     let ignore = false;
-    setStart("");
+    setSlotsReady(false);
     setSlotNote("Checking open times…");
     const params = new URLSearchParams({ car, date, hours: String(hours) });
     fetch(`/api/availability/?${params}`)
       .then((response) => response.json())
       .then((data) => {
         if (ignore) return;
+        const next = data.connected === false ? openStartTimes(hours, []) : Array.isArray(data.slots) ? data.slots : [];
+        setSlots(next);
+        setSlotsReady(true);
+        setStart((current) => (current && next.includes(clockValue(current)) ? clockValue(current) : ""));
         if (data.connected === false) {
-          setSlots(openStartTimes(hours, []));
           setSlotNote(`${data.message || "Open times can’t be checked yet."} These hours are not reserved.`);
           return;
         }
-        setSlots(Array.isArray(data.slots) ? data.slots : []);
-        setSlotNote(data.message || data.error || "");
+        setSlotNote(data.message || data.error || (next.length ? "" : "No open times on that day for this length."));
       })
-      .catch(() => {
-        if (!ignore) setSlotNote("Open times could not be loaded.");
+        .catch(() => {
+        if (!ignore) {
+          setSlots([]);
+          setStart("");
+          setSlotsReady(true);
+          setSlotNote("Open times could not be loaded.");
+        }
       });
     return () => {
       ignore = true;
     };
   }, [car, date, hours]);
 
+  const startError = startTimeError(start, slots, slotsReady);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setMessage("");
+    if (!slotsReady) {
+      setMessage("Open times are still loading.");
+      return;
+    }
+    const problem = start ? startTimeError(start, slots, true) : "Choose a start time.";
+    if (problem) {
+      setMessage(problem);
+      return;
+    }
     setBusy(true);
     try {
       const response = await fetch("/api/bookings/", {
@@ -156,22 +180,25 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           </select>
         </label>
       </div>
-      <fieldset>
-        <legend>Open start times</legend>
-        {slotNote && <p className="note">{slotNote}</p>}
-        {slots.length > 0 ? (
-          <div className="slots" role="radiogroup" aria-label="Open start times">
-            {slots.map((slot) => (
-              <label key={slot} className={start === slot ? "slot on" : "slot"}>
-                <input type="radio" name="start" value={slot} checked={start === slot} onChange={() => setStart(slot)} required />
-                {formatSlot(slot)}
-              </label>
-            ))}
-          </div>
-        ) : (
-          !slotNote && <p className="note">No open times on that day for this length.</p>
-        )}
-      </fieldset>
+      <label>
+        Start time
+        <input
+          type="time"
+          name="start"
+          required
+          min={fromMinutes(DAY_START_MIN)}
+          max={fromMinutes(LAST_START_MIN)}
+          step={SLOT_STEP_MIN * 60}
+          value={start}
+          aria-invalid={Boolean(startError)}
+          aria-describedby="start-time-note"
+          onChange={(event) => setStart(event.target.value)}
+        />
+      </label>
+      <p id="start-time-note" className="note" aria-live="polite">
+        {slotNote || "Start times are every 30 minutes, from 8:00 AM to 8:00 PM, and the rental has to finish the same day."}
+        {startError ? ` ${startError}` : ""}
+      </p>
       <div className="book-grid">
         <label>
           Your name
@@ -254,10 +281,22 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   );
 }
 
-function formatSlot(slot: string) {
-  const [hourText, minute] = slot.split(":");
-  const hour = Number(hourText);
-  const suffix = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 || 12;
-  return `${hour12}:${minute} ${suffix}`;
+function clockValue(value: string) {
+  const minutes = toMinutes(value);
+  return minutes == null ? "" : fromMinutes(minutes);
+}
+
+function startTimeError(value: string, open: string[], ready: boolean) {
+  if (!ready || !value) return "";
+  const minutes = toMinutes(value);
+  if (
+    minutes == null
+    || minutes < DAY_START_MIN
+    || minutes > LAST_START_MIN
+    || (minutes - DAY_START_MIN) % SLOT_STEP_MIN !== 0
+  ) {
+    return "Choose a start time on the half hour between 8:00 AM and 8:00 PM.";
+  }
+  if (!open.includes(fromMinutes(minutes))) return "That start time isn’t open for this rental length.";
+  return "";
 }

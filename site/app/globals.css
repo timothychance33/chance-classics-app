@@ -409,8 +409,10 @@ p { margin: 0 0 1em; }
 }
 .field input[type="date"],
 .field input[type="datetime-local"],
+.field input[type="time"],
 .book-form input[type="date"],
-.book-form input[type="datetime-local"] {
+.book-form input[type="datetime-local"],
+.book-form input[type="time"] {
   background-image: none;
 }
 .field input::-webkit-calendar-picker-indicator,
@@ -665,17 +667,6 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   min-height: 44px;
 }
 .book-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.slots { display: flex; flex-wrap: wrap; gap: 8px; }
-.slot {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid #c8c8c8;
-  padding: 8px 10px;
-  min-height: 44px;
-}
-.slot.on { border-color: var(--btn); background: #f6f6f6; }
-.slot input { width: auto; min-height: 0; margin: 0; }
 .check { display: flex; gap: 10px; align-items: flex-start; }
 .check input { width: auto; min-height: 0; margin-top: 6px; }
 .address-field { position: relative; }

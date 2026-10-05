@@ -83,6 +83,23 @@ export const services = byModelYear(
   (service) => service.name,
   (service) => service.car,
 );
+
+/** Veronica and Sylvia are 2-door hardtops. Rosie is a 2-seat Corvette. They stay in the fleet. */
+const WEDDING_CARS_EXCLUDED = new Set(["Veronica", "Sylvia", "Rosie"]);
+
+/** Catalog names don't say "convertible" for Rosie, but the 1960 Corvette is an open roadster. */
+export function isConvertible(service: Pick<Service, "car" | "name" | "tagLine" | "slug">) {
+  const text = `${service.name} ${service.tagLine} ${service.slug}`.toLowerCase();
+  if (text.includes("convertible")) return true;
+  return service.car === "Rosie";
+}
+
+/** Occasion pages filter the fleet. Book Online, car pages, and other occasions keep every car. */
+export function carsForOccasion(slug: string) {
+  if (slug === "weddings") return services.filter((service) => !WEDDING_CARS_EXCLUDED.has(service.car));
+  if (slug === "parades-and-special-events") return services.filter((service) => isConvertible(service));
+  return services;
+}
 export const galleries = galleriesData as Record<string, Gallery>;
 export const agreements = agreementsData as Record<string, Agreement>;
 export const home = homeData as {
