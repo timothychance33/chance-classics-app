@@ -32,7 +32,7 @@ export default function AboutPage() {
         <h2>Carl Chance</h2>
         <p className="lede center">Owner</p>
         <p className="lede center">
-          Cars have been Carl&apos;s passion since childhood. A &quot;classic&quot; himself, a lot of his collection he has owned for over 50 years. In this business, Carl not only owns a lot of the vehicles, he also helps drive them on occasions.
+          Cars have been Carl&apos;s passion since childhood. A &quot;classic&quot; himself, a lot of his collection he has owned for over 50 years. In this business, Carl not only owns a few of the vehicles, he also helps drive them on occasions.
         </p>
       </section>
       <section className="bio">
