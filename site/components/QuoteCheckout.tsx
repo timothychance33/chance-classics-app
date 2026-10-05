@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { DayOfContactFields } from "@/components/DayOfContactFields";
 import { DEPOSIT_USD, QUOTE_LINK_EXPIRED, RELIABILITY_TEXT, WAIVER_TEXT } from "@/lib/booking-rules";
 
 type Line = { label: string; amount: number };
@@ -33,6 +34,9 @@ export function QuoteCheckout({ token }: { token: string }) {
   const [availability, setAvailability] = useState("");
   const [waiver, setWaiver] = useState(false);
   const [reliability, setReliability] = useState(false);
+  const [dayOfName, setDayOfName] = useState("");
+  const [dayOfPhone, setDayOfPhone] = useState("");
+  const [dayOfRole, setDayOfRole] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -68,7 +72,7 @@ export function QuoteCheckout({ token }: { token: string }) {
       const response = await fetch("/api/quotes/book/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, waiver, reliability }),
+        body: JSON.stringify({ token, waiver, reliability, dayOfName, dayOfPhone, dayOfRole }),
       });
       const data = await response.json();
       if (data.url) {
@@ -127,6 +131,14 @@ export function QuoteCheckout({ token }: { token: string }) {
       {quote.note && <p>{quote.note}</p>}
       {availability && <p className="form-error" role="alert">{availability}</p>}
       <form className="book-form" onSubmit={(event) => { event.preventDefault(); pay(); }}>
+        <DayOfContactFields
+          name={dayOfName}
+          phone={dayOfPhone}
+          role={dayOfRole}
+          onName={setDayOfName}
+          onPhone={setDayOfPhone}
+          onRole={setDayOfRole}
+        />
         <label className="check">
           <input type="checkbox" checked={waiver} onChange={(event) => setWaiver(event.target.checked)} required />
           <span>

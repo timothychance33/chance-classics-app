@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import {
   bookingSource,
+  dayOfContactColumns,
+  dayOfContactNotes,
   quoteTotal,
   rangesOverlap,
   stripeReady,
@@ -11,7 +13,7 @@ import {
 import { serviceBySlug } from "@/lib/content";
 import { quoteDrivingMileage } from "@/lib/mileage";
 import { rentalDb } from "@/lib/rental-db";
-import { busyRanges, carIdForName, releaseStaleHolds } from "@/lib/site-booking";
+import { busyRanges, carIdForName, insertBooking, releaseStaleHolds } from "@/lib/site-booking";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -32,6 +34,9 @@ export async function POST(request: Request) {
     occasion: String(raw.occasion || ""),
     pickup: String(raw.pickup || ""),
     dropoff: String(raw.dropoff || ""),
+    dayOfName: String(raw.dayOfName || ""),
+    dayOfPhone: String(raw.dayOfPhone || ""),
+    dayOfRole: String(raw.dayOfRole || ""),
     waiver: raw.waiver === true,
     reliability: raw.reliability === true,
   });
@@ -105,6 +110,7 @@ export async function POST(request: Request) {
       `Balance billed separately: $${money.balance}`,
       "Waiver accepted: Yes",
       "Vehicle reliability acknowledged: Yes",
+      dayOfContactNotes({ name: value.dayOfName, phone: value.dayOfPhone, role: value.dayOfRole }),
       `Confirmed only after the $${money.deposit} deposit is paid.`,
     ].join("\n");
 
@@ -126,15 +132,9 @@ export async function POST(request: Request) {
       mileage_miles: mileage.miles,
       mileage_fee_usd: mileage.fee,
       mileage_needs_review: mileage.needsReview,
+      ...dayOfContactColumns({ name: value.dayOfName, phone: value.dayOfPhone, role: value.dayOfRole }),
     };
-    let inserted = await db.from("bookings").insert(row).select("id").single();
-    if (inserted.error && /mileage_/i.test(inserted.error.message || "")) {
-      const { mileage_miles, mileage_fee_usd, mileage_needs_review, ...withoutMileage } = row;
-      void mileage_miles;
-      void mileage_fee_usd;
-      void mileage_needs_review;
-      inserted = await db.from("bookings").insert(withoutMileage).select("id").single();
-    }
+    const inserted = await insertBooking(db, row);
 
     if (inserted.error || !inserted.data) {
       const code = inserted.error?.code;

@@ -8,9 +8,12 @@ import {
   quoteCheckoutMoney,
   quoteLinkOpen,
   quoteRequestRecord,
+  dayOfContactColumns,
+  dayOfContactNotes,
   quoteTotal,
   rangesOverlap,
   validateBooking,
+  validateDayOfContact,
 } from "../lib/booking-rules.ts";
 
 function assert(cond: boolean, message: string) {
@@ -83,10 +86,23 @@ const early = validateBooking({
   occasion: "Wedding",
   pickup: "118 5th St, Benton, LA",
   dropoff: "Same",
+  dayOfName: "Jordan Hale",
+  dayOfPhone: "3185550199",
+  dayOfRole: "Planner",
   waiver: true,
   reliability: true,
 }, new Date("2026-10-04T18:00:00Z"));
 assert(!early.ok, "seven day rule");
+
+const missingDayOf = validateDayOfContact({ name: "Jordan", phone: "3185550199", role: "" });
+assert(!missingDayOf.ok, "day-of role is required");
+const dayOf = validateDayOfContact({ name: " Jordan Hale ", phone: "3185550199", role: "Maid of honor" });
+assert(dayOf.ok && dayOf.value.name === "Jordan Hale" && dayOf.value.role === "Maid of honor", "day-of contact is trimmed");
+if (dayOf.ok) {
+  const columns = dayOfContactColumns(dayOf.value);
+  assert(columns.day_of_contact_phone === "3185550199", "day-of phone column");
+  assert(dayOfContactNotes(dayOf.value).includes("not the booker"), "day-of note names the driver contact");
+}
 
 assert(bookingSource({ stripeSecret: "sk_test_x", vercelEnv: "production" }) === "site-test", "test key");
 assert(bookingSource({ stripeSecret: "sk_live_x", vercelEnv: "preview" }) === "site-test", "preview");

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { validateDayOfContact } from "@/lib/booking-rules";
 import { confirmPaidQuote } from "@/lib/quote-booking";
 import { rentalDb } from "@/lib/rental-db";
 
@@ -36,10 +37,15 @@ export async function POST(request: Request) {
   const quoteId = session.metadata?.quote_id;
   if (quoteId && !session.metadata?.booking_id) {
     try {
+      const dayOf = validateDayOfContact({
+        name: session.metadata?.day_of_contact_name,
+        phone: session.metadata?.day_of_contact_phone,
+        role: session.metadata?.day_of_contact_role,
+      });
       const confirmed = await confirmPaidQuote(db, quoteId, {
         stripeSecret: secret,
         vercelEnv: process.env.VERCEL_ENV,
-      });
+      }, dayOf.ok ? dayOf.value : null);
       if (!confirmed.ok && "error" in confirmed && confirmed.status >= 400) {
         return NextResponse.json({ error: confirmed.error }, { status: confirmed.status });
       }

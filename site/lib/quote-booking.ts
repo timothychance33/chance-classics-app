@@ -1,5 +1,7 @@
 import {
   bookingSource,
+  dayOfContactColumns,
+  dayOfContactNotes,
   endMinutes,
   fromMinutes,
   quoteCheckoutLines,
@@ -7,10 +9,11 @@ import {
   quoteLinkOpen,
   rangesOverlap,
   toMinutes,
+  type DayOfContact,
   type QuoteLine,
 } from "@/lib/booking-rules";
 import type { rentalDb } from "@/lib/rental-db";
-import { busyRanges, releaseStaleHolds } from "@/lib/site-booking";
+import { busyRanges, insertBooking, releaseStaleHolds } from "@/lib/site-booking";
 
 type Db = NonNullable<ReturnType<typeof rentalDb>>;
 
@@ -140,7 +143,12 @@ export function quoteIsOpen(quote: QuoteRow | null, now = new Date()) {
   return quoteLinkOpen(quote, now);
 }
 
-export async function confirmPaidQuote(db: Db, quoteId: string, env: { stripeSecret?: string; vercelEnv?: string }) {
+export async function confirmPaidQuote(
+  db: Db,
+  quoteId: string,
+  env: { stripeSecret?: string; vercelEnv?: string },
+  dayOf: DayOfContact | null = null,
+) {
   const loaded = await db.from("quote_requests").select("*").eq("id", quoteId).maybeSingle();
   if (loaded.error) throw new Error(loaded.error.message);
   const quote = loaded.data as QuoteRow | null;
@@ -171,6 +179,7 @@ export async function confirmPaidQuote(db: Db, quoteId: string, env: { stripeSec
     `Balance billed separately: $${money.balance}`,
     "Waiver accepted: Yes",
     "Vehicle reliability acknowledged: Yes",
+    dayOf ? dayOfContactNotes(dayOf) : "",
     "Deposit paid. Booking confirmed.",
   ].filter(Boolean).join("\n");
 
@@ -192,15 +201,9 @@ export async function confirmPaidQuote(db: Db, quoteId: string, env: { stripeSec
     mileage_miles: quote.miles,
     mileage_fee_usd: quote.travel,
     mileage_needs_review: false,
+    ...(dayOf ? dayOfContactColumns(dayOf) : {}),
   };
-  let inserted = await db.from("bookings").insert(row).select("id").single();
-  if (inserted.error && /mileage_/i.test(inserted.error.message || "")) {
-    const { mileage_miles, mileage_fee_usd, mileage_needs_review, ...withoutMileage } = row;
-    void mileage_miles;
-    void mileage_fee_usd;
-    void mileage_needs_review;
-    inserted = await db.from("bookings").insert(withoutMileage).select("id").single();
-  }
+  const inserted = await insertBooking(db, row);
   if (inserted.error || !inserted.data) {
     if (inserted.error?.code === "23P01") return { ok: false as const, status: 200, unavailable: true };
     throw new Error(inserted.error?.message || "The booking could not be saved.");

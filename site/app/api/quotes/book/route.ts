@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { QUOTE_LINK_EXPIRED, bookingSource, quoteCheckoutMoney, stripeReady } from "@/lib/booking-rules";
+import { QUOTE_LINK_EXPIRED, bookingSource, quoteCheckoutMoney, stripeReady, validateDayOfContact } from "@/lib/booking-rules";
 import {
   carNameFor,
   loadQuoteByToken,
@@ -51,6 +51,12 @@ export async function POST(request: Request) {
   if (!token) return NextResponse.json({ error: QUOTE_LINK_EXPIRED }, { status: 404 });
   if (raw.waiver !== true) return NextResponse.json({ error: "Accept the rental terms to continue." }, { status: 400 });
   if (raw.reliability !== true) return NextResponse.json({ error: "Accept the classic-car reliability notice to continue." }, { status: 400 });
+  const dayOf = validateDayOfContact({
+    name: String(raw.dayOfName || ""),
+    phone: String(raw.dayOfPhone || ""),
+    role: String(raw.dayOfRole || ""),
+  });
+  if (!dayOf.ok) return NextResponse.json({ error: dayOf.error }, { status: 400 });
 
   const db = rentalDb();
   if (!db) {
@@ -93,7 +99,15 @@ export async function POST(request: Request) {
       mode: "payment",
       customer_email: quote.customer_email || undefined,
       client_reference_id: quote.id,
-      metadata: { quote_id: quote.id, book_token: token, source, car: carName },
+      metadata: {
+        quote_id: quote.id,
+        book_token: token,
+        source,
+        car: carName,
+        day_of_contact_name: dayOf.value.name,
+        day_of_contact_phone: dayOf.value.phone,
+        day_of_contact_role: dayOf.value.role,
+      },
       line_items: [
         {
           quantity: 1,

@@ -57,3 +57,19 @@ export async function openTimesForCar(db: Db, carId: string, date: string, hours
   const busy = await busyRanges(db, carId, date);
   return openStartTimes(hours, busy);
 }
+
+/** Mileage and day-of columns are additive. Drop a missing one and retry so a booking still saves. */
+export async function insertBooking(db: Db, row: Record<string, unknown>) {
+  let payload = { ...row };
+  let inserted = await db.from("bookings").insert(payload).select("id").single();
+  for (let attempt = 0; attempt < 6 && inserted.error; attempt += 1) {
+    const message = inserted.error.message || "";
+    const named = message.match(/'([a-z0-9_]+)' column/i)?.[1] || message.match(/column "([a-z0-9_]+)"/i)?.[1];
+    if (!named || !/^(mileage_|day_of_contact_)/.test(named) || !(named in payload)) break;
+    const next = { ...payload };
+    delete next[named];
+    payload = next;
+    inserted = await db.from("bookings").insert(payload).select("id").single();
+  }
+  return inserted;
+}

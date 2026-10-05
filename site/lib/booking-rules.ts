@@ -262,6 +262,46 @@ export function quoteRequestRecord(input: {
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export type DayOfContact = {
+  name: string;
+  phone: string;
+  role: string;
+};
+
+/** Who the driver calls during the event. Separate from the person who booked. */
+export function validateDayOfContact(input: { name?: string; phone?: string; role?: string }) {
+  const name = String(input.name || "").trim();
+  const phone = String(input.phone || "").trim();
+  const role = String(input.role || "").trim();
+  if (name.length < 2 || name.length > 120) {
+    return { ok: false as const, error: "Enter the day-of contact’s name." };
+  }
+  if (phone.length < 7 || phone.length > 40) {
+    return { ok: false as const, error: "Enter a phone number for the day-of contact." };
+  }
+  if (role.length < 2 || role.length > 80) {
+    return { ok: false as const, error: "Enter the day-of contact’s role, such as planner or maid of honor." };
+  }
+  return { ok: true as const, value: { name, phone, role } satisfies DayOfContact };
+}
+
+export function dayOfContactNotes(contact: DayOfContact) {
+  return [
+    "Day-of contact (call this person during the event; this is not the booker):",
+    `Name: ${contact.name}`,
+    `Phone: ${contact.phone}`,
+    `Role: ${contact.role}`,
+  ].join("\n");
+}
+
+export function dayOfContactColumns(contact: DayOfContact) {
+  return {
+    day_of_contact_name: contact.name,
+    day_of_contact_phone: contact.phone,
+    day_of_contact_role: contact.role,
+  };
+}
+
 export type BookingInput = {
   car: string;
   date: string;
@@ -273,6 +313,9 @@ export type BookingInput = {
   occasion: string;
   pickup: string;
   dropoff: string;
+  dayOfName: string;
+  dayOfPhone: string;
+  dayOfRole: string;
   waiver: boolean;
   reliability: boolean;
 };
@@ -306,6 +349,12 @@ export function validateBooking(input: BookingInput, now = new Date()) {
   if (dropoff.length < 3 || dropoff.length > 300) return { ok: false as const, error: "Enter a drop-off location." };
   if (!input.waiver) return { ok: false as const, error: "Accept the rental terms to continue." };
   if (!input.reliability) return { ok: false as const, error: "Accept the classic-car reliability notice to continue." };
+  const dayOf = validateDayOfContact({
+    name: input.dayOfName,
+    phone: input.dayOfPhone,
+    role: input.dayOfRole,
+  });
+  if (!dayOf.ok) return dayOf;
   return {
     ok: true as const,
     value: {
@@ -316,6 +365,9 @@ export function validateBooking(input: BookingInput, now = new Date()) {
       phone,
       pickup,
       dropoff,
+      dayOfName: dayOf.value.name,
+      dayOfPhone: dayOf.value.phone,
+      dayOfRole: dayOf.value.role,
       start: fromMinutes(startMin),
       end: fromMinutes(end),
     },

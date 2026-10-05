@@ -667,6 +667,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   min-height: 44px;
 }
 .book-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.day-of {
+  border: 1px solid #222;
+  background: #f2f2f2;
+  margin: 18px 0 8px;
+  padding: 4px 14px 8px;
+}
+.day-of legend { font-weight: 700; padding: 0 6px; }
+.day-of .note { margin-top: 0; }
 .check { display: flex; gap: 10px; align-items: flex-start; }
 .check input { width: auto; min-height: 0; margin-top: 6px; }
 .address-field { position: relative; }

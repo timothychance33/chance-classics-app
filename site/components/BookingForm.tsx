@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AddressField } from "@/components/AddressField";
+import { DayOfContactFields } from "@/components/DayOfContactFields";
 import {
   BASE_HOURS,
   DAY_START_MIN,
@@ -47,6 +48,9 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const [mileage, setMileage] = useState<MileagePreview | null>(null);
   const [dropoff, setDropoff] = useState("");
   const [dropoffPlaceId, setDropoffPlaceId] = useState("");
+  const [dayOfName, setDayOfName] = useState("");
+  const [dayOfPhone, setDayOfPhone] = useState("");
+  const [dayOfRole, setDayOfRole] = useState("");
   const [waiver, setWaiver] = useState(false);
   const [reliability, setReliability] = useState(false);
   const [message, setMessage] = useState("");
@@ -141,6 +145,9 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           pickup,
           pickupPlaceId,
           dropoff,
+          dayOfName,
+          dayOfPhone,
+          dayOfRole,
           waiver,
           reliability,
         }),
@@ -250,6 +257,14 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           }}
         />
       </label>
+      <DayOfContactFields
+        name={dayOfName}
+        phone={dayOfPhone}
+        role={dayOfRole}
+        onName={setDayOfName}
+        onPhone={setDayOfPhone}
+        onRole={setDayOfRole}
+      />
       <label className="check">
         <input type="checkbox" checked={waiver} onChange={(event) => setWaiver(event.target.checked)} required />
         <span>
