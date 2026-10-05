@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 type Prediction = { description: string; placeId: string };
 
@@ -15,8 +15,14 @@ type Props = {
 
 export function AddressField({ name, required, value, placeId, onValue, placeholder }: Props) {
   const listId = useId();
+  const sessionToken = useRef("");
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Prediction[]>([]);
+
+  function currentSession() {
+    if (!sessionToken.current) sessionToken.current = crypto.randomUUID();
+    return sessionToken.current;
+  }
 
   useEffect(() => {
     if (placeId || value.trim().length < 3) {
@@ -24,7 +30,7 @@ export function AddressField({ name, required, value, placeId, onValue, placehol
       return;
     }
     const timer = setTimeout(() => {
-      const params = new URLSearchParams({ q: value.trim() });
+      const params = new URLSearchParams({ q: value.trim(), sessionToken: currentSession() });
       fetch(`/api/places/?${params}`)
         .then((response) => response.json())
         .then((data) => setItems(Array.isArray(data.predictions) ? data.predictions : []))
@@ -61,6 +67,7 @@ export function AddressField({ name, required, value, placeId, onValue, placehol
                 role="option"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
+                  sessionToken.current = "";
                   onValue(item.description, item.placeId);
                   setOpen(false);
                   setItems([]);

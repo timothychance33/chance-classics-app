@@ -9,19 +9,26 @@ export type MileageQuote = {
   message: string;
 };
 
-type MatrixBody = {
-  status?: string;
-  rows?: { elements?: { status?: string; distance?: { value?: number } }[] }[];
+type MatrixElement = {
+  originIndex?: number;
+  destinationIndex?: number;
+  distanceMeters?: number;
+  condition?: string;
 };
 
-export function legMiles(body: unknown, row: number, col: number): number | null {
-  if (!body || typeof body !== "object") return null;
-  const record = body as MatrixBody;
-  if (record.status !== "OK") return null;
-  const element = record.rows?.[row]?.elements?.[col];
-  if (element?.status !== "OK" || typeof element.distance?.value !== "number") return null;
-  if (element.distance.value < 0) return null;
-  return element.distance.value / METERS_PER_MILE;
+/** Miles for the Benton-to-pickup element. Only a ROUTE_EXISTS result counts. */
+export function routeMatrixMiles(body: unknown): number | null {
+  const elements: unknown[] = Array.isArray(body) ? body : [];
+  const element = elements.find((item) => {
+    if (!item || typeof item !== "object") return false;
+    const row = item as MatrixElement;
+    return (row.originIndex ?? 0) === 0 && (row.destinationIndex ?? 0) === 0;
+  }) as MatrixElement | undefined;
+  if (!element || element.condition !== "ROUTE_EXISTS") return null;
+  if (typeof element.distanceMeters !== "number" || !Number.isFinite(element.distanceMeters) || element.distanceMeters < 0) {
+    return null;
+  }
+  return element.distanceMeters / METERS_PER_MILE;
 }
 
 export function mileageMessage(charge: { miles: number; fee: number }) {
@@ -34,10 +41,12 @@ export function reviewMileage(): MileageQuote {
   return { needsReview: true, miles: null, fee: null, message: MILEAGE_REVIEW_TEXT };
 }
 
-function endpoint(placeId: string | undefined, address: string | undefined) {
-  const id = placeId?.trim();
-  if (id) return `place_id:${id}`;
-  return address?.trim() || "";
+function destinationWaypoint(pickupPlaceId: string | undefined, pickup: string | undefined) {
+  const address = pickup?.trim() || "";
+  if (address.length >= 4) return { address };
+  const placeId = pickupPlaceId?.trim();
+  if (placeId) return { placeId };
+  return null;
 }
 
 export async function quoteDrivingMileage(input: {
@@ -46,20 +55,26 @@ export async function quoteDrivingMileage(input: {
 }): Promise<MileageQuote> {
   const key = process.env.GOOGLE_MAPS_API_KEY;
   if (!key) return reviewMileage();
-  const pickup = endpoint(input.pickupPlaceId, input.pickup);
-  if (pickup.length < 4) return reviewMileage();
-
-  const url = new URL("https://maps.googleapis.com/maps/api/distancematrix/json");
-  url.searchParams.set("origins", SHOP_ADDRESS);
-  url.searchParams.set("destinations", pickup);
-  url.searchParams.set("mode", "driving");
-  url.searchParams.set("units", "imperial");
-  url.searchParams.set("key", key);
+  const waypoint = destinationWaypoint(input.pickupPlaceId, input.pickup);
+  if (!waypoint) return reviewMileage();
 
   try {
-    const response = await fetch(url, { cache: "no-store" });
-    const body = await response.json();
-    const miles = legMiles(body, 0, 0);
+    const response = await fetch("https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": "originIndex,destinationIndex,distanceMeters,status,condition",
+      },
+      body: JSON.stringify({
+        origins: [{ waypoint: { address: SHOP_ADDRESS } }],
+        destinations: [{ waypoint }],
+        travelMode: "DRIVE",
+      }),
+    });
+    if (!response.ok) return reviewMileage();
+    const miles = routeMatrixMiles(await response.json());
     if (miles == null) return reviewMileage();
     const charge = mileageCharge(miles);
     return {
