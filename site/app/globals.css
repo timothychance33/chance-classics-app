@@ -666,7 +666,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   margin-top: 4px;
   min-height: 44px;
 }
-/* iOS draws type=time as a tall centered control. Keep the native picker, match the other inputs. */
+/* iOS draws native date and time controls oversized. Keep the pickers, match the other inputs. */
+.book-form input[type="date"]:not([type="checkbox"]):not([type="radio"]),
 .book-form input[type="time"]:not([type="checkbox"]):not([type="radio"]) {
   -webkit-appearance: none;
   appearance: none;
@@ -677,6 +678,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   line-height: 28px;
   text-align: left;
 }
+.book-form input[type="date"]::-webkit-datetime-edit,
+.book-form input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.book-form input[type="date"]::-webkit-datetime-edit-year-field,
+.book-form input[type="date"]::-webkit-datetime-edit-month-field,
+.book-form input[type="date"]::-webkit-datetime-edit-day-field,
+.book-form input[type="date"]::-webkit-date-and-time-value,
 .book-form input[type="time"]::-webkit-datetime-edit,
 .book-form input[type="time"]::-webkit-datetime-edit-fields-wrapper,
 .book-form input[type="time"]::-webkit-datetime-edit-hour-field,
@@ -689,6 +696,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   min-height: 0;
   line-height: 28px;
   text-align: left;
+}
+.book-form input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+  margin: 0;
+  height: 20px;
 }
 .book-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .day-of {
