@@ -23,11 +23,11 @@ const nunito = Nunito_Sans({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Classic Car Rental for Weddings & Photos | Chance Classics",
+    default: "Classic Car Rental for Weddings, Photo Shoots, and Parades | Chance Classics",
     template: "%s",
   },
   description:
-    "Vintage car rental for weddings, photo shoots, and special occasions in Benton and the Shreveport/Bossier area. Ten cars. Call 318-344-5001.",
+    "Chance Classics is Northwest Louisiana’s premier classic car rental, with a fleet of chauffeured vintage cars for weddings, photo shoots, parades, and special events across Shreveport, Bossier, and surrounding areas.",
   verification: { google: "P91eKA62ipDzmXGRzpoHcba1SdcyUAahw_4frZrCnAc" },
   openGraph: {
     siteName: "Chance Classics, Classic Car Rental",
