@@ -666,6 +666,30 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   margin-top: 4px;
   min-height: 44px;
 }
+/* iOS draws type=time as a tall centered control. Keep the native picker, match the other inputs. */
+.book-form input[type="time"]:not([type="checkbox"]):not([type="radio"]) {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 46px;
+  min-height: 46px;
+  max-height: 46px;
+  padding: 0 12px;
+  line-height: 28px;
+  text-align: left;
+}
+.book-form input[type="time"]::-webkit-datetime-edit,
+.book-form input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+.book-form input[type="time"]::-webkit-datetime-edit-hour-field,
+.book-form input[type="time"]::-webkit-datetime-edit-minute-field,
+.book-form input[type="time"]::-webkit-datetime-edit-ampm-field,
+.book-form input[type="time"]::-webkit-date-and-time-value {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  min-height: 0;
+  line-height: 28px;
+  text-align: left;
+}
 .book-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .day-of {
   border: 1px solid #222;
