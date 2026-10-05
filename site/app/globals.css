@@ -374,35 +374,77 @@ p { margin: 0 0 1em; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .field { display: grid; gap: 6px; }
 .field span, .radios legend, .check { font-weight: 600; font-size: 14px; }
-.field input, .field select, .field textarea {
-  background: var(--blue);
-  color: var(--blue-text);
-  border: 0;
+.field input:not([type="checkbox"]):not([type="radio"]),
+.field select,
+.field textarea,
+.book-form input:not([type="checkbox"]):not([type="radio"]),
+.book-form select,
+.book-form textarea {
+  background: #f2f2f2;
+  color: #222;
+  border: 1px solid #ccc;
   border-radius: 0;
   min-height: 40px;
   padding: 8px 12px;
   width: 100%;
   font-weight: 600;
+  color-scheme: light;
 }
-.field textarea { min-height: 110px; resize: vertical; }
-.field input::placeholder, .field textarea::placeholder { color: var(--blue-text); opacity: 0.9; font-weight: 400; }
-.field select { appearance: none; }
+.field textarea, .book-form textarea { min-height: 110px; resize: vertical; }
+.field input::placeholder,
+.field textarea::placeholder,
+.book-form input::placeholder,
+.book-form textarea::placeholder {
+  color: #5c5c5c;
+  opacity: 1;
+  font-weight: 400;
+}
+.field select, .book-form select {
+  appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23222' stroke-width='1.6' d='M1 1.2 6 6.2 11 1.2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 8px;
+}
+.field input[type="date"],
+.field input[type="datetime-local"],
+.book-form input[type="date"],
+.book-form input[type="datetime-local"] {
+  background-image: none;
+}
+.field input::-webkit-calendar-picker-indicator,
+.book-form input::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  cursor: pointer;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.book-form input:focus,
+.book-form select:focus,
+.book-form textarea:focus {
+  border-color: #111;
+  outline: 2px solid #111;
+  outline-offset: 1px;
+}
 .radios { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
 .radios label, .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 300; }
+input[type="checkbox"], input[type="radio"] { accent-color: #111; }
 .quote-submit {
-  background: #fff;
-  color: var(--blue);
-  border: 1px solid var(--blue);
+  background: #111;
+  color: #fff;
+  border: 1px solid #111;
   min-height: 46px;
   font-size: 20px;
   font-weight: 400;
   cursor: pointer;
   font-family: var(--sans);
 }
-.quote-submit:hover { background: var(--blue); color: #fff; }
+.quote-submit:hover, .quote-submit:focus-visible { background: #3a3a3a; color: #fff; border-color: #3a3a3a; }
 .mileage-callout {
-  background: #e7f0fc;
-  border: 2px solid var(--blue);
+  background: #f2f2f2;
+  border: 2px solid #222;
   padding: 16px;
 }
 .mileage-callout label {
@@ -417,7 +459,7 @@ p { margin: 0 0 1em; }
   min-width: 28px;
   min-height: 28px;
   margin: 1px 0 0;
-  accent-color: var(--blue);
+  accent-color: #111;
   flex: 0 0 auto;
 }
 .mileage-callout span {
@@ -615,14 +657,12 @@ p { margin: 0 0 1em; }
 
 .book-form, .car-facts { max-width: 720px; margin: 36px 0; }
 .book-form label, .book-grid label { display: block; margin: 12px 0; }
-.book-form input, .book-form select, .book-form textarea {
+.book-form input:not([type="checkbox"]):not([type="radio"]),
+.book-form select,
+.book-form textarea {
   display: block;
-  width: 100%;
   margin-top: 4px;
   min-height: 44px;
-  padding: 8px 10px;
-  border: 1px solid #c8c8c8;
-  background: #fff;
 }
 .book-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .slots { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -662,7 +702,7 @@ p { margin: 0 0 1em; }
   cursor: pointer;
   font: inherit;
 }
-.address-suggest button:hover, .address-suggest button:focus-visible { background: #f4f7fb; }
+.address-suggest button:hover, .address-suggest button:focus-visible { background: #f2f2f2; }
 .mileage-line { margin: 12px 0; }
 .quote-lock { margin: 18px 0; }
 .quote-lock div { display: grid; grid-template-columns: 110px 1fr; gap: 8px; margin: 6px 0; }

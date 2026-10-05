@@ -18,7 +18,9 @@ export const SHOP_ADDRESS = "118 5th St E, Benton, LA 71006";
 export const MILEAGE_REVIEW_TEXT = "We'll confirm mileage.";
 export const MILEAGE_RULE_TEXT =
   "Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport).";
-export const MILEAGE_ACK = MILEAGE_RULE_TEXT;
+export const MILEAGE_ACK =
+  "I understand that pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport).";
+export const MILEAGE_ACK_ERROR = "Please check this box to continue.";
 
 export type MileageCharge = { miles: number; fee: number };
 

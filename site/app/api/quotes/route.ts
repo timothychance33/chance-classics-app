@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { quoteRequestRecord } from "@/lib/booking-rules";
+import { MILEAGE_ACK_ERROR, quoteRequestRecord } from "@/lib/booking-rules";
 import { rentalDb } from "@/lib/rental-db";
 
 function matchCar(service: string | null, cars: { id?: string; name?: string }[] | null) {
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Enter the pickup address." }, { status: 400 });
   }
   if (!record.details?.includes("Drop-off:")) return NextResponse.json({ error: "Enter the drop-off address." }, { status: 400 });
+  if (raw.mileageAck !== true) return NextResponse.json({ error: MILEAGE_ACK_ERROR }, { status: 400 });
 
   const db = rentalDb();
   if (!db) {

@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AddressField } from "@/components/AddressField";
-import { MILEAGE_ACK } from "@/lib/booking-rules";
+import { MILEAGE_ACK, MILEAGE_ACK_ERROR } from "@/lib/booking-rules";
 import { quoteServices } from "@/lib/content";
 
 const hear = ["Google / Search Engine", "Wedding Planning Site", "Event Planner", "Event Venue", "Friend / Family", "Other"];
@@ -50,11 +50,17 @@ export function QuoteForm() {
           planner: data.get("planner"),
           heard: data.get("hear"),
           heardOther: data.get("hear_other"),
+          mileageAck: data.get("mileage") === "on",
         }),
       });
       const saved = await response.json();
       if (!response.ok || !saved.ok) {
-        setFormError(saved.error || "The quote request could not be saved.");
+        if (saved.error === MILEAGE_ACK_ERROR) {
+          setMileageError(true);
+          setFormError("");
+        } else {
+          setFormError(saved.error || "The quote request could not be saved.");
+        }
         return;
       }
       router.push("/registrationthanks/");
@@ -206,7 +212,7 @@ export function QuoteForm() {
         </label>
         {mileageError && (
           <p id="mileage-error" className="mileage-error" role="alert">
-            Check this box to confirm the mileage charges before requesting a quote.
+            {MILEAGE_ACK_ERROR}
           </p>
         )}
       </div>
