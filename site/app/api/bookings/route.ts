@@ -3,7 +3,6 @@ import Stripe from "stripe";
 import {
   bookingSource,
   dayOfContactColumns,
-  dayOfContactNotes,
   quoteTotal,
   rangesOverlap,
   stripeReady,
@@ -110,7 +109,6 @@ export async function POST(request: Request) {
       `Balance billed separately: $${money.balance}`,
       "Waiver accepted: Yes",
       "Vehicle reliability acknowledged: Yes",
-      dayOfContactNotes({ name: value.dayOfName, phone: value.dayOfPhone, role: value.dayOfRole }),
       `Confirmed only after the $${money.deposit} deposit is paid.`,
     ].join("\n");
 

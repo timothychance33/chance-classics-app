@@ -824,11 +824,62 @@ function driverNotifyBookingPayload(booking, car){
     car_id:booking.car_id, car_name:car?car.name:'',
     pickup_location:booking.pickup_location, return_location:booking.return_location,
     customer_phone:booking.customer_phone, customer_email:booking.customer_email,
+    day_of_contact_name:booking.day_of_contact_name||'',
+    day_of_contact_phone:booking.day_of_contact_phone||'',
+    day_of_contact_role:booking.day_of_contact_role||'',
     notes:driverFacingNotes(booking.notes),
     needs_trailer:!!booking.needs_trailer,
     status:booking.status,
     pay_tier:booking.pay_tier
   };
+}
+function bookingForDriverMail(booking, fallback){
+  const src=fallback||{};
+  const pick=key=>(booking&&booking[key])?booking[key]:(src[key]||'');
+  return {
+    ...booking,
+    day_of_contact_name:pick('day_of_contact_name'),
+    day_of_contact_phone:pick('day_of_contact_phone'),
+    day_of_contact_role:pick('day_of_contact_role'),
+  };
+}
+function dayOfTel(phone){
+  const href=String(phone||'').replace(/[^\d+]/g,'');
+  return href?('tel:'+href):'';
+}
+function dayOfParts(b){
+  if(!b) return null;
+  const name=String(b.day_of_contact_name||'').trim();
+  const phone=String(b.day_of_contact_phone||'').trim();
+  const role=String(b.day_of_contact_role||'').trim();
+  if(!name&&!phone&&!role) return null;
+  return {name,phone,role};
+}
+function dayOfPhoneLink(phone){
+  const raw=String(phone||'').trim();
+  if(!raw) return '';
+  const tel=dayOfTel(raw);
+  if(!tel) return esc(raw);
+  return `<a href="${esc(tel)}" onclick="event.stopPropagation()">${esc(raw)}</a>`;
+}
+function dayOfContactLine(b){
+  const p=dayOfParts(b);
+  if(!p) return '';
+  const who=[p.name,p.role].filter(Boolean).map(esc).join(' · ');
+  return `<div class="meta">Day-of: ${who}${p.phone?(who?' · ':'')+dayOfPhoneLink(p.phone):''}</div>`;
+}
+function dayOfContactBlock(b){
+  const p=dayOfParts(b);
+  if(!p) return '';
+  const who=p.name
+    ?`<div style="font-size:16px;margin-top:6px">${esc(p.name)}${p.role?` <span style="font-weight:400;color:#6b6052">· ${esc(p.role)}</span>`:''}</div>`
+    :(p.role?`<div style="font-size:16px;margin-top:6px">${esc(p.role)}</div>`:'');
+  const phone=p.phone?`<div style="font-size:16px;margin-top:4px">${dayOfPhoneLink(p.phone)}</div>`:'';
+  return `<div style="margin:4px 0 14px;padding:10px 12px;border:1px solid #c5d4e3;background:#f7f4ef">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052">Day-of contact</div>
+    <div style="font-size:13px;color:#6b6052;margin-top:2px">Call this person during the event. This is not the booker.</div>
+    ${who}${phone}
+  </div>`;
 }
 function driverMailSubject(kind, booking){
   const who=(booking&&(booking.customer_name||booking.event_type))||'booking';
@@ -2279,6 +2330,7 @@ function bookingRowHtml(b){
       </div>
       <div class="meta">${esc(b.event_type||'—')}${b.start_time?' · '+fmtTime(b.start_time):''}</div>
       <div class="meta lcar">🚗 ${car?esc(car.name):'<em>no car</em>'} &nbsp;·&nbsp; 👤 ${drv?esc(drv.name):'<em>no driver</em>'}${pct!==null?` &nbsp;·&nbsp; ${pct}% prepped`:''}</div>
+      ${dayOfContactLine(b)}
       ${payline}
     </div>
     <div class="lactions">${actions}</div>
@@ -2468,6 +2520,7 @@ function calDay(day){
       <div class="lmain">
         <div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}</div>
         <div class="meta lcar">🚗 ${car?esc(car.name):'<em>no car</em>'} &nbsp;·&nbsp; 👤 ${drv?esc(drv.name):'<em>no driver</em>'}${b.event_type?' · '+esc(b.event_type):''}</div>
+        ${dayOfContactLine(b)}
         ${ownerCustomerAmountTagHtml(b)}
         ${isOwnerView()?ownerPayPillHtml(b):''}
       </div></div>`;
@@ -2831,8 +2884,9 @@ async function saveBooking(id){
         }
       }
     }
-    if(justOffered) notifyOfferTo(rec);  // email the #1 driver that a job awaits
-    notifyDriversAfterBookingWrite({previous:existing, next:{...rec,id:savedId}});
+    const mailed=bookingForDriverMail({...rec,id:savedId}, existing);
+    if(justOffered) notifyOfferTo(mailed);  // email the #1 driver that a job awaits
+    notifyDriversAfterBookingWrite({previous:existing, next:mailed});
     closeModal();toast('Booking saved');await loadAll();
   }catch(e){toast('Error: '+(e.message||e))}
 }
@@ -2914,6 +2968,7 @@ function bookingDetail(bid){
     ${row('Car', car?car.name:'—')}
     ${row('Pickup', b.pickup_location)}
     ${row('Drop-off', b.return_location)}
+    ${dayOfContactBlock(b)}
     ${row('Phone', b.customer_phone)}
     ${row('Email', b.customer_email)}
     ${b.needs_trailer?`<div style="margin-bottom:10px"><span class="trailertag">🚛 Car must be trailered</span></div>`:''}

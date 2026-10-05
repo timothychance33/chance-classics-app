@@ -53,6 +53,17 @@ async function sendEmail(to: string, subject: string, html: string) {
   return await r.json();
 }
 
+function dayOfContactEmailHtml(b: Record<string, unknown>) {
+  const name = String(b.day_of_contact_name || "").trim();
+  const phone = String(b.day_of_contact_phone || "").trim();
+  const role = String(b.day_of_contact_role || "").trim();
+  if (!name && !phone && !role) return "";
+  const href = phone.replace(/[^\d+]/g, "");
+  const phoneHtml = phone ? (href ? `<a href="tel:${esc(href)}">${esc(phone)}</a>` : esc(phone)) : "";
+  const who = [name ? esc(name) : "", role ? esc(role) : ""].filter(Boolean).join(" · ");
+  return `<p style="margin:8px 0 0;font-size:14px"><b>Day-of contact</b> — call during the event, not the booker<br>${who}${phoneHtml ? `<br>${phoneHtml}` : ""}</p>`;
+}
+
 function bookingBlock(b: Record<string, unknown>) {
   const rows: [string, unknown][] = [
     ["Customer", b.customer_name],
@@ -141,6 +152,7 @@ Deno.serve(async (req) => {
           <p>Hi ${driverName}, a booking has been offered to you. You're next in line — claim it or pass to the next driver.</p>
           ${pay != null ? `<p style="font-size:18px;font-weight:700;color:#3c6b4f">You'd earn $${pay}</p>` : ""}
           <table style="border-collapse:collapse;margin:14px 0">${bookingBlock(b)}</table>
+          ${dayOfContactEmailHtml(b)}
           <p><a href="${APP_URL}" style="background:#6e1d1a;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;display:inline-block">Open the app to Claim or Pass</a></p>
           <p style="color:#6b6052;font-size:13px">Log in at <a href="${APP_URL}">${APP_URL}</a> with your email and password. On the Schedule tab you'll see this job with Claim and Pass buttons. If you don't claim it, please Pass so it moves to the next driver.</p>
         </div>`;
@@ -304,6 +316,7 @@ Deno.serve(async (req) => {
           <p>Hi ${driverName}, this rental is open to <b>all drivers</b> — first to claim it gets it.</p>
           ${pay != null ? `<p style="font-size:20px;font-weight:800;color:#3c6b4f">Now paying $${pay}</p>` : ""}
           <table style="border-collapse:collapse;margin:14px 0">${bookingBlock(b)}</table>
+          ${dayOfContactEmailHtml(b)}
           <p><a href="${APP_URL}" style="background:#6e1d1a;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;display:inline-block">Claim it before someone else does</a></p>
         </div>`;
       result = await sendEmail(driverEmail, subject, html);
@@ -340,6 +353,7 @@ Deno.serve(async (req) => {
         ${changeRows}
         ${payLine(pay)}
         <table style="border-collapse:collapse;margin:14px 0">${driverBookingBlock(b)}</table>
+        ${dayOfContactEmailHtml(b)}
         ${appButton("Open the app")}
       `);
       result = await sendEmail(driverEmail, subject, html);
@@ -356,6 +370,7 @@ Deno.serve(async (req) => {
         <p>Hi ${esc(driverName)}, this job was assigned to you.</p>
         ${payLine(pay)}
         <table style="border-collapse:collapse;margin:14px 0">${driverBookingBlock(b)}</table>
+        ${dayOfContactEmailHtml(b)}
         ${appButton("Open the app")}
       `);
       result = await sendEmail(driverEmail, subject, html);
@@ -371,6 +386,7 @@ Deno.serve(async (req) => {
         <h2 style="color:#6e1d1a">You're no longer on this booking</h2>
         <p>Hi ${esc(driverName)}, you were taken off this job. You don't need to show up for it.</p>
         <table style="border-collapse:collapse;margin:14px 0">${driverBookingBlock(b)}</table>
+        ${dayOfContactEmailHtml(b)}
         ${appButton("Open the app")}
       `);
       result = await sendEmail(driverEmail, subject, html);

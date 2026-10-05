@@ -1,7 +1,6 @@
 import {
   bookingSource,
   dayOfContactColumns,
-  dayOfContactNotes,
   endMinutes,
   fromMinutes,
   quoteCheckoutLines,
@@ -179,7 +178,6 @@ export async function confirmPaidQuote(
     `Balance billed separately: $${money.balance}`,
     "Waiver accepted: Yes",
     "Vehicle reliability acknowledged: Yes",
-    dayOf ? dayOfContactNotes(dayOf) : "",
     "Deposit paid. Booking confirmed.",
   ].filter(Boolean).join("\n");
 
