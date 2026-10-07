@@ -32,6 +32,7 @@ assert.equal(allowNotify({ secretOk: false, roles: ['admin', 'driver'], type: 'r
 
 assert.match(html, /const NOTIFY_FN_URL = SUPABASE_URL \+ '\/functions\/v1\/send-notification'/);
 assert.match(html, /function postNotification/);
+assert.match(html, /function sessionBearerHeaders/);
 assert.match(html, /Authorization':'Bearer '\+token/);
 assert.doesNotMatch(html, /send-notification\?secret/);
 assert.equal((html.match(/fetch\(NOTIFY_FN_URL/g) || []).length, 1, 'only postNotification calls the function');
