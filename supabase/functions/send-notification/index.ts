@@ -1,6 +1,7 @@
 // ============================================================
 // Chance Classics — Send Notification (Supabase Edge Function)
-// Live layout: index.ts, shared.ts, quotes.ts (deployed version 22).
+// Live layout: index.ts, shared.ts, quotes.ts, access.mjs (deployed v23).
+// The supabase-js import is the npm: specifier live v23 bundled with.
 //
 // Auth (verify_jwt stays OFF at the gateway):
 //   - Signed-in garage admin: Authorization: Bearer <session access token>
@@ -15,7 +16,7 @@
 //   SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.
 // ============================================================
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   APP_URL, NOTIFY_SECRET, OWNER_EMAIL, cors, esc, sendEmail,
   bookingBlock, driverBookingBlock, wrap, appButton, payLine, bookingTitle,
