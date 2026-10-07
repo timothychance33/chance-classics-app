@@ -19,7 +19,9 @@ import {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
-const notify = readFileSync(join(root, 'supabase/functions/send-notification/index.ts'), 'utf8');
+const notifyDir = join(root, 'supabase/functions/send-notification');
+const notifyIndex = readFileSync(join(notifyDir, 'index.ts'), 'utf8');
+const notify = ['index.ts', 'shared.ts', 'quotes.ts'].map((name) => readFileSync(join(notifyDir, name), 'utf8')).join('\n');
 
 assert.equal(BOOKING_BUFFER_HOURS, 2, 'buffer defaults to 2 hours');
 
@@ -171,7 +173,9 @@ const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
 assert.ok(scripts.length, 'page has inline script');
 for (const source of scripts) new vm.Script(source);
 
-const declinedBranch = notify.slice(notify.indexOf('type === "quote_declined"'), notify.indexOf('type === "quote_reminder"'));
+const declinedBranch = notify.slice(notify.indexOf('export async function handleQuoteDeclined'));
+assert.match(notifyIndex, /type === "quote_declined"/);
+assert.match(notifyIndex, /handleQuoteDeclined/);
 assert.ok(declinedBranch.includes('quote_declined requires'), 'send-notification sends the decline');
 assert.doesNotMatch(declinedBranch, /book_url|Book now|Book \$\{/);
 assert.match(declinedBranch, /Chance Classics/);
