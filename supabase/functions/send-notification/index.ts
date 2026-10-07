@@ -5,7 +5,7 @@
 //   type "claimed"            -> tell the owner a driver claimed a job
 //   type "passed"             -> tell the owner a driver passed
 //   type "reoffer"            -> open-to-all re-offer to a driver
-//   type "quote" / "quote_reminder" / "unavailable" / "quote_alternatives"
+//   type "quote" / "quote_reminder" / "unavailable" / "quote_alternatives" / "quote_declined"
 //   type "booking_updated"    -> assigned driver: something they care about changed
 //   type "booking_assigned"   -> driver was put on a booking
 //   type "booking_unassigned" -> driver was taken off a booking
@@ -161,6 +161,23 @@ Deno.serve(async (req) => {
           ${altList}
           <p>Just reply to this email and let us know if you'd like more info or a quote for one of these — we'd love to help make your day special.</p>
           <p style="margin-top:18px">Tim Chance<br>Chance Classics<br>(318) 344-5001</p>
+        </div>`;
+      result = await sendEmail(to, subject, html);
+    } else if (type === "quote_declined") {
+      const n = body.notice ?? {};
+      const to = body.to;
+      if (!to) throw new Error("quote_declined requires 'to'");
+      const note = String(n.note || "").trim();
+      if (!note) throw new Error("quote_declined requires a message");
+      const subject = `About your Chance Classics request${n.event_date ? ` — ${n.event_date}` : ""}`;
+      const safe = esc(note).replace(/\n/g, "<br>");
+      const signoff = /chance classics/i.test(note)
+        ? ""
+        : `<p style="margin-top:18px">Chance Classics</p>`;
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#21130f">
+          <p>${safe}</p>
+          ${signoff}
         </div>`;
       result = await sendEmail(to, subject, html);
     } else if (type === "quote_reminder") {

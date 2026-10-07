@@ -1502,6 +1502,10 @@ function renderEarnings(){
 // ---------- QUOTES ----------
 const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.10, HOTEL_FEE=200;
 const FOLLOWUP_DAYS=3, QUOTE_VALID_DAYS=7;
+// Prep, travel, and trailer time kept clear before AND after each booking of the same car.
+// Change this one number to adjust the gap. The database exclusion constraint does not include it.
+const BOOKING_BUFFER_HOURS=2;
+const NO_AVAILABILITY_REASON='no availability';
 function renderQuotes(){
   const el=document.getElementById('panel-quotes');
   if(!el) return;
@@ -1514,15 +1518,16 @@ function renderQuotes(){
   const daysSince=(iso)=>iso?(now-new Date(iso).getTime())/86400000:null;
   const isExpired=(q)=>{const d=daysSince(q.sent_at||q.created_at);return d!=null&&d>=QUOTE_VALID_DAYS;};
 
-  const needsQuote=qs.filter(q=>q.status!=='sent' && q.status!=='booked');
+  const needsQuote=qs.filter(q=>q.status!=='sent' && q.status!=='booked' && q.status!=='declined');
   const active=qs.filter(q=>q.status==='sent' && !isExpired(q));
-  const old=qs.filter(q=>q.status==='booked' || (q.status==='sent' && isExpired(q)));
+  const old=qs.filter(q=>q.status==='booked' || q.status==='declined' || (q.status==='sent' && isExpired(q)));
 
   const row=(q)=>{
     const car=q.car_id?carById(q.car_id):null;
     const age=daysSince(q.reminder_sent_at||q.sent_at||q.created_at);
     const due=q.status==='sent' && age!=null && age>=FOLLOWUP_DAYS;  // manual nudge available, auto-reminder also covers this
     let tag=q.status==='booked'?'<span class="pill s-completed">🎉 Booked</span>'
+      :q.status==='declined'?'<span class="pill s-new">Declined</span>'
       :q.status==='sent'?'<span class="pill s-ready">Sent</span>'
       :q.status==='quoted'?'<span class="pill s-prepping">Quoted</span>'
       :'<span class="pill s-new">New</span>';
@@ -1545,7 +1550,7 @@ function renderQuotes(){
   if(needsQuote.length) h+=`<div class="schsec"><div class="schsechd">Needs a quote <span class="schcount">${needsQuote.length}</span></div><div class="rowlist">${needsQuote.map(row).join('')}</div></div>`;
   if(active.length) h+=`<div class="schsec"><div class="schsechd">Active <span class="schcount">${active.length}</span></div><div class="meta" style="margin:-4px 0 10px">Sent, still valid (under ${QUOTE_VALID_DAYS} days) — a reminder goes out automatically before these expire.</div><div class="rowlist">${active.map(row).join('')}</div></div>`;
   if(!needsQuote.length && !active.length) h+=`<div class="empty"><div class="big">You're all caught up 🎉</div>Nothing needs a quote and nothing's active right now.</div>`;
-  if(old.length) h+=`<div style="margin-top:6px"><button class="ghost tinybtn" onclick="showOtherQuotes()">View ${old.length} old quote${old.length===1?'':'s'} (booked or expired) →</button></div>`;
+  if(old.length) h+=`<div style="margin-top:6px"><button class="ghost tinybtn" onclick="showOtherQuotes()">View ${old.length} old quote${old.length===1?'':'s'} (booked, declined, or expired) →</button></div>`;
   el.innerHTML=h;
 }
 
@@ -1554,7 +1559,7 @@ function showOtherQuotes(){
   const now=Date.now();
   const daysSince=(iso)=>iso?(now-new Date(iso).getTime())/86400000:null;
   const isExpired=(q)=>{const d=daysSince(q.sent_at||q.created_at);return d!=null&&d>=QUOTE_VALID_DAYS;};
-  const old=qs.filter(q=>q.status==='booked' || (q.status==='sent' && isExpired(q)))
+  const old=qs.filter(q=>q.status==='booked' || q.status==='declined' || (q.status==='sent' && isExpired(q)))
     .sort((a,b)=>(b.sent_at||b.created_at||'').localeCompare(a.sent_at||a.created_at||''));
   let body='';
   if(!old.length) body='<div class="meta">Nothing here.</div>';
@@ -1562,7 +1567,9 @@ function showOtherQuotes(){
     body='<div class="rowlist">';
     for(const q of old){
       const car=q.car_id?carById(q.car_id):null;
-      const tag=q.status==='booked'?'<span class="pill s-completed">🎉 Booked</span>':'<span class="pill s-ready">Sent</span><span class="waittag">Expired</span>';
+      const tag=q.status==='booked'?'<span class="pill s-completed">🎉 Booked</span>'
+        :q.status==='declined'?'<span class="pill s-new">Declined</span>'
+        :'<span class="pill s-ready">Sent</span><span class="waittag">Expired</span>';
       const sentDateStr=(q.sent_at||q.created_at)?new Date(q.sent_at||q.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):null;
       body+=`<div class="lrow" style="margin-bottom:8px" onclick="closeModal();quoteBuilder('${q.id}')">
         <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}</div>
@@ -1588,31 +1595,98 @@ function calcQuote(carId, hours, miles, hotelFee){
   return {base,extraH,overage,mi,travel,hotel,subtotal,tax,total};
 }
 
-function findBookingClash(carId, evDate){
+function clockMinutes(value){
+  if(value==null||value==='') return null;
+  const text=String(value).trim();
+  const ampm=text.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])$/);
+  if(ampm){
+    let hours=Number(ampm[1]);
+    const minutes=Number(ampm[2]);
+    const pm=ampm[3].toLowerCase()==='pm';
+    if(hours===12) hours=pm?12:0;
+    else if(pm) hours+=12;
+    if(hours>23||minutes>59) return null;
+    return hours*60+minutes;
+  }
+  const match=text.match(/^(\d{1,2}):(\d{2})/);
+  if(!match) return null;
+  const hours=Number(match[1]), minutes=Number(match[2]);
+  if(hours>23||minutes>59) return null;
+  return hours*60+minutes;
+}
+function dayNumber(iso){
+  const match=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!match) return null;
+  return Math.floor(Date.UTC(Number(match[1]), Number(match[2])-1, Number(match[3]))/86400000);
+}
+function blockedInterval(booking, bufferHours){
+  if(!booking||booking.status==='cancelled'||!booking.event_date) return null;
+  const day=dayNumber(booking.event_date);
+  const startMin=clockMinutes(booking.start_time);
+  const endMin=clockMinutes(booking.end_time);
+  if(day==null||startMin==null||endMin==null) return null;
+  let end=endMin;
+  if(end<=startMin) end+=1440;
+  const buffer=(bufferHours==null?BOOKING_BUFFER_HOURS:Number(bufferHours))*60;
+  const origin=day*1440;
+  return {start:origin+startMin-buffer, end:origin+end+buffer};
+}
+function requestedInterval(evDate, startTime, hours){
+  const day=dayNumber(evDate);
+  const startMin=clockMinutes(startTime);
+  const duration=Number(hours);
+  if(day==null||startMin==null||!Number.isFinite(duration)||duration<=0) return null;
+  const start=day*1440+startMin;
+  return {start, end:start+duration*60};
+}
+function intervalsOverlap(a, b){
+  return !!(a&&b&&a.start<b.end&&b.start<a.end);
+}
+function quoteSlot(hours){
+  let h=hours;
+  if(h==null||h===''){
+    const el=document.getElementById('q_hours');
+    if(el) h=el.value;
+    else if(window._quoteTrip) h=window._quoteTrip.hours;
+  }
+  h=parseFloat(h);
+  if(!Number.isFinite(h)||h<=0) h=INCLUDED_HOURS;
+  return {startTime:window._quoteEventTime||null, hours:h};
+}
+function findBookingClash(carId, evDate, request){
   if(!evDate||!carId) return null;
-  return (DATA.bookings||[]).find(b=>b.car_id===carId && b.event_date===evDate && b.status!=='cancelled')||null;
+  const slot=request||quoteSlot();
+  const wanted=requestedInterval(evDate, slot.startTime, slot.hours);
+  return (DATA.bookings||[]).find(b=>{
+    if(!b||b.car_id!==carId||b.status==='cancelled') return false;
+    if(!wanted) return b.event_date===evDate;
+    const blocked=blockedInterval(b);
+    if(!blocked) return b.event_date===evDate;
+    return intervalsOverlap(wanted, blocked);
+  })||null;
 }
 function isElviraCar(c){
   return !!(c && (c.id==='afa12220-a923-454e-b1d9-758906d72419' || String(c.name||'').trim().toLowerCase()==='elvira'));
 }
-function carsOpenOnDate(evDate, excludeCarId){
-  return (DATA.cars||[]).filter(c=>c.id!==excludeCarId && !findBookingClash(c.id, evDate));
+function carsOpenOnDate(evDate, excludeCarId, request){
+  return (DATA.cars||[]).filter(c=>c.id!==excludeCarId && !findBookingClash(c.id, evDate, request));
 }
-function carsForAlternateOffers(evDate, excludeCarId){
-  return carsOpenOnDate(evDate, excludeCarId).filter(c=>!isElviraCar(c));
+function carsForAlternateOffers(evDate, excludeCarId, request){
+  return carsOpenOnDate(evDate, excludeCarId, request||quoteSlot()).filter(c=>!isElviraCar(c));
 }
 function pricedAlternateQuotes(excludeCarId, hours, miles, hotelFee, evDate){
   const when=evDate||window._quoteEventDate;
-  return carsForAlternateOffers(when, excludeCarId).map(car=>{
+  return carsForAlternateOffers(when, excludeCarId, quoteSlot(hours)).map(car=>{
     const c=calcQuote(car.id, hours, miles, hotelFee);
     return {id:car.id, name:car.name, book_url:car.book_url||null,
       base_rate:c.base, extra_hours:c.extraH, overage:c.overage, miles:c.mi, travel:c.travel,
       hotel_fee:c.hotel, subtotal:c.subtotal, tax:c.tax, total:c.total};
   });
 }
-function quoteCarOptions(selectedId, evDate){
+function quoteCarOptions(selectedId, evDate, request){
+  const slot=request||quoteSlot();
   return (DATA.cars||[]).map(c=>{
-    const booked=!!findBookingClash(c.id, evDate);
+    const booked=!!findBookingClash(c.id, evDate, slot);
     return `<option value="${c.id}" ${selectedId===c.id?'selected':''}>${esc(c.name)} ($${c.base_rate||0})${booked?' — booked':''}</option>`;
   }).join('');
 }
@@ -1781,13 +1855,77 @@ async function sendAlternateQuotes(qid, requestedCarId, chosenCarId){
   closeModal();await loadAll();
 }
 
+function defaultDeclineAvailabilityMessage(customerName){
+  const first=String(customerName||'').trim().split(/\s+/)[0];
+  const hello=first?`Hi ${first},`:'Hi,';
+  return `${hello}\n\nI'm sorry, we can't accommodate your request due to a lack of availability. Thank you for thinking of us — we hope we can help another time.\n\nChance Classics`;
+}
+function declineAvailabilityNotice(qid){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q) return;
+  if(q.status==='booked') return;
+  if(!q.customer_email){ toast('No customer email on file'); return; }
+  const note=defaultDeclineAvailabilityMessage(q.customer_name);
+  openModal('Decline: no availability', `
+    <div class="qreq">
+      <div class="meta">To: ${esc(q.customer_email)}</div>
+      <div class="meta">Nothing is sent until you confirm. You can edit the message first.</div>
+    </div>
+    <div style="margin-top:12px"><label>Message</label><textarea id="dec_note" rows="8">${esc(note)}</textarea></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="act" onclick="sendDeclineAvailability('${qid}')">Send and decline</button>
+      <button class="ghost" onclick="quoteBuilder('${qid}')">Back</button>
+    </div>
+  `);
+}
+async function sendDeclineAvailability(qid){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q) return;
+  if(q.status==='booked') return;
+  if(!q.customer_email){ toast('No customer email on file'); return; }
+  const noteEl=document.getElementById('dec_note');
+  const note=noteEl?noteEl.value.trim():'';
+  if(!note){ toast('Write a message first'); return; }
+  const again=q.status==='declined';
+  if(!confirm(again
+    ? `Send this decline to ${q.customer_email} again?`
+    : `Send this decline to ${q.customer_email}? The quote will leave the open list.`)) return;
+  if(typeof SB==='undefined'||!SB){ toast('Not connected'); return; }
+  const nowIso=new Date().toISOString();
+  const patch={
+    status:'declined',
+    decline_reason:NO_AVAILABILITY_REASON,
+    declined_at:nowIso,
+    book_expires_at:nowIso
+  };
+  const {error}=await SB.from('quote_requests').update(patch).eq('id',qid);
+  if(error){ toast(error.message); return; }
+  Object.assign(q, patch);
+  const car=q.car_id?carById(q.car_id):null;
+  try{
+    const r=await fetch(NOTIFY_FN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      type:'quote_declined', to:q.customer_email,
+      notice:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:q.event_date, note}
+    })});
+    const out=await r.json().catch(()=>({}));
+    if(!r.ok||out.error) throw new Error(out.error||('Email failed ('+r.status+')'));
+    toast('Declined and emailed');
+    closeModal();
+  }catch(e){
+    toast('Marked declined, but the email did not send: '+(e.message||e));
+    return;
+  }
+  await loadAll();
+}
 function quoteBuilder(qid){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q) return;
-  const carOpts=quoteCarOptions(q.car_id, q.event_date);
   const stashed=(window._quoteId===q.id && window._quoteTrip)?window._quoteTrip:null;
   const initHours=stashed?stashed.hours:(q.hours||INCLUDED_HOURS);
   const initMiles=stashed?stashed.miles:(q.miles||0);
   const initHotel=stashed?stashed.hotel>0:Number(q.hotel_fee)>0;
+  window._quoteEventDate=q.event_date||null;
+  window._quoteEventTime=q.event_time||null;
+  window._quoteId=q.id;
+  if(!stashed) window._quoteTrip={hours:initHours,miles:initMiles,hotel:initHotel?HOTEL_FEE:0,note:q.quote_notes||null};
+  const carOpts=quoteCarOptions(q.car_id, q.event_date, quoteSlot(initHours));
   let statusLine='';
   if(q.status==='sent'){
     const sentDate=q.sent_at||q.created_at;
@@ -1809,6 +1947,9 @@ function quoteBuilder(qid){
       </div></div>`;
   } else if(q.status==='booked'){
     statusLine=`<div class="wfbox"><div class="wfrow wf-claimed">🎉 Booked${q.decline_reason?'':''}</div></div>`;
+  } else if(q.status==='declined'){
+    const when=q.declined_at?new Date(q.declined_at).toLocaleString('en-US',{month:'long',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}):'';
+    statusLine=`<div class="wfbox"><div class="wfrow">Declined — no availability${when?' · '+esc(when):''}</div></div>`;
   }
   openModal('Build quote', `
     <div class="qreq">
@@ -1832,6 +1973,7 @@ function quoteBuilder(qid){
       <button class="act" onclick="sendQuote('${q.id}')" ${q.customer_email?'':'disabled title="No email on file"'}>${q.status==='sent'||q.status==='booked'?'Re-send to customer':'Send to customer'}</button>
       <button class="ghost" onclick="saveQuoteDraft('${q.id}')">Save draft</button>
     </div>
+    ${q.status==='booked'?'':`<div style="margin-top:8px"><button class="ghost" onclick="declineAvailabilityNotice('${q.id}')" ${q.customer_email?'':'disabled title="No email on file"'}>${q.status==='declined'?'Email the decline again':'Decline: no availability'}</button></div>`}
     ${q.customer_email?'':'<div class="meta" style="color:var(--oxblood);margin-top:8px">No customer email on file — add one to send.</div>'}
     ${statusLine}
     ${q.decline_reason?`<div class="meta" style="margin-top:10px">Decline reason: ${esc(q.decline_reason)}</div>`:''}
@@ -1839,8 +1981,6 @@ function quoteBuilder(qid){
       <button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood)" onclick="deleteQuote('${q.id}')">🗑️ Delete this quote request</button>
     </div>
   `);
-  window._quoteEventDate=q.event_date||null;
-  window._quoteId=q.id;
   quoteRecalc();
 }
 
@@ -1923,23 +2063,34 @@ function quoteRecalc(){
   const hasEmail=!!(q&&q.customer_email);
   const resend=!!(q&&(q.status==='sent'||q.status==='booked'));
 
-  // Availability check: does the selected car already have a booking that day?
+  // Availability: the quote's start + hours overlaps a booking, plus BOOKING_BUFFER_HOURS on both sides.
   const avail=document.getElementById('q_avail');
   const altsEl=document.getElementById('q_alts');
   const sendRow=document.getElementById('q_send_row');
   const evDate=window._quoteEventDate;
+  const slot=quoteSlot(hours);
   let clash=null, others=[];
   if(avail){
     if(!evDate){
       avail.innerHTML='';
       if(altsEl) altsEl.innerHTML='';
     } else {
-      clash=findBookingClash(carId, evDate);
+      const carSel=document.getElementById('q_car');
+      if(carSel){
+        for(const opt of carSel.options){
+          const base=opt.textContent.replace(/ — booked$/,'');
+          opt.textContent=base+(findBookingClash(opt.value, evDate, slot)?' — booked':'');
+        }
+      }
+      clash=findBookingClash(carId, evDate, slot);
       if(clash){
         const drv=staffById(clash.driver_id);
-        others=carsForAlternateOffers(evDate, carId);
-        avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} is already booked on ${esc(evDate)} — ${esc(clash.customer_name||'another customer')}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}
-          <div class="meta" style="margin-top:6px;font-weight:600">Hours, miles, and hotel still apply — we just swap the car. ${others.length?`Prices for the ${others.length} open car${others.length===1?'':'s'} update as you type.`:'Nothing else is free that day.'}</div>
+        const startLbl=clash.start_time?fmtTime(normTime(clash.start_time)):'';
+        const endLbl=clash.end_time?fmtTime(normTime(clash.end_time)):'';
+        const span=startLbl&&endLbl?`${startLbl}–${endLbl}`:startLbl;
+        others=carsForAlternateOffers(evDate, carId, slot);
+        avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} isn't free for this time — ${esc(clash.customer_name||'another customer')}${span?' is booked '+esc(span):' is already booked that day'}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}. We keep ${BOOKING_BUFFER_HOURS} hours clear before and after.
+          <div class="meta" style="margin-top:6px;font-weight:600">Hours, miles, and hotel still apply — we just swap the car. ${others.length?`Prices for the ${others.length} open car${others.length===1?'':'s'} update as you type.`:'Nothing else is free for this time.'}</div>
           ${hasEmail && !others.length
             ? `<div style="margin-top:8px"><button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood);background:#fff" onclick="unavailableNotice('${qid}','${carId}')">✉️ Tell them it's booked</button></div>`
             : ''}
@@ -1947,7 +2098,7 @@ function quoteRecalc(){
         if(altsEl){
           if(others.length){
             const priced=pricedAlternateQuotes(carId, hours, miles, hotelOn?HOTEL_FEE:0, evDate);
-            altsEl.innerHTML=`<div class="qalts"><div class="qahd">Open that day — tap Send this option on one car, or send all prices</div>${
+            altsEl.innerHTML=`<div class="qalts"><div class="qahd">Open for this time — tap Send this option on one car, or send all prices</div>${
               priced.map(a=>alternateOfferRowHtml(qid, carId, a, hasEmail)).join('')
             }</div>`;
           } else {
@@ -1955,14 +2106,16 @@ function quoteRecalc(){
           }
         }
       } else {
-        avail.innerHTML=`<div class="qok">✓ ${esc(carById(carId)?.name||'This car')} is open on ${esc(evDate)}</div>`;
+        avail.innerHTML=`<div class="qok">✓ ${esc(carById(carId)?.name||'This car')} is open for this time on ${esc(evDate)}</div>`;
         if(altsEl) altsEl.innerHTML='';
       }
     }
   }
 
   if(sendRow && qid){
-    if(clash && others.length){
+    if(q && q.status==='declined'){
+      sendRow.innerHTML=`<div class="meta">Declined — no availability. It is off the open list, and its Book Now link is closed.</div>`;
+    } else if(clash && others.length){
       sendRow.innerHTML=`
         <button class="act" ${hasEmail?'':`disabled title="No email on file"`} onclick="alternateQuotesNotice('${qid}','${carId}')">${others.length===1?'Send this price':`Send all ${others.length} prices`}</button>
         <button class="ghost" onclick="saveQuoteDraft('${qid}')">Save draft</button>`;
@@ -2017,10 +2170,12 @@ async function sendQuote(qid){
   if(!q.customer_email){toast('No customer email on file');return}
   const f=quoteFields(qid);
   const car=carById(f.car_id);
+  if(q.status==='declined'){ toast('This request was declined'); return; }
   const evDate=q.event_date||window._quoteEventDate;
-  const clash=findBookingClash(f.car_id, evDate);
+  const slot=quoteSlot(f.hours);
+  const clash=findBookingClash(f.car_id, evDate, slot);
   if(clash){
-    const others=carsForAlternateOffers(evDate, f.car_id);
+    const others=carsForAlternateOffers(evDate, f.car_id, slot);
     if(others.length){ alternateQuotesNotice(qid, f.car_id); return; }
     unavailableNotice(qid, f.car_id); return;
   }
@@ -3024,6 +3179,8 @@ function bootOwnerPreview(){
         car_id:'c1',driver_id:'d2',status:'cancelled',payment_status:'unpaid',pay_tier:2,needs_trailer:false},
       {id:'b-draft',customer_name:'Draft Inquiry',customer_email:'draft@example.com',event_type:'inquiry',event_date:soon,
         car_id:'c1',driver_id:null,status:'new',payment_status:'unpaid',pay_tier:null,needs_trailer:false},
+      {id:'b-morning-slot',customer_name:'Morning Wedding',customer_email:'morning@example.com',event_type:'wedding',event_date:soon,start_time:'08:30',end_time:'10:30',
+        car_id:'c2',driver_id:'d2',status:'confirmed',payment_status:'deposit',pay_tier:2,needs_trailer:false},
     ],
     prep:[],templates:[],
     quotes:[
@@ -3035,6 +3192,9 @@ function bootOwnerPreview(){
       {id:'q-gala',customer_email:'gala@example.com',event_date:lastYear,car_id:'c1',status:'booked',total:1100},
       {id:'q-prom',customer_email:'prom@example.com',event_date:past,car_id:'c1',status:'booked',total:700},
       {id:'q-draft',customer_email:'draft@example.com',event_date:soon,car_id:'c1',status:'quoted',total:300},
+      {id:'q-afternoon',customer_name:'Afternoon Guest',customer_email:'afternoon@example.com',event_date:soon,event_time:'1:00 PM',hours:4,car_id:'c2',status:'quoted',event_type:'wedding',event_location:'Benton'},
+      {id:'q-buffer',customer_name:'Buffer Guest',customer_email:'buffer@example.com',event_date:soon,event_time:'11:00 AM',hours:2,car_id:'c2',status:'new'},
+      {id:'q-declined',customer_name:'Passed Guest',customer_email:'passed@example.com',event_date:past,event_time:'2:00 PM',hours:2,car_id:'c2',status:'declined',decline_reason:'no availability',declined_at:new Date().toISOString()},
     ]
   };
   showApp(); setupRoleUI(); renderAll();
