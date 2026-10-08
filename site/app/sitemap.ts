@@ -19,6 +19,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/rental-terms",
     ...occasions.map((occasion) => `/occasions/${occasion.slug}`),
     "/faq",
+    "/service-area",
+    "/planners",
     "/blog",
     ...posts.map((post) => `/post/${post.slug}`),
     "/cart-page",

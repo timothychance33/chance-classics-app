@@ -4,11 +4,11 @@ import {
   bookingSource,
   dayOfContactColumns,
   quoteTotal,
-  rangesOverlap,
+  slotTaken,
   stripeReady,
-  toMinutes,
   validateBooking,
 } from "@/lib/booking-rules";
+import { withSecondCarNote } from "@/data/packages";
 import { serviceBySlug } from "@/lib/content";
 import { quoteDrivingMileage } from "@/lib/mileage";
 import { rentalDb } from "@/lib/rental-db";
@@ -85,18 +85,12 @@ export async function POST(request: Request) {
     }
     await releaseStaleHolds(db, carId);
     const busy = await busyRanges(db, carId, value.date);
-    const start = toMinutes(value.start)!;
-    const end = toMinutes(value.end)!;
-    const clash = busy.some((item) => {
-      const a = toMinutes(item.start);
-      const b = toMinutes(item.end);
-      return a != null && b != null && rangesOverlap(start, end, a, b);
-    });
+    const clash = slotTaken(value.date, value.start, value.hours, busy);
     if (clash) {
       return NextResponse.json({ error: "That time was just taken. Pick another open time." }, { status: 409 });
     }
 
-    const notes = [
+    const notes = withSecondCarNote([
       source === "site-test" ? "TEST website booking. Not a real garage job until you say so." : "Website booking.",
       `Car: ${service.car} (${service.name})`,
       `Occasion: ${value.occasion}`,
@@ -110,7 +104,7 @@ export async function POST(request: Request) {
       "Waiver accepted: Yes",
       "Vehicle reliability acknowledged: Yes",
       `Confirmed only after the $${money.deposit} deposit is paid.`,
-    ].join("\n");
+    ].join("\n"), raw.secondCar === true);
 
     const row = {
       customer_name: value.name,

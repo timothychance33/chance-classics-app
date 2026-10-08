@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { CarTile } from "@/components/CarTile";
 import { galleries, portfolioCovers, portfolioOrder, serviceByPortfolio } from "@/lib/content";
 
 export function CarsGrid() {
@@ -15,24 +15,19 @@ export function CarsGrid() {
       {ordered.map((car) => {
         const service = serviceByPortfolio(car.slug);
         const galleryHref = `${car.href.endsWith("/") ? car.href : `${car.href}/`}`;
-        const href = service ? `/service-page/${service.slug}/` : galleryHref;
+        const meetHref = service ? `/service-page/${service.slug}/` : galleryHref;
+        const bookHref = service ? `/service-page/${service.slug}/#book` : meetHref;
         const subtitle = galleries[car.slug]?.subtitle;
         return (
-          <Link key={car.slug} href={href} className="tile">
-            <img
-              src={car.image.src}
-              alt={subtitle ? `Photo of ${car.title}, ${subtitle}` : `Photo of ${car.title}`}
-              width={640}
-              height={640}
-              loading="lazy"
-              decoding="async"
-            />
-            <span className="cap">
-              <strong>{car.title}</strong>
-              {subtitle && <span className="model">{subtitle}</span>}
-              {service && <span className="price">Starting at ${service.price}</span>}
-            </span>
-          </Link>
+          <CarTile
+            key={car.slug}
+            name={car.title}
+            model={subtitle}
+            price={service?.price}
+            image={car.image}
+            bookHref={bookHref}
+            meetHref={meetHref}
+          />
         );
       })}
     </div>

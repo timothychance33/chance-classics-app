@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookingForm } from "@/components/BookingForm";
+import { CarFactsStrip } from "@/components/CarFactsStrip";
+import { CarStory } from "@/components/CarStory";
 import { EventPhotos } from "@/components/EventPhotos";
+import { FeaturedReview } from "@/components/FeaturedReview";
 import { Reviews } from "@/components/Reviews";
 import { StickyBookBar } from "@/components/StickyBookBar";
 import { DEPOSIT_USD, EXTRA_HOUR_USD, MILEAGE_RULE_TEXT } from "@/lib/booking-rules";
@@ -47,6 +50,8 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
       </div>
       <h2>Service Description</h2>
       <p>{serviceDescription(service)}</p>
+      <CarFactsStrip car={service.car} />
+      <CarStory car={service.car} />
       <section className="car-facts">
         <h2>This car</h2>
         <ul>
@@ -59,6 +64,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
         </ul>
       </section>
       <EventPhotos slug={service.slug} />
+      <FeaturedReview car={service.car} />
       <Reviews car={service.car} />
       <BookingForm car={service.slug} carName={service.car} basePrice={service.price} />
       {service.gallery.length > 0 && (

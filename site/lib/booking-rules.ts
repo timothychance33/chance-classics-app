@@ -14,6 +14,13 @@ export const EXTRA_MILE_USD = 3;
 export const MILEAGE_TRIP = "one-way" as const;
 export const MILE_RATE_USD = EXTRA_MILE_USD;
 export const MILE_THRESHOLD = MILE_RADIUS;
+
+/**
+ * Same 2-hour gap as BOOKING_BUFFER_HOURS in lib/quotes.mjs.
+ * Applied before and after each booking, including when the gap crosses midnight.
+ */
+export const BOOKING_BUFFER_HOURS = 2;
+const MINUTES_PER_DAY = 1440;
 export const SHOP_ADDRESS = "118 5th St E, Benton, LA 71006";
 export const MILEAGE_REVIEW_TEXT = "We'll confirm mileage.";
 export const MILEAGE_RULE_TEXT =
@@ -49,7 +56,6 @@ export const RELIABILITY_TEXT =
 
 export const OCCASIONS = [
   "Wedding",
-  "Homecoming",
   "Photo shoot",
   "Parade",
   "Other special occasion",
@@ -76,13 +82,73 @@ export function earliestBookableDate(now = new Date()) {
   return addDays(chicagoDate(now), MIN_LEAD_DAYS);
 }
 
-export function toMinutes(value: string) {
-  const match = String(value).match(/^(\d{1,2}):(\d{2})/);
+/** Clock time to minutes after midnight. Accepts "13:00", "13:00:00", and "1:00 PM". */
+export function clockMinutes(value: string | null | undefined) {
+  if (value == null || value === "") return null;
+  const text = String(value).trim();
+  const ampm = text.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])$/);
+  if (ampm) {
+    let hours = Number(ampm[1]);
+    const minutes = Number(ampm[2]);
+    const pm = ampm[3].toLowerCase() === "pm";
+    if (hours === 12) hours = pm ? 12 : 0;
+    else if (pm) hours += 12;
+    if (hours > 23 || minutes > 59) return null;
+    return hours * 60 + minutes;
+  }
+  const match = text.match(/^(\d{1,2}):(\d{2})/);
   if (!match) return null;
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
   if (hours > 23 || minutes > 59) return null;
   return hours * 60 + minutes;
+}
+
+export function toMinutes(value: string) {
+  return clockMinutes(value);
+}
+
+export function dayNumber(iso: string | null | undefined) {
+  const match = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000);
+}
+
+export type Interval = { start: number; end: number };
+
+/** Booking window plus BOOKING_BUFFER_HOURS on both sides. An end at or before the start runs past midnight. */
+export function blockedInterval(
+  booking: {
+    event_date?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    status?: string | null;
+  },
+  bufferHours = BOOKING_BUFFER_HOURS,
+): Interval | null {
+  if (!booking || booking.status === "cancelled" || !booking.event_date) return null;
+  const day = dayNumber(booking.event_date);
+  const startMin = clockMinutes(booking.start_time);
+  const endMin = clockMinutes(booking.end_time);
+  if (day == null || startMin == null || endMin == null) return null;
+  let end = endMin;
+  if (end <= startMin) end += MINUTES_PER_DAY;
+  const buffer = Number(bufferHours) * 60;
+  const origin = day * MINUTES_PER_DAY;
+  return { start: origin + startMin - buffer, end: origin + end + buffer };
+}
+
+export function requestedInterval(evDate: string, startTime: string, hours: number): Interval | null {
+  const day = dayNumber(evDate);
+  const startMin = clockMinutes(startTime);
+  const duration = Number(hours);
+  if (day == null || startMin == null || !Number.isFinite(duration) || duration <= 0) return null;
+  const start = day * MINUTES_PER_DAY + startMin;
+  return { start, end: start + duration * 60 };
+}
+
+export function intervalsOverlap(a: Interval | null, b: Interval | null) {
+  return !!(a && b && a.start < b.end && b.start < a.end);
 }
 
 export function fromMinutes(minutes: number) {
@@ -119,20 +185,33 @@ export function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd
   return aStart < bEnd && bStart < aEnd;
 }
 
-export type Busy = { start: string; end: string };
+export type Busy = { start: string; end: string; date?: string };
 
-export function openStartTimes(hours: number, busy: Busy[]) {
+/** True when the requested window overlaps a booking expanded by the buffer, including a buffer that crosses midnight. */
+export function slotTaken(date: string, start: string, hours: number, busy: Busy[]) {
+  const wanted = requestedInterval(date, start, hours);
+  if (!wanted) return true;
+  return busy.some((item) => {
+    const itemDate = item.date || date;
+    if (!item.end) return itemDate === date;
+    const blocked = blockedInterval({
+      event_date: itemDate,
+      start_time: item.start,
+      end_time: item.end,
+      status: "active",
+    });
+    if (!blocked) return itemDate === date;
+    return intervalsOverlap(wanted, blocked);
+  });
+}
+
+export function openStartTimes(hours: number, busy: Busy[], onDate = "2000-01-01") {
   const slots: string[] = [];
   for (let start = DAY_START_MIN; start <= LAST_START_MIN; start += SLOT_STEP_MIN) {
     const end = start + hours * 60;
     if (end > 24 * 60) continue;
-    const taken = busy.some((item) => {
-      const bStart = toMinutes(item.start);
-      const bEnd = toMinutes(item.end);
-      if (bStart == null || bEnd == null || bEnd <= bStart) return false;
-      return rangesOverlap(start, end, bStart, bEnd);
-    });
-    if (!taken) slots.push(fromMinutes(start));
+    const label = fromMinutes(start);
+    if (!slotTaken(onDate, label, hours, busy)) slots.push(label);
   }
   return slots;
 }
@@ -176,7 +255,9 @@ export function quoteLinkOpen(
   now = new Date(),
 ) {
   if (!quote) return { ok: false as const, message: QUOTE_LINK_EXPIRED };
-  if (quote.booking_id || quote.status === "booked") return { ok: false as const, message: QUOTE_LINK_EXPIRED };
+  if (quote.booking_id || quote.status === "booked" || quote.status === "declined") {
+    return { ok: false as const, message: QUOTE_LINK_EXPIRED };
+  }
   const explicit = quote.book_expires_at ? new Date(quote.book_expires_at) : null;
   const anchor = quote.sent_at || quote.created_at;
   const fallback = anchor ? new Date(new Date(anchor).getTime() + QUOTE_LINK_DAYS * 86400000) : null;

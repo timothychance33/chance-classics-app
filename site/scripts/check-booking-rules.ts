@@ -1,10 +1,13 @@
+import { withSecondCarNote } from "../data/packages.ts";
 import {
   addDays,
   bookingSource,
   earliestBookableDate,
   mileageCharge,
+  BOOKING_BUFFER_HOURS,
   openStartTimes,
   quoteCheckoutLines,
+  slotTaken,
   quoteCheckoutMoney,
   quoteLinkOpen,
   quoteRequestRecord,
@@ -20,10 +23,15 @@ function assert(cond: boolean, message: string) {
   if (!cond) throw new Error(message);
 }
 
-const busy = [{ start: "10:00", end: "12:00" }];
-const open = openStartTimes(2, busy);
-assert(!open.includes("10:00") && !open.includes("11:00") && !open.includes("11:30"), "overlap hidden");
-assert(open.includes("08:00") && open.includes("12:00"), "edges stay open");
+assert(BOOKING_BUFFER_HOURS === 2, "buffer is 2 hours");
+const busy = [{ start: "10:00", end: "12:00", date: "2026-10-16" }];
+const open = openStartTimes(2, busy, "2026-10-16");
+assert(!open.includes("08:00") && !open.includes("10:00") && !open.includes("12:00"), "2 hour buffer hides the edges");
+assert(open.includes("14:00"), "a start exactly when the buffer ends stays open");
+const overnight = [{ date: "2026-10-10", start: "22:00", end: "00:00" }];
+assert(slotTaken("2026-10-11", "01:00", 1, overnight), "a midnight end blocks the next morning through the buffer");
+assert(!slotTaken("2026-10-11", "02:00", 2, overnight), "2:00 AM is exactly when the post-midnight buffer ends");
+assert(!slotTaken("2026-10-10", "18:00", 2, overnight), "6:00–8:00 PM ends as the pre-booking buffer begins");
 assert(rangesOverlap(60, 120, 90, 150) && !rangesOverlap(60, 120, 120, 180), "range math");
 
 const money = quoteTotal(500, 4);
@@ -59,6 +67,8 @@ const linkNow = new Date("2026-10-11T00:00:00Z");
 assert(quoteLinkOpen({ status: "sent", book_expires_at: "2026-10-18T00:00:00Z" }, linkNow).ok, "link inside 7 days");
 assert(!quoteLinkOpen({ status: "sent", created_at: "2026-10-04T00:00:00Z" }, new Date("2026-10-12T00:00:00Z")).ok, "default 7 days expires");
 assert(!quoteLinkOpen({ status: "booked", booking_id: "b1", book_expires_at: "2026-10-18T00:00:00Z" }, linkNow).ok, "used link is closed");
+assert(!quoteLinkOpen({ status: "declined", book_expires_at: "2026-10-18T00:00:00Z" }, linkNow).ok, "declined quote is closed");
+assert(withSecondCarNote("Drop-off: 200 Crockett St", true) === "Drop-off: 200 Crockett St", "second car stays out of notes until enabled");
 const pay = quoteCheckoutMoney(680);
 assert(pay.deposit === 250 && pay.balance === 430 && pay.total === 680, "quote deposit stays 250");
 const lines = quoteCheckoutLines({

@@ -1,5 +1,6 @@
 import {
   HOLD_MINUTES,
+  addDays,
   holdIsFresh,
   openStartTimes,
   type Busy,
@@ -10,6 +11,7 @@ type Db = NonNullable<ReturnType<typeof rentalDb>>;
 
 type Row = {
   id: string;
+  event_date: string | null;
   start_time: string | null;
   end_time: string | null;
   status: string | null;
@@ -37,25 +39,31 @@ export async function releaseStaleHolds(db: Db, carId: string) {
 }
 
 export async function busyRanges(db: Db, carId: string, date: string, now = new Date()): Promise<Busy[]> {
+  const dates = [addDays(date, -1), date, addDays(date, 1)];
   const { data, error } = await db
     .from("bookings")
-    .select("id,start_time,end_time,status,source,created_at")
+    .select("id,event_date,start_time,end_time,status,source,created_at")
     .eq("car_id", carId)
-    .eq("event_date", date)
+    .in("event_date", dates)
     .neq("status", "cancelled");
   if (error) throw new Error(error.message);
   return ((data || []) as Row[])
     .filter((row) => {
       if (row.status === "hold" && row.created_at && !holdIsFresh(row.created_at, now)) return false;
-      return Boolean(row.start_time && row.end_time);
+      if (row.start_time && row.end_time) return true;
+      return String(row.event_date || "") === date;
     })
-    .map((row) => ({ start: String(row.start_time), end: String(row.end_time) }));
+    .map((row) => ({
+      start: String(row.start_time || ""),
+      end: String(row.end_time || ""),
+      date: String(row.event_date || date),
+    }));
 }
 
 export async function openTimesForCar(db: Db, carId: string, date: string, hours: number) {
   await releaseStaleHolds(db, carId);
   const busy = await busyRanges(db, carId, date);
-  return openStartTimes(hours, busy);
+  return openStartTimes(hours, busy, date);
 }
 
 /** Mileage and day-of columns are additive. Drop a missing one and retry so a booking still saves. */

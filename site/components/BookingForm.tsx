@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AddressField } from "@/components/AddressField";
 import { DayOfContactFields } from "@/components/DayOfContactFields";
+import { SecondCarField } from "@/components/SecondCarField";
 import {
   BASE_HOURS,
   DAY_START_MIN,
@@ -43,6 +44,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [occasion, setOccasion] = useState("");
+  const [secondCar, setSecondCar] = useState(false);
   const [pickup, setPickup] = useState("");
   const [pickupPlaceId, setPickupPlaceId] = useState("");
   const [mileage, setMileage] = useState<MileagePreview | null>(null);
@@ -142,6 +144,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           email,
           phone,
           occasion,
+          secondCar,
           pickup,
           pickupPlaceId,
           dropoff,
@@ -229,6 +232,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           </select>
         </label>
       </div>
+      <SecondCarField checked={secondCar} onChange={setSecondCar} />
       <label>
         Pickup address
         <AddressField

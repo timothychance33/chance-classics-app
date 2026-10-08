@@ -39,6 +39,16 @@ export function reviewsForCar(car: string) {
   return reviewsWithText().filter((review) => words.some((word) => review.text.includes(word)));
 }
 
+/** First Google review whose own words name this car. */
+export function featuredReview(car: string) {
+  return reviewsForCar(car)[0] || null;
+}
+
+/** Other reviews that name this car, after the featured one. */
+export function additionalReviewsForCar(car: string) {
+  return reviewsForCar(car).slice(1);
+}
+
 export function weddingReviews() {
   return homeReviews().filter((review) => /wedding/i.test(review.text)).slice(0, 2);
 }

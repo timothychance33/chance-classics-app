@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AddressField } from "@/components/AddressField";
+import { SecondCarField } from "@/components/SecondCarField";
 import { MILEAGE_ACK, MILEAGE_ACK_ERROR } from "@/lib/booking-rules";
 import { quoteServices } from "@/lib/content";
 
@@ -47,6 +48,7 @@ export function QuoteForm() {
           pickup: location,
           dropoff,
           details: data.get("details"),
+          secondCar: data.get("second_car") === "on",
           planner: data.get("planner"),
           heard: data.get("hear"),
           heardOther: data.get("hear_other"),
@@ -172,6 +174,7 @@ export function QuoteForm() {
         <span>Event Planner</span>
         <input name="planner" />
       </label>
+      <SecondCarField />
       <fieldset className="radios">
         <legend>How did you hear about us?</legend>
         {hear.map((option) => (

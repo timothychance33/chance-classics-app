@@ -70,6 +70,16 @@ export function Header() {
             </Link>
           </li>
           <li>
+            <Link href="/service-area/" aria-current={current(pathname, "/service-area/") ? "page" : undefined} onClick={close}>
+              Service Area
+            </Link>
+          </li>
+          <li>
+            <Link href="/planners/" aria-current={current(pathname, "/planners/") ? "page" : undefined} onClick={close}>
+              Planners
+            </Link>
+          </li>
+          <li>
             <Link href="/blog/" aria-current={current(pathname, "/blog/") || current(pathname, "/post/") ? "page" : undefined} onClick={close}>
               Blog
             </Link>

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
+import { WeddingPackage } from "@/components/WeddingPackage";
+import { WhyBook } from "@/components/WhyBook";
 import { EXTRA_HOUR_USD, DEPOSIT_USD, MILE_THRESHOLD, MILEAGE_RULE_TEXT, MIN_LEAD_DAYS, CANCEL_HOURS } from "@/lib/booking-rules";
 import { occasionBySlug, occasions } from "@/lib/occasions";
 import { carsForOccasion, pageMeta } from "@/lib/content";
@@ -40,6 +42,8 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
         />
       )}
       <p>{occasion.text}</p>
+      <WhyBook />
+      {occasion.slug === "weddings" && <WeddingPackage />}
       {occasion.slug === "weddings" && <Reviews wedding />}
       <h2>What’s included</h2>
       <ul>

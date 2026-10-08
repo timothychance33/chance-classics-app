@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { CarTile } from "@/components/CarTile";
 import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
+import { WhyBook } from "@/components/WhyBook";
 import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, byModelYear, home, pageMeta, services } from "@/lib/content";
 import { occasions } from "@/lib/occasions";
 
@@ -25,24 +27,18 @@ export default function HomePage() {
         {byModelYear(home.fleet, (car) => car.caption, (car) => car.name).map((car) => {
           const service = services.find((item) => item.car === car.name);
           const model = car.caption.split(" / ")[0];
-          const price = service?.price;
-          const href = service ? `/service-page/${service.slug}/` : `${car.href.replace(/\/$/, "")}/`;
+          const meetHref = service ? `/service-page/${service.slug}/` : `${car.href.replace(/\/$/, "")}/`;
+          const bookHref = service ? `/service-page/${service.slug}/#book` : meetHref;
           return (
-            <Link key={car.name} href={href} className="tile">
-              <img
-                src={car.image.src}
-                alt={`Photo of ${car.name}, ${model}`}
-                width={640}
-                height={640}
-                loading="lazy"
-                decoding="async"
-              />
-              <span className="cap">
-                <strong>{car.name}</strong>
-                <span className="model">{model}</span>
-                {price != null && <span className="price">Starting at ${price}</span>}
-              </span>
-            </Link>
+            <CarTile
+              key={car.name}
+              name={car.name}
+              model={model}
+              price={service?.price}
+              image={car.image}
+              bookHref={bookHref}
+              meetHref={meetHref}
+            />
           );
         })}
       </section>
@@ -69,6 +65,7 @@ export default function HomePage() {
         </ul>
       </section>
       <div className="wrap">
+        <WhyBook />
         <Reviews />
       </div>
       <section className="wrap split">

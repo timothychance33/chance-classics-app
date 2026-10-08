@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withSecondCarNote } from "@/data/packages";
 import { MILEAGE_ACK_ERROR, quoteRequestRecord } from "@/lib/booking-rules";
 import { rentalDb } from "@/lib/rental-db";
 
@@ -44,6 +45,7 @@ export async function POST(request: Request) {
   }
   if (!record.details?.includes("Drop-off:")) return NextResponse.json({ error: "Enter the drop-off address." }, { status: 400 });
   if (raw.mileageAck !== true) return NextResponse.json({ error: MILEAGE_ACK_ERROR }, { status: 400 });
+  record.details = withSecondCarNote(record.details || "", raw.secondCar === true);
 
   const db = rentalDb();
   if (!db) {

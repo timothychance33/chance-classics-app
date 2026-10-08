@@ -6,7 +6,7 @@ import {
   quoteCheckoutLines,
   quoteCheckoutMoney,
   quoteLinkOpen,
-  rangesOverlap,
+  slotTaken,
   toMinutes,
   type DayOfContact,
   type QuoteLine,
@@ -128,12 +128,7 @@ export async function quoteTimeFree(db: Db, quote: QuoteRow) {
   if (end == null) return { ok: false as const, error: "That rental would run past midnight." };
   await releaseStaleHolds(db, quote.car_id);
   const busy = await busyRanges(db, quote.car_id, quote.event_date);
-  const startMin = toMinutes(start)!;
-  const taken = busy.some((item) => {
-    const a = toMinutes(item.start);
-    const b = toMinutes(item.end);
-    return a != null && b != null && rangesOverlap(startMin, end, a, b);
-  });
+  const taken = slotTaken(quote.event_date, start, hours, busy);
   if (taken) return { ok: false as const, error: "That time was just taken. Ask Chance Classics for a new quote." };
   return { ok: true as const, start, end: fromMinutes(end), hours };
 }

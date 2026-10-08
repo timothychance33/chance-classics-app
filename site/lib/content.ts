@@ -205,49 +205,6 @@ export const quoteServices = byModelYear(
   (option) => option.split(" - ")[0].trim(),
 );
 
-export const faqs = [
-  {
-    q: "What areas does Chance Classics serve?",
-    a: "Chance Classics provides classic and vintage car rentals throughout Northwest Louisiana, and we regularly travel to surrounding parishes for weddings and special events. If your venue is within about 200 miles of Benton, we can typically get a car there — just ask when you book.",
-  },
-  {
-    q: "How many classic cars does Chance Classics have?",
-    a: "Chance Classics operates a fleet of 10 vintage automobiles, making it one of the largest classic car rental fleets in Louisiana. Each car comes with a professional chauffeur included in your rental.",
-  },
-  {
-    q: "What occasions do you provide cars for?",
-    a: "Chance Classics provides vintage car rentals for weddings, anniversaries, engagements, photo shoots, parades, and other special occasions. Weddings make up the majority of our bookings, typically for the ceremony exit or reception getaway.",
-  },
-  {
-    q: "How much does it cost to rent a classic car for a wedding in Louisiana?",
-    a: "Classic car rental pricing at Chance Classics starts at $500 and varies based on the car, event length, and distance traveled. Contact us for a quote specific to your date and venue.",
-  },
-  {
-    q: "How far in advance should I book a wedding getaway car?",
-    a: "Most couples book their classic car rental 2 to 4 months before their wedding date, especially for popular dates in spring and fall. Popular cars and peak wedding weekends can book out faster, so earlier is safer if you have a specific car in mind.",
-  },
-  {
-    q: "Does the rental include a driver?",
-    a: "Yes. Every Chance Classics rental includes a professional, experienced chauffeur — you don't drive the car yourself. Our drivers are familiar with wedding timelines and photo stops.",
-  },
-  {
-    q: "What happens if it rains on my event day?",
-    a: "Most of our cars are convertibles with tops that can be raised, so light rain typically isn't a problem. Many times, we can swap out to a “fixed roof” option if one is available. For swapping cars, rescheduling or cancellation due to severe weather, contact us at least 24 hours in advance to discuss options.",
-  },
-  {
-    q: "Can I use the car just for photos, not transportation?",
-    a: "Yes, Chance Classics rentals are available for photo-shoot-only bookings, not just transportation. Many couples book a shorter window specifically for wedding party or engagement photos with the car.",
-  },
-  {
-    q: "What's the difference between Chance Classics and a limousine service?",
-    a: "Chance Classics specializes in vintage and classic automobiles rather than modern limousines — think a 1940s convertible or a classic sedan, not a stretch limo. It's suited to couples and event planners looking for a distinctive, photo-worthy vehicle rather than standard transportation.",
-  },
-  {
-    q: "How do I book a car with Chance Classics?",
-    a: "You can book a classic car rental directly through our online booking system at chanceclassics.com/book-online, or by calling (318) 344-5001. We recommend booking as early as possible for peak wedding season dates.",
-  },
-];
-
 export type PostBlock =
   | { type: "p"; html: string }
   | { type: "h3"; text: string }
