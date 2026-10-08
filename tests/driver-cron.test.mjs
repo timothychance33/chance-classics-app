@@ -7,7 +7,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const vercel = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8'));
 const cron = readFileSync(join(root, 'api/cron/weekly-driver-digest.js'), 'utf8');
 const scheduled = readFileSync(join(root, 'supabase/functions/scheduled-tasks/index.ts'), 'utf8');
-const notify = readFileSync(join(root, 'supabase/functions/send-notification/index.ts'), 'utf8');
+const notifyDir = join(root, 'supabase/functions/send-notification');
+const notify = ['index.ts', 'shared.ts', 'quotes.ts'].map((name) => readFileSync(join(notifyDir, name), 'utf8')).join('\n');
 const migration = readFileSync(join(root, 'supabase/migrations/20260908190000_driver_weekly_digest_sends.sql'), 'utf8');
 
 assert.equal(vercel.crons.length, 1);

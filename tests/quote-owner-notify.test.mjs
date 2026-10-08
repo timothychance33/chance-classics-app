@@ -109,6 +109,10 @@ assert.match(capture, /WIX_SYNC_SECRET/);
 assert.match(capture, /webhookAuthorized\(SECRET, provided\)/);
 assert.match(capture, /x-secret/);
 assert.match(capture, /searchParams\.get\("secret"\)/);
+assert.match(capture, /WIX_SYNC_SECRET is not set/);
+assert.match(capture, /server misconfigured/);
+assert.match(capture, /from "npm:@supabase\/supabase-js@2"/);
+assert.doesNotMatch(capture, /esm\.sh\/@supabase\/supabase-js/);
 assert.doesNotMatch(capture, /WIX_SYNC_SECRET"\)\s*\?\?\s*"[^"]+"/);
 assert.doesNotMatch(capture, /secret=[A-Za-z0-9]/);
 

@@ -1,141 +1,90 @@
 // ============================================================
 // Chance Classics — Send Notification (Supabase Edge Function)
-// Sends emails via Resend for:
-//   type "offer"              -> tell the driver whose turn it is that a job awaits
-//   type "claimed"            -> tell the owner a driver claimed a job
-//   type "passed"             -> tell the owner a driver passed
-//   type "reoffer"            -> open-to-all re-offer to a driver
-//   type "quote" / "quote_reminder" / "unavailable" / "quote_alternatives"
-//   type "booking_updated"    -> assigned driver: something they care about changed
-//   type "booking_assigned"   -> driver was put on a booking
-//   type "booking_unassigned" -> driver was taken off a booking
+// Live layout: index.ts, shared.ts, quotes.ts, access.mjs (deployed v23).
+// The supabase-js import is the npm: specifier live v23 bundled with.
+//
+// Auth (verify_jwt stays OFF at the gateway):
+//   - Signed-in garage admin: Authorization: Bearer <session access token>
+//   - Signed-in driver: same header, only types claimed, passed, and offer
+//     (offer must go to an active driver on the roster)
+//   - Server jobs: header x-notify-secret: <NOTIFY_SECRET>
+// The secret is not read from the query string.
 //
 // Deploy: supabase functions deploy send-notification
-//   Settings -> turn OFF "Verify JWT" (same as today).
-//   Secrets already used by this function:
-//     RESEND_API_KEY, NOTIFY_SECRET, OWNER_EMAIL, FROM_EMAIL, APP_URL
+//   Settings -> leave "Verify JWT" OFF.
+//   Secrets: RESEND_API_KEY, NOTIFY_SECRET, OWNER_EMAIL, FROM_EMAIL, APP_URL
+//   SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.
 // ============================================================
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const NOTIFY_SECRET = Deno.env.get("NOTIFY_SECRET") ?? "";
-const OWNER_EMAIL = Deno.env.get("OWNER_EMAIL") ?? "chanceclassics@gmail.com";
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "noreply@chanceclassics.com";
-const APP_URL = Deno.env.get("APP_URL") ?? "https://app.chanceclassics.com";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  APP_URL, NOTIFY_SECRET, OWNER_EMAIL, cors, esc, sendEmail,
+  bookingBlock, driverBookingBlock, wrap, appButton, payLine, bookingTitle, dayOfContactEmailHtml,
+} from "./shared.ts";
+import { handleQuoteAlternatives, handleQuoteDeclined } from "./quotes.ts";
+import { allowNotify, roleTokens, secretMatches } from "./access.mjs";
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, x-notify-secret",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-function esc(s: unknown) {
-  return (s ?? "").toString().replace(/[&<>"]/g, (c) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-  }[c] as string));
+function bearerToken(req: Request): string {
+  const header = req.headers.get("Authorization") || "";
+  const match = header.match(/^Bearer\s+(\S+)/i);
+  return match ? match[1] : "";
 }
 
-async function sendEmail(to: string, subject: string, html: string) {
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from: `Chance Classics <${FROM_EMAIL}>`, to, subject, html }),
+async function authorize(req: Request, body: any): Promise<boolean> {
+  const type = typeof body?.type === "string" ? body.type : "";
+  if (secretMatches(NOTIFY_SECRET, req.headers.get("x-notify-secret") || "")) return true;
+
+  const token = bearerToken(req);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!token || !supabaseUrl || !serviceKey) return false;
+
+  const sb = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    db: { schema: "rental" },
   });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`Resend ${r.status}: ${t}`);
+  const { data, error } = await sb.auth.getUser(token);
+  if (error || !data?.user) return false;
+
+  const { data: profile, error: profileError } = await sb
+    .from("profiles")
+    .select("role")
+    .eq("id", data.user.id)
+    .maybeSingle();
+  if (profileError || !profile) return false;
+
+  const gate = allowNotify({ secretOk: false, roles: roleTokens(profile.role), type });
+  if (!gate.ok) return false;
+
+  if (gate.via === "driver" && type === "offer") {
+    const email = String(body.driver_email ?? "").trim().toLowerCase();
+    if (!email) return false;
+    const { data: staff, error: staffError } = await sb.from("staff").select("email,role,active");
+    if (staffError || !staff) return false;
+    const onRoster = staff.some((row: { email?: string | null; role?: string | null; active?: boolean | null }) =>
+      String(row.email ?? "").trim().toLowerCase() === email &&
+      roleTokens(row.role).includes("driver") &&
+      row.active !== false
+    );
+    if (!onRoster) return false;
   }
-  return await r.json();
-}
-
-function dayOfContactEmailHtml(b: Record<string, unknown>) {
-  const name = String(b.day_of_contact_name || "").trim();
-  const phone = String(b.day_of_contact_phone || "").trim();
-  const role = String(b.day_of_contact_role || "").trim();
-  if (!name && !phone && !role) return "";
-  const href = phone.replace(/[^\d+]/g, "");
-  const phoneHtml = phone ? (href ? `<a href="tel:${esc(href)}">${esc(phone)}</a>` : esc(phone)) : "";
-  const who = [name ? esc(name) : "", role ? esc(role) : ""].filter(Boolean).join(" · ");
-  return `<p style="margin:8px 0 0;font-size:14px"><b>Day-of contact</b> — call during the event, not the booker<br>${who}${phoneHtml ? `<br>${phoneHtml}` : ""}</p>`;
-}
-
-function bookingBlock(b: Record<string, unknown>) {
-  const rows: [string, unknown][] = [
-    ["Customer", b.customer_name],
-    ["Event", b.event_type],
-    ["Date", b.event_date],
-    ["Time", b.start_time],
-    ["Car", b.car_name],
-    ["Pickup", b.pickup_location],
-    ["Drop-off", b.return_location],
-  ];
-  return rows
-    .filter(([, v]) => v)
-    .map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#6b6052;font-size:13px">${k}</td><td style="padding:4px 0;font-weight:600">${v}</td></tr>`)
-    .join("");
-}
-
-function driverBookingBlock(b: Record<string, unknown>) {
-  const time = [b.start_time, b.end_time].filter(Boolean).join(" – ");
-  const rows: [string, unknown][] = [
-    ["Customer", b.customer_name],
-    ["Event", b.event_type],
-    ["Date", b.event_date],
-    ["Time", time || b.start_time],
-    ["Car", b.car_name],
-    ["Pickup", b.pickup_location],
-    ["Drop-off", b.return_location],
-    ["Phone", b.customer_phone],
-    ["Email", b.customer_email],
-    ["Notes", b.notes],
-    ["Status", b.status],
-  ];
-  let html = rows
-    .filter(([, v]) => v)
-    .map(([k, v]) => `<tr><td style="padding:4px 12px 4px 0;color:#6b6052;font-size:13px;vertical-align:top">${esc(k)}</td><td style="padding:4px 0;font-weight:600;white-space:pre-line">${esc(v)}</td></tr>`)
-    .join("");
-  if (b.needs_trailer) {
-    html += `<tr><td style="padding:4px 12px 4px 0;color:#6b6052;font-size:13px">Trailer</td><td style="padding:4px 0;font-weight:600">Yes — car must be trailered</td></tr>`;
-  }
-  return html;
-}
-
-function wrap(inner: string) {
-  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#21130f">${inner}</div>`;
-}
-
-function appButton(label: string) {
-  return `<p><a href="${APP_URL}" style="background:#6e1d1a;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;display:inline-block">${esc(label)}</a></p>`;
-}
-
-function payLine(pay: unknown) {
-  if (pay == null || pay === "") return "";
-  return `<p style="font-size:18px;font-weight:700;color:#3c6b4f">You earn $${esc(pay)}</p>`;
-}
-
-function bookingTitle(b: Record<string, unknown>) {
-  const who = b.customer_name || b.event_type || "Booking";
-  const when = b.event_date ? ` — ${b.event_date}` : "";
-  return `${who}${when}`;
+  return true;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
-    const url = new URL(req.url);
-    const provided = req.headers.get("x-notify-secret") || url.searchParams.get("secret") || "";
-    if (NOTIFY_SECRET && provided !== NOTIFY_SECRET) {
+    if (new URL(req.url).searchParams.has("secret")) {
+      console.log("send-notification: ignored secret in the query string");
+    }
+
+    const body = await req.json().catch(() => ({}));
+    if (!(await authorize(req, body))) {
       return new Response(JSON.stringify({ error: "unauthorized" }), {
         status: 401, headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
-    const body = await req.json().catch(() => ({}));
     const type = body.type;
     const b = body.booking ?? {};
     const pay = body.pay;
@@ -233,80 +182,9 @@ Deno.serve(async (req) => {
         </div>`;
       result = await sendEmail(to, `Your Chance Classics quote${q.event_date ? ` — ${q.event_date}` : ""}`, html);
     } else if (type === "quote_alternatives") {
-      const q = body.quote ?? {};
-      const to = body.to;
-      if (!to) throw new Error("quote_alternatives requires 'to'");
-      const money = (n: unknown) => `$${Number(n || 0).toFixed(2)}`;
-      const fallbackBook = body.book_url || "https://www.chanceclassics.com/book-online?referral=quote_email";
-      const alts = (Array.isArray(q.alternatives) ? q.alternatives : []).filter((a: Record<string, unknown>) =>
-        String(a?.name || "").trim().toLowerCase() !== "elvira"
-      );
-      const one = alts.length === 1;
-      const chosen = one ? alts[0] : null;
-      const chosenName = chosen ? String(chosen.name || "Classic car") : "";
-      const altRows = one && chosen
-        ? (() => {
-          const href = esc((chosen.book_url as string) || fallbackBook);
-          const hasBreakdown = chosen.base_rate != null || chosen.subtotal != null;
-          const lines: string[] = [];
-          if (hasBreakdown) {
-            lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(chosenName)} — base (up to 2 hours)</td><td style="padding:6px 0;text-align:right">${money(chosen.base_rate)}</td></tr>`);
-            if (Number(chosen.overage) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Additional hours (${esc(chosen.extra_hours)})</td><td style="padding:6px 0;text-align:right">${money(chosen.overage)}</td></tr>`);
-            if (Number(chosen.travel) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Travel (${esc(chosen.miles ?? q.miles)} mi, trailered)</td><td style="padding:6px 0;text-align:right">${money(chosen.travel)}</td></tr>`);
-            if (Number(chosen.hotel_fee) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Overnight hotel accommodation</td><td style="padding:6px 0;text-align:right">${money(chosen.hotel_fee)}</td></tr>`);
-            lines.push(`<tr><td style="padding:6px 14px 6px 0;border-top:1px solid #ddd">Subtotal</td><td style="padding:6px 0;text-align:right;border-top:1px solid #ddd">${money(chosen.subtotal)}</td></tr>`);
-            lines.push(`<tr><td style="padding:6px 14px 6px 0">Tax</td><td style="padding:6px 0;text-align:right">${money(chosen.tax)}</td></tr>`);
-          } else {
-            lines.push(`<tr><td style="padding:6px 14px 6px 0;font-weight:700">${esc(chosenName)}</td><td></td></tr>`);
-          }
-          lines.push(`<tr><td style="padding:8px 14px 8px 0;font-weight:800;font-size:17px">Total</td><td style="padding:8px 0;text-align:right;font-weight:800;font-size:17px">${money(chosen.total)}</td></tr>`);
-          return `${lines.join("")}<tr><td colspan="2" style="padding:14px 0 0"><a href="${href}" style="background:#6e1d1a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Book ${esc(chosenName)}</a></td></tr>`;
-        })()
-        : alts.map((a: Record<string, unknown>) => {
-          const href = esc((a.book_url as string) || fallbackBook);
-          return `<tr>
-          <td style="padding:10px 14px 10px 0;border-bottom:1px solid #eee;vertical-align:top">
-            <div style="font-weight:700">${esc(a.name || "Classic car")}</div>
-            <a href="${href}" style="color:#6e1d1a;font-size:13px">Book this car</a>
-          </td>
-          <td style="padding:10px 0;border-bottom:1px solid #eee;text-align:right;font-weight:800;white-space:nowrap">${money(a.total)}</td>
-        </tr>`;
-        }).join("");
-      const bits: string[] = [];
-      if (q.hours) bits.push(`${q.hours} hours`);
-      if (q.miles) bits.push(`${q.miles} mi trailered`);
-      if (Number(q.hotel_fee) > 0) bits.push("overnight hotel");
-      bits.push("tax included");
-      const intro = q.note
-        ? esc(q.note).replace(/\n/g, "<br>")
-        : one
-          ? `${esc(q.car_name || "The car you asked about")} is already booked${q.event_date ? ` on ${esc(q.event_date)}` : ""}. Same trip details — here's the price for the ${esc(chosenName)}.`
-          : `${esc(q.car_name || "The car you asked about")} is already booked${q.event_date ? ` on ${esc(q.event_date)}` : ""}. Same trip details — here are prices for the cars we still have that day.`;
-      const heading = one ? "This car is still open" : "A few cars are still open";
-      const subject = one
-        ? `${chosenName} is still open${q.event_date ? ` — ${q.event_date}` : ""}`
-        : `Cars still open${q.event_date ? ` — ${q.event_date}` : ""}`;
-      const validLine = q.expires
-        ? (one
-          ? `This price is good through ${esc(q.expires)}.`
-          : `These prices are good through ${esc(q.expires)}.`)
-        : "";
-      const footer = one
-        ? "This is an estimate and doesn't hold a date. Reply if you want this car, or tap Book above."
-        : "This is an estimate and doesn't hold a date. Reply and tell us which car you want, or tap Book on one above.";
-      const html = `
-        <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;color:#21130f">
-          <h2 style="color:#6e1d1a">${heading}</h2>
-          <p>Hi ${esc(q.customer_name || "there")},</p>
-          <p>${intro}</p>
-          ${q.event_location ? `<p style="color:#6b6052">${esc(q.event_location)}</p>` : ""}
-          <p style="font-size:13px;color:#6b6052">${esc(bits.join(" · "))}</p>
-          <table style="border-collapse:collapse;width:100%;margin:14px 0">${altRows}</table>
-          ${validLine ? `<p style="color:#b8862c;font-weight:700;font-size:13px">${validLine}</p>` : ""}
-          <p style="color:#6b6052;font-size:13px;margin-top:18px">${footer}</p>
-          <p style="margin-top:18px">Tim Chance<br>Chance Classics<br>(318) 344-5001</p>
-        </div>`;
-      result = await sendEmail(to, subject, html);
+      result = await handleQuoteAlternatives(body);
+    } else if (type === "quote_declined") {
+      result = await handleQuoteDeclined(body);
     } else if (type === "reoffer") {
       if (!driverEmail) throw new Error("reoffer requires driver_email");
       const subject = `🏷️ New pay rate! Rental up for grabs — ${b.event_date ?? ""}`;

@@ -1,17 +1,29 @@
 # Edge Function gateway settings for deploys from this repo.
-# quote-capture is a Wix webhook. Wix does not send a user JWT.
-# Auth is WIX_SYNC_SECRET, checked inside the function.
-#
-# Deploy only quote-capture. A bare `supabase functions deploy` also uploads
-# send-notification and scheduled-tasks from this repo and can overwrite
-# newer code that is live but not committed here.
+# Deploy functions one at a time. A bare `supabase functions deploy`
+# also uploads scheduled-tasks. Do not deploy scheduled-tasks from this
+# repo unless you have compared it to live. Its supabase-js import uses
+# the npm: specifier so a future deploy can bundle; the rest of that file
+# was not re-synced here.
 
+# quote-capture is a Wix webhook. Wix does not send a user JWT.
+# Auth is the WIX_SYNC_SECRET env var only (?secret= or x-secret).
+# An unset secret fails closed. Verify JWT stays OFF.
 [functions.quote-capture]
 verify_jwt = false
 
-# Keep JWT off if these are ever deployed from here. They authenticate with
-# their own shared secrets. Prefer not to deploy them from this repo.
+# Verify JWT stays OFF. send-notification checks the caller itself:
+# a signed-in admin (or a driver, for claim / pass / offer) via the
+# Authorization bearer token, or a server job via the x-notify-secret header.
+# The secret is not accepted in the URL.
 [functions.send-notification]
+verify_jwt = false
+
+# Verify JWT stays OFF. create-crew-login checks the caller itself:
+# a signed-in garage admin via the Authorization bearer token, or a
+# server job via the x-crew-admin-secret header. The URL secret is not
+# accepted. A secret-only caller has no user JWT, so the gateway must
+# not require one.
+[functions.create-crew-login]
 verify_jwt = false
 
 [functions.scheduled-tasks]

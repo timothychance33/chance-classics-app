@@ -22,7 +22,8 @@ import {
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
-const notify = readFileSync(join(root, 'supabase/functions/send-notification/index.ts'), 'utf8');
+const notifyDir = join(root, 'supabase/functions/send-notification');
+const notify = ['index.ts', 'shared.ts', 'quotes.ts'].map((name) => readFileSync(join(notifyDir, name), 'utf8')).join('\n');
 
 const mustang = { id: 'm', name: '1965 Mustang', base_rate: 500, book_url: 'https://www.chanceclassics.com/mustang' };
 const chevy = { id: 'c', name: '1957 Chevy', base_rate: 600, book_url: 'https://www.chanceclassics.com/chevy' };

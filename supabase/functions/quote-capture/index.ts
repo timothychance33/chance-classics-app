@@ -3,9 +3,15 @@
 // Receives the Wix "Price Quote" form submission, saves it to
 // rental.quote_requests, then emails the owner via Resend.
 //
-// Webhook auth: WIX_SYNC_SECRET, sent as ?secret= or x-secret.
-// There is no in-source fallback. Verify JWT must stay OFF — Wix
-// does not send a user JWT. The shared secret is the auth check.
+// Webhook auth: Deno.env WIX_SYNC_SECRET only, sent as ?secret= or x-secret.
+// There is no in-source fallback. If the env var is unset the function
+// logs and returns 500. A wrong secret returns 401.
+// Verify JWT must stay OFF — Wix does not send a user JWT.
+//
+// Who sends it: Wix Automations → "Price Quote" (form submitted) posts
+// to this function with ?secret= on the URL. The same env var is also
+// what wix-booking-sync checks for the "Booking > App Sync" automation.
+// Rotating WIX_SYNC_SECRET means updating both automation URLs.
 //
 // Owner mail uses the same project secrets as send-notification:
 //   RESEND_API_KEY, OWNER_EMAIL, FROM_EMAIL, APP_URL
@@ -16,7 +22,7 @@
 // Set WIX_SYNC_SECRET first, to the secret the Wix automation already sends.
 // ============================================================
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   matchCar,
   ownerQuoteRequestHtml,
@@ -85,6 +91,10 @@ async function emailOwner(quote: Record<string, unknown>) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
+    if (!SECRET) {
+      console.error("quote-capture: WIX_SYNC_SECRET is not set");
+      return json(500, { error: "server misconfigured" });
+    }
     const url = new URL(req.url);
     const provided = req.headers.get("x-secret") || url.searchParams.get("secret") || "";
     if (!webhookAuthorized(SECRET, provided)) return json(401, { error: "unauthorized" });
