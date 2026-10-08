@@ -1,0 +1,214 @@
+{
+  "redirects": [
+    {
+      "source": "/blank-2",
+      "destination": "/quoterequest/",
+      "permanent": true
+    },
+    {
+      "source": "/blank-3",
+      "destination": "/services/",
+      "permanent": true
+    },
+    {
+      "source": "/blank-1",
+      "destination": "/about/",
+      "permanent": true
+    },
+    {
+      "source": "/general-5",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/bookonline",
+      "destination": "/book-online/",
+      "permanent": true
+    },
+    {
+      "source": "/general-5-1",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/copy-of-patsy",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/copy-of-patsy-4",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/copy-of-phyllis",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/copy-of-brenda",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/copy-of-patsy-3",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/copy-of-sylvia",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/copy-of-patsy-5",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/copy-of-patsy-2",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/copy-of-patsy-1",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1953-packard-limo-2-hour-vehicle-rental",
+      "destination": "/service-page/1953-packard-limo/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1953-packard-limo-2-hour-vehicle-rental",
+      "destination": "/booking-calendar/1953-packard-limo/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1961-buick",
+      "destination": "/service-page/1961-buick-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1961-buick-2-hour-vehicle-rental",
+      "destination": "/service-page/1961-buick-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1961-buick",
+      "destination": "/booking-calendar/1961-buick-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1961-buick-2-hour-vehicle-rental",
+      "destination": "/booking-calendar/1961-buick-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1941-buick",
+      "destination": "/service-page/1941-buick-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1941-buick-2-hour-vehicle-rental",
+      "destination": "/service-page/1941-buick-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1941-buick",
+      "destination": "/booking-calendar/1941-buick-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1941-buick-2-hour-vehicle-rental",
+      "destination": "/booking-calendar/1941-buick-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1950-ford",
+      "destination": "/service-page/1950-ford-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1950-ford-2-hour-vehicle-rental",
+      "destination": "/service-page/1950-ford-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1950-ford",
+      "destination": "/booking-calendar/1950-ford-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1950-ford-2-hour-vehicle-rental",
+      "destination": "/booking-calendar/1950-ford-convertible/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1960-corvette-2-hour-vehicle-rental",
+      "destination": "/service-page/1960-corvette/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1960-corvette-2-hour-vehicle-rental",
+      "destination": "/booking-calendar/1960-corvette/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1957-chevy-2-hour-vehicle-rental",
+      "destination": "/service-page/1957-chevy/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/2-hour-vehicle-rental",
+      "destination": "/service-page/1957-chevy/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1957-chevy-2-hour-vehicle-rental",
+      "destination": "/booking-calendar/1957-chevy/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/2-hour-vehicle-rental",
+      "destination": "/booking-calendar/1957-chevy/",
+      "permanent": true
+    },
+    {
+      "source": "/service-page/1970-chevelle-ss-2-hour-vehicle-rental",
+      "destination": "/service-page/1970-chevelle-ss/",
+      "permanent": true
+    },
+    {
+      "source": "/booking-calendar/1970-chevelle-ss-2-hour-vehicle-rental",
+      "destination": "/booking-calendar/1970-chevelle-ss/",
+      "permanent": true
+    },
+    {
+      "source": "/blog/categories/:path*",
+      "destination": "/blog/",
+      "permanent": true
+    },
+    {
+      "source": "/terms/:slug",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/termsandconditions",
+      "destination": "/rental-terms/",
+      "permanent": true
+    },
+    {
+      "source": "/portfolio-collections/my-portfolio/daisy",
+      "destination": "/portfolio/",
+      "permanent": true
+    },
+    {
+      "source": "/occasions/prom-and-homecoming",
+      "destination": "/occasions/parades-and-special-events/",
+      "permanent": true
+    }
+  ]
+}

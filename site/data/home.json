@@ -1,0 +1,145 @@
+{
+  "hero": {
+    "src": "/images/home_main_01.webp",
+    "alt": "AllImages-775.jpg",
+    "w": 7200,
+    "h": 4800,
+    "file": "home_main_01.jpg"
+  },
+  "fleet": [
+    {
+      "name": "Patsy",
+      "caption": "1953 Packard Patrician Limo / Starting at $500",
+      "href": "/portfolio-collections/my-portfolio/patsy",
+      "image": {
+        "src": "/images/home_main_02.webp",
+        "alt": "Starting at $500",
+        "w": 4032,
+        "h": 3024,
+        "file": "home_main_02.png"
+      }
+    },
+    {
+      "name": "Brenda",
+      "caption": "1961 Buick Invicta / Starting at $500",
+      "href": "/portfolio-collections/my-portfolio/brenda",
+      "image": {
+        "src": "/images/home_main_03.webp",
+        "alt": "",
+        "w": 2048,
+        "h": 1536,
+        "file": "home_main_03.webp"
+      }
+    },
+    {
+      "name": "Bonnie",
+      "caption": "1937 Cadillac Fleetwood Series 75 / Starting at $600",
+      "href": "/portfolio-collections/my-portfolio/bonnie",
+      "image": {
+        "src": "/images/home_main_04.webp",
+        "alt": "Starting at $600",
+        "w": 4284,
+        "h": 4284,
+        "file": "home_main_04.jpg"
+      }
+    },
+    {
+      "name": "Phyllis",
+      "caption": "1941 Buick Super / Starting at $600",
+      "href": "/portfolio-collections/my-portfolio/phyllis",
+      "image": {
+        "src": "/images/home_main_05.webp",
+        "alt": "",
+        "w": 4032,
+        "h": 3024,
+        "file": "home_main_05.png"
+      }
+    },
+    {
+      "name": "Elsa",
+      "caption": "1954 Packard Caribbean / Starting at $600",
+      "href": "/portfolio-collections/my-portfolio/elsa",
+      "image": {
+        "src": "/images/home_main_06.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 4284,
+        "h": 4284,
+        "file": "home_main_06.jpg"
+      }
+    },
+    {
+      "name": "Carmen",
+      "caption": "1976 Cadillac Eldorado / Starting at $500",
+      "href": "/portfolio-collections/my-portfolio/carmen",
+      "image": {
+        "src": "/images/home_main_07.webp",
+        "alt": "1976 Cadillac Eldorado",
+        "w": 1440,
+        "h": 1080,
+        "file": "home_main_07.jpg"
+      }
+    },
+    {
+      "name": "Black Betty",
+      "caption": "1950 Ford Custom / Starting at $500",
+      "href": "/portfolio-collections/my-portfolio/black-betty",
+      "image": {
+        "src": "/images/home_main_08.webp",
+        "alt": "",
+        "w": 4032,
+        "h": 3024,
+        "file": "home_main_08.png"
+      }
+    },
+    {
+      "name": "Rosie",
+      "caption": "1960 Chevrolet Corvette / Starting at $700",
+      "href": "/portfolio-collections/my-portfolio/rosie",
+      "image": {
+        "src": "/images/home_main_09.webp",
+        "alt": "",
+        "w": 3000,
+        "h": 2250,
+        "file": "home_main_09.jpg"
+      }
+    },
+    {
+      "name": "Veronica",
+      "caption": "1957 Chevrolet Belair / Starting at $700",
+      "href": "/portfolio-collections/my-portfolio/veronica",
+      "image": {
+        "src": "/images/home_main_10.webp",
+        "alt": "",
+        "w": 3000,
+        "h": 2250,
+        "file": "home_main_10.jpg"
+      }
+    },
+    {
+      "name": "Sylvia",
+      "caption": "1970 Chevrolet Chevelle SS / Starting at $500",
+      "href": "/portfolio-collections/my-portfolio/sylvia",
+      "image": {
+        "src": "/images/home_main_11.webp",
+        "alt": "",
+        "w": 4032,
+        "h": 3024,
+        "file": "home_main_11.jpg"
+      }
+    }
+  ],
+  "portrait": {
+    "src": "/images/home_who-we-are_01.webp",
+    "alt": "IMG_7708.heic",
+    "w": 2000,
+    "h": 3000,
+    "file": "home_who-we-are_01.png"
+  },
+  "wedding": {
+    "src": "/images/home_main_12.webp",
+    "alt": "wedding.jpg",
+    "w": 2693,
+    "h": 1795,
+    "file": "home_main_12.jpg"
+  }
+}

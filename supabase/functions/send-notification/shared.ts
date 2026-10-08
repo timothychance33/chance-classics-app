@@ -95,3 +95,15 @@ export function bookingTitle(b: Record<string, unknown>) {
   const when = b.event_date ? ` — ${b.event_date}` : "";
   return `${who}${when}`;
 }
+
+/** Who the driver calls during the event. Empty when the booking has no day-of contact. */
+export function dayOfContactEmailHtml(b: Record<string, unknown>) {
+  const name = String(b.day_of_contact_name || "").trim();
+  const phone = String(b.day_of_contact_phone || "").trim();
+  const role = String(b.day_of_contact_role || "").trim();
+  if (!name && !phone && !role) return "";
+  const href = phone.replace(/[^\d+]/g, "");
+  const phoneHtml = phone ? (href ? `<a href="tel:${esc(href)}">${esc(phone)}</a>` : esc(phone)) : "";
+  const who = [name ? esc(name) : "", role ? esc(role) : ""].filter(Boolean).join(" · ");
+  return `<p style="margin:8px 0 0;font-size:14px"><b>Day-of contact</b> — call during the event, not the booker<br>${who}${phoneHtml ? `<br>${phoneHtml}` : ""}</p>`;
+}

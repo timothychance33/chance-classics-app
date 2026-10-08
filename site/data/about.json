@@ -1,0 +1,25 @@
+{
+  "images": [
+    {
+      "src": "/images/about_our-automotive-family_01.webp",
+      "alt": "driving.JPG",
+      "w": 1242,
+      "h": 2208,
+      "file": "about_our-automotive-family_01.jpg"
+    },
+    {
+      "src": "/images/about_tim-chance_01.webp",
+      "alt": "Chance Classics",
+      "w": 2250,
+      "h": 3000,
+      "file": "about_tim-chance_01.png"
+    },
+    {
+      "src": "/images/about_carl-chance_01.webp",
+      "alt": "Chance Classics",
+      "w": 1182,
+      "h": 1518,
+      "file": "about_carl-chance_01.png"
+    }
+  ]
+}

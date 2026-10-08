@@ -1,0 +1,330 @@
+[
+  {
+    "car": "Patsy",
+    "name": "1953 Packard Limo",
+    "tagLine": "Patsy - 1953 Packard Patrician Limo",
+    "slug": "1953-packard-limo",
+    "oldSlugs": [
+      "1953-packard-limo-2-hour-vehicle-rental"
+    ],
+    "price": 500,
+    "description": "$500 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile), $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "patsy",
+    "image": {
+      "src": "/images/book-online_1953-packard-limo_01.webp",
+      "alt": "1953 Packard Limo",
+      "w": 4032,
+      "h": 3024,
+      "file": "book-online_1953-packard-limo_01.png"
+    },
+    "gallery": [
+      {
+        "src": "/images/service-1953-packard-limo_1953-packard-limo_02.webp",
+        "alt": "1953 Packard Limo",
+        "w": 4032,
+        "h": 3024,
+        "file": "service-1953-packard-limo_1953-packard-limo_02.png"
+      },
+      {
+        "src": "/images/service-1953-packard-limo_1953-packard-limo_03.webp",
+        "alt": "1953 Packard Limo",
+        "w": 4032,
+        "h": 3024,
+        "file": "service-1953-packard-limo_1953-packard-limo_03.png"
+      },
+      {
+        "src": "/images/home_main_02.webp",
+        "alt": "Starting at $500",
+        "w": 4032,
+        "h": 3024,
+        "file": "home_main_02.png"
+      },
+      {
+        "src": "/images/service-1953-packard-limo_1953-packard-limo_04.webp",
+        "alt": "1953 Packard Limo",
+        "w": 4032,
+        "h": 3024,
+        "file": "service-1953-packard-limo_1953-packard-limo_04.png"
+      }
+    ],
+    "servicePageUrl": "/service-page/1953-packard-limo",
+    "bookingCalendarUrl": "/booking-calendar/1953-packard-limo",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1953-packard-limo"
+  },
+  {
+    "car": "Brenda",
+    "name": "1961 Buick Convertible",
+    "tagLine": "Brenda - 1961 Buick Invicta Convertible",
+    "slug": "1961-buick-convertible",
+    "oldSlugs": [
+      "1961-buick",
+      "1961-buick-2-hour-vehicle-rental"
+    ],
+    "price": 500,
+    "description": "$500 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile), $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "brenda",
+    "image": {
+      "src": "/images/book-online_1961-buick-convertible_01.webp",
+      "alt": "1961 Buick Convertible",
+      "w": 939,
+      "h": 626,
+      "file": "book-online_1961-buick-convertible_01.webp"
+    },
+    "gallery": [],
+    "servicePageUrl": "/service-page/1961-buick-convertible",
+    "bookingCalendarUrl": "/booking-calendar/1961-buick-convertible",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1961-buick-convertible"
+  },
+  {
+    "car": "Bonnie",
+    "name": "1937 Cadillac Fleetwood Series 75",
+    "tagLine": "Bonnie - 1937 Cadillac",
+    "slug": "1937-cadillac-fleetwood-series-75",
+    "oldSlugs": [],
+    "price": 600,
+    "description": "$600 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile), $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "bonnie",
+    "image": {
+      "src": "/images/book-online_1937-cadillac-fleetwood-series_01.webp",
+      "alt": "1937 Cadillac Fleetwood Series 75",
+      "w": 4284,
+      "h": 4284,
+      "file": "book-online_1937-cadillac-fleetwood-series_01.jpg"
+    },
+    "gallery": [],
+    "servicePageUrl": "/service-page/1937-cadillac-fleetwood-series-75",
+    "bookingCalendarUrl": "/booking-calendar/1937-cadillac-fleetwood-series-75",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1937-cadillac-fleetwood-series-75"
+  },
+  {
+    "car": "Phyllis",
+    "name": "1941 Buick Convertible",
+    "tagLine": "Phyllis - 1941 Buick Super Convertible",
+    "slug": "1941-buick-convertible",
+    "oldSlugs": [
+      "1941-buick",
+      "1941-buick-2-hour-vehicle-rental"
+    ],
+    "price": 600,
+    "description": "$600 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile), $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "phyllis",
+    "image": {
+      "src": "/images/book-online_1941-buick-convertible_01.webp",
+      "alt": "1941 Buick Convertible",
+      "w": 4032,
+      "h": 3024,
+      "file": "book-online_1941-buick-convertible_01.png"
+    },
+    "gallery": [],
+    "servicePageUrl": "/service-page/1941-buick-convertible",
+    "bookingCalendarUrl": "/booking-calendar/1941-buick-convertible",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1941-buick-convertible"
+  },
+  {
+    "car": "Elsa",
+    "name": "1954 Packard Caribbean",
+    "tagLine": "Elsa - 1954 Packard Caribbean Convertible",
+    "slug": "1954-packard-caribbean",
+    "oldSlugs": [],
+    "price": 600,
+    "description": "$500 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile), $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "elsa",
+    "image": {
+      "src": "/images/book-online_1954-packard-caribbean_01.webp",
+      "alt": "1954 Packard Caribbean",
+      "w": 4284,
+      "h": 4284,
+      "file": "book-online_1954-packard-caribbean_01.jpg"
+    },
+    "gallery": [
+      {
+        "src": "/images/home_main_06.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 4284,
+        "h": 4284,
+        "file": "home_main_06.jpg"
+      },
+      {
+        "src": "/images/service-1954-packard-caribbean_1954-packard-caribbean_01.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 4284,
+        "h": 4284,
+        "file": "service-1954-packard-caribbean_1954-packard-caribbean_01.jpg"
+      },
+      {
+        "src": "/images/service-1954-packard-caribbean_1954-packard-caribbean_02.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 5712,
+        "h": 4284,
+        "file": "service-1954-packard-caribbean_1954-packard-caribbean_02.png"
+      },
+      {
+        "src": "/images/service-1954-packard-caribbean_1954-packard-caribbean_03.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 3421,
+        "h": 3421,
+        "file": "service-1954-packard-caribbean_1954-packard-caribbean_03.jpg"
+      },
+      {
+        "src": "/images/service-1954-packard-caribbean_1954-packard-caribbean_04.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 5712,
+        "h": 4284,
+        "file": "service-1954-packard-caribbean_1954-packard-caribbean_04.png"
+      },
+      {
+        "src": "/images/service-1954-packard-caribbean_1954-packard-caribbean_05.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 2509,
+        "h": 1882,
+        "file": "service-1954-packard-caribbean_1954-packard-caribbean_05.png"
+      },
+      {
+        "src": "/images/service-1954-packard-caribbean_1954-packard-caribbean_06.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 5712,
+        "h": 4284,
+        "file": "service-1954-packard-caribbean_1954-packard-caribbean_06.jpg"
+      },
+      {
+        "src": "/images/service-1954-packard-caribbean_1954-packard-caribbean_07.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 5712,
+        "h": 4284,
+        "file": "service-1954-packard-caribbean_1954-packard-caribbean_07.png"
+      },
+      {
+        "src": "/images/service-1954-packard-caribbean_1954-packard-caribbean_08.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 3700,
+        "h": 3700,
+        "file": "service-1954-packard-caribbean_1954-packard-caribbean_08.jpg"
+      },
+      {
+        "src": "/images/service-1954-packard-caribbean_1954-packard-caribbean_09.webp",
+        "alt": "1954 Packard Caribbean",
+        "w": 5712,
+        "h": 4284,
+        "file": "service-1954-packard-caribbean_1954-packard-caribbean_09.jpg"
+      }
+    ],
+    "servicePageUrl": "/service-page/1954-packard-caribbean",
+    "bookingCalendarUrl": "/booking-calendar/1954-packard-caribbean",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1954-packard-caribbean"
+  },
+  {
+    "car": "Carmen",
+    "name": "1976 Cadillac Eldorado",
+    "tagLine": "Carmen - 1976 Cadillac Eldorado Convertible",
+    "slug": "1976-cadillac-eldorado",
+    "oldSlugs": [],
+    "price": 500,
+    "description": "$500 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be cahrged an additional $3/mile).  $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "carmen",
+    "image": {
+      "src": "/images/home_main_07.webp",
+      "alt": "1976 Cadillac Eldorado",
+      "w": 1440,
+      "h": 1080,
+      "file": "home_main_07.jpg"
+    },
+    "gallery": [],
+    "servicePageUrl": "/service-page/1976-cadillac-eldorado",
+    "bookingCalendarUrl": "/booking-calendar/1976-cadillac-eldorado",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1976-cadillac-eldorado"
+  },
+  {
+    "car": "Black Betty",
+    "name": "1950 Ford Convertible",
+    "tagLine": "Black Betty - 1950 Ford Custom Deluxe Convertible",
+    "slug": "1950-ford-convertible",
+    "oldSlugs": [
+      "1950-ford",
+      "1950-ford-2-hour-vehicle-rental"
+    ],
+    "price": 500,
+    "description": "$500 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile), $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "black-betty",
+    "image": {
+      "src": "/images/book-online_1950-ford-convertible_01.webp",
+      "alt": "1950 Ford Convertible",
+      "w": 4032,
+      "h": 3024,
+      "file": "book-online_1950-ford-convertible_01.png"
+    },
+    "gallery": [],
+    "servicePageUrl": "/service-page/1950-ford-convertible",
+    "bookingCalendarUrl": "/booking-calendar/1950-ford-convertible",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1950-ford-convertible"
+  },
+  {
+    "car": "Rosie",
+    "name": "1960 Corvette",
+    "tagLine": "Rosie - 1960 Chevrolet Corvette",
+    "slug": "1960-corvette",
+    "oldSlugs": [
+      "1960-corvette-2-hour-vehicle-rental"
+    ],
+    "price": 700,
+    "description": "$500 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile), $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "rosie",
+    "image": {
+      "src": "/images/book-online_1960-corvette_01.webp",
+      "alt": "1960 Corvette",
+      "w": 3000,
+      "h": 2250,
+      "file": "book-online_1960-corvette_01.jpg"
+    },
+    "gallery": [],
+    "servicePageUrl": "/service-page/1960-corvette",
+    "bookingCalendarUrl": "/booking-calendar/1960-corvette",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1960-corvette"
+  },
+  {
+    "car": "Veronica",
+    "name": "1957 Chevy",
+    "tagLine": "Veronica - 1957 Chevy Bel Air",
+    "slug": "1957-chevy",
+    "oldSlugs": [
+      "1957-chevy-2-hour-vehicle-rental",
+      "2-hour-vehicle-rental"
+    ],
+    "price": 700,
+    "description": "$700 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile), $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "veronica",
+    "image": {
+      "src": "/images/book-online_1957-chevy_01.webp",
+      "alt": "1957 Chevy",
+      "w": 3000,
+      "h": 2250,
+      "file": "book-online_1957-chevy_01.jpg"
+    },
+    "gallery": [],
+    "servicePageUrl": "/service-page/1957-chevy",
+    "bookingCalendarUrl": "/booking-calendar/1957-chevy",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1957-chevy"
+  },
+  {
+    "car": "Sylvia",
+    "name": "1970 Chevelle SS",
+    "tagLine": "Sylvia - 1970 Chevrolet Chevelle SS454",
+    "slug": "1970-chevelle-ss",
+    "oldSlugs": [
+      "1970-chevelle-ss-2-hour-vehicle-rental"
+    ],
+    "price": 500,
+    "description": "$500 for 2 hour session with the car (chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile), $100 for each additional hour.  All reservations require a $250 non-refundable retainer, balance will be billed seperately.  Please call, text or e-mail with any questions prior to booking.",
+    "portfolioSlug": "sylvia",
+    "image": {
+      "src": "/images/book-online_1970-chevelle-ss_01.webp",
+      "alt": "1970 Chevelle SS",
+      "w": 4032,
+      "h": 3024,
+      "file": "book-online_1970-chevelle-ss_01.jpg"
+    },
+    "gallery": [],
+    "servicePageUrl": "/service-page/1970-chevelle-ss",
+    "bookingCalendarUrl": "/booking-calendar/1970-chevelle-ss",
+    "wixBookUrl": "https://www.chanceclassics.com/booking-calendar/1970-chevelle-ss"
+  }
+]

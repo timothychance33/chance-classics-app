@@ -1,0 +1,1759 @@
+{
+  "bonnie": {
+    "slug": "bonnie",
+    "title": "Bonnie",
+    "subtitle": "1937 Cadillac Fleetwood Series 75",
+    "hero": {
+      "src": "/images/cars_cars_01.webp",
+      "alt": "Bonnie",
+      "w": 4284,
+      "h": 4284,
+      "file": "cars_cars_01.jpg"
+    },
+    "images": [
+      {
+        "src": "/images/cars-bonnie_gallery_01.webp",
+        "alt": "",
+        "w": 4032,
+        "h": 3024,
+        "file": "cars-bonnie_gallery_01.jpg"
+      },
+      {
+        "src": "/images/cars-bonnie_gallery_02.webp",
+        "alt": "",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-bonnie_gallery_02.jpg"
+      },
+      {
+        "src": "/images/cars-bonnie_gallery_03.webp",
+        "alt": "2026-01-18_08-17-10_000",
+        "w": 1168,
+        "h": 880,
+        "file": "cars-bonnie_gallery_03.jpg"
+      },
+      {
+        "src": "/images/cars-bonnie_gallery_04.webp",
+        "alt": "2026-01-17_22-49-59_599",
+        "w": 4032,
+        "h": 3024,
+        "file": "cars-bonnie_gallery_04.jpg"
+      },
+      {
+        "src": "/images/cars-bonnie_gallery_05.webp",
+        "alt": "2026-01-10_17-06-46_285 (2026-01-18T17_28_15.886)",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-bonnie_gallery_05.jpg"
+      },
+      {
+        "src": "/images/cars-bonnie_gallery_06.webp",
+        "alt": "2026-01-10_17-06-18_340",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-bonnie_gallery_06.jpg"
+      },
+      {
+        "src": "/images/cars-bonnie_gallery_07.webp",
+        "alt": "2026-01-10_17-06-00_956 (2026-01-18T17_28_26.005)",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-bonnie_gallery_07.jpg"
+      },
+      {
+        "src": "/images/cars-bonnie_gallery_08.webp",
+        "alt": "2026-01-10_17-05-33_066",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-bonnie_gallery_08.jpg"
+      }
+    ]
+  },
+  "elsa": {
+    "slug": "elsa",
+    "title": "Elsa",
+    "subtitle": "1954 Packard Caribbean",
+    "hero": {
+      "src": "/images/cars_cars_02.webp",
+      "alt": "IMG_2309.HEIC",
+      "w": 5712,
+      "h": 4284,
+      "file": "cars_cars_02.png"
+    },
+    "images": [
+      {
+        "src": "/images/cars-elsa_gallery_01.webp",
+        "alt": "4D4A8DA7-A08F-45CB-8765-08D7C142BBF4.jpeg",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-elsa_gallery_01.jpg"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_02.webp",
+        "alt": "IMG_2330.HEIC",
+        "w": 4284,
+        "h": 5712,
+        "file": "cars-elsa_gallery_02.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_03.webp",
+        "alt": "D882CB03-D3CF-420D-9F66-973484DA0EBD.jpeg",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-elsa_gallery_03.jpg"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_04.webp",
+        "alt": "IMG_2324.HEIC",
+        "w": 4284,
+        "h": 5712,
+        "file": "cars-elsa_gallery_04.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_05.webp",
+        "alt": "IMG_2320.HEIC",
+        "w": 2509,
+        "h": 1882,
+        "file": "cars-elsa_gallery_05.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_06.webp",
+        "alt": "IMG_2316.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-elsa_gallery_06.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_07.webp",
+        "alt": "DB851066-FB29-4249-BC48-98CD809D0D53.jpeg",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-elsa_gallery_07.jpg"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_08.webp",
+        "alt": "CBBA0B7D-7A8F-4CDC-BBEF-5A184ABBF168.jpeg",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-elsa_gallery_08.jpg"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_09.webp",
+        "alt": "IMG_2299.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-elsa_gallery_09.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_10.webp",
+        "alt": "C96085E2-FB07-418F-8B60-400BE6F17136.jpeg",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-elsa_gallery_10.jpg"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_11.webp",
+        "alt": "IMG_2282.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-elsa_gallery_11.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_12.webp",
+        "alt": "IMG_2278.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-elsa_gallery_12.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_13.webp",
+        "alt": "77021F18-93C3-42B3-84FC-F935D6462E29.jpeg",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-elsa_gallery_13.jpg"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_14.webp",
+        "alt": "IMG_2724.HEIC",
+        "w": 4032,
+        "h": 3024,
+        "file": "cars-elsa_gallery_14.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_15.webp",
+        "alt": "IMG_2720.HEIC",
+        "w": 4032,
+        "h": 3024,
+        "file": "cars-elsa_gallery_15.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_16.webp",
+        "alt": "FEF65709-2CCE-4574-9AEC-E226CF625F14.jpg",
+        "w": 590,
+        "h": 826,
+        "file": "cars-elsa_gallery_16.jpg"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_17.webp",
+        "alt": "0D0B7B03-D9FB-4E83-AAE7-B0A7E391A5FE.jpg",
+        "w": 590,
+        "h": 826,
+        "file": "cars-elsa_gallery_17.jpg"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_18.webp",
+        "alt": "D31F5C6B-355C-454F-B0E2-78D189CEFCC9.jpg",
+        "w": 590,
+        "h": 422,
+        "file": "cars-elsa_gallery_18.jpg"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_19.webp",
+        "alt": "IMG_2014.heic",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-elsa_gallery_19.png"
+      },
+      {
+        "src": "/images/cars-elsa_gallery_20.webp",
+        "alt": "IMG_4222.png",
+        "w": 1170,
+        "h": 2532,
+        "file": "cars-elsa_gallery_20.png"
+      }
+    ]
+  },
+  "patsy": {
+    "slug": "patsy",
+    "title": "Patsy",
+    "subtitle": "1953 Packard Patrician Limousine",
+    "hero": {
+      "src": "/images/cars_cars_03.webp",
+      "alt": "IMG_0070.JPG",
+      "w": 645,
+      "h": 430,
+      "file": "cars_cars_03.jpg"
+    },
+    "images": [
+      {
+        "src": "/images/cars-patsy_gallery_01.webp",
+        "alt": "IMG_0070.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_01.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_02.webp",
+        "alt": "ADFF4B61-FA6B-4203-9A67-628E4ABF7E38",
+        "w": 646,
+        "h": 968,
+        "file": "cars-patsy_gallery_02.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_03.webp",
+        "alt": "294914A5-2C03-4D7C-BF8D-F532E3215A48",
+        "w": 645,
+        "h": 430,
+        "file": "cars-patsy_gallery_03.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_04.webp",
+        "alt": "66C02DEB-E47A-4A53-90D7-42A3E9C1ED73",
+        "w": 646,
+        "h": 968,
+        "file": "cars-patsy_gallery_04.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_05.webp",
+        "alt": "6AE4CEEC-9748-4CE6-999E-19A0026EE8C0",
+        "w": 645,
+        "h": 430,
+        "file": "cars-patsy_gallery_05.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_06.webp",
+        "alt": "IMG_0070.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_06.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_07.webp",
+        "alt": "IMG_9822.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_07.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_08.webp",
+        "alt": "IMG_9824.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_08.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_09.webp",
+        "alt": "IMG_9825.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_09.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_10.webp",
+        "alt": "IMG_9826.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_10.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_11.webp",
+        "alt": "IMG_0056.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_11.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_12.webp",
+        "alt": "IMG_0057.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_12.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_13.webp",
+        "alt": "IMG_0060.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_13.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_14.webp",
+        "alt": "IMG_0063.JPG",
+        "w": 2000,
+        "h": 3000,
+        "file": "cars-patsy_gallery_14.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_15.webp",
+        "alt": "IMG_0067.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_15.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_16.webp",
+        "alt": "IMG_0068.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_16.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_17.webp",
+        "alt": "IMG_0073.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_17.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_18.webp",
+        "alt": "IMG_0074.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_18.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_19.webp",
+        "alt": "IMG_0076.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_19.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_20.webp",
+        "alt": "IMG_0077.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_20.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_21.webp",
+        "alt": "IMG_0079.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_21.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_22.webp",
+        "alt": "IMG_0081.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_22.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_23.webp",
+        "alt": "IMG_0083.JPG",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-patsy_gallery_23.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_24.webp",
+        "alt": "IMG_7956.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_24.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_25.webp",
+        "alt": "IMG_7953.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_25.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_26.webp",
+        "alt": "IMG_7957.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_26.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_27.webp",
+        "alt": "IMG_7959.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_27.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_28.webp",
+        "alt": "IMG_7964.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_28.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_29.webp",
+        "alt": "IMG_7967.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_29.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_30.webp",
+        "alt": "IMG_7989.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_30.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_31.webp",
+        "alt": "IMG_7990.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_31.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_32.webp",
+        "alt": "IMG_7994.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_32.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_33.webp",
+        "alt": "IMG_7998.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_33.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_34.webp",
+        "alt": "IMG_8001.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_34.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_35.webp",
+        "alt": "IMG_8003.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_35.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_36.webp",
+        "alt": "IMG_8008.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_36.jpg"
+      },
+      {
+        "src": "/images/cars-patsy_gallery_37.webp",
+        "alt": "IMG_8011.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-patsy_gallery_37.jpg"
+      }
+    ]
+  },
+  "phyllis": {
+    "slug": "phyllis",
+    "title": "Phyllis",
+    "subtitle": "1941 Buick Super 8 Convertible",
+    "hero": {
+      "src": "/images/cars_cars_04.webp",
+      "alt": "IMG_2222.HEIC",
+      "w": 5712,
+      "h": 4284,
+      "file": "cars_cars_04.png"
+    },
+    "images": [
+      {
+        "src": "/images/cars-phyllis_gallery_01.webp",
+        "alt": "",
+        "w": 768,
+        "h": 432,
+        "file": "cars-phyllis_gallery_01.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_02.webp",
+        "alt": "IMG_0585.JPG",
+        "w": 3648,
+        "h": 5472,
+        "file": "cars-phyllis_gallery_02.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_03.webp",
+        "alt": "IMG_0584.JPG",
+        "w": 3324,
+        "h": 4986,
+        "file": "cars-phyllis_gallery_03.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_04.webp",
+        "alt": "IMG_0582.JPG",
+        "w": 5472,
+        "h": 3648,
+        "file": "cars-phyllis_gallery_04.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_05.webp",
+        "alt": "IMG_0581.JPG",
+        "w": 3045,
+        "h": 4568,
+        "file": "cars-phyllis_gallery_05.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_06.webp",
+        "alt": "IMG_0583.JPG",
+        "w": 3648,
+        "h": 5472,
+        "file": "cars-phyllis_gallery_06.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_07.webp",
+        "alt": "IMG_0579.JPG",
+        "w": 3365,
+        "h": 5048,
+        "file": "cars-phyllis_gallery_07.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_08.webp",
+        "alt": "IMG_0575.JPG",
+        "w": 3648,
+        "h": 5472,
+        "file": "cars-phyllis_gallery_08.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_09.webp",
+        "alt": "IMG_1675.JPG",
+        "w": 810,
+        "h": 1013,
+        "file": "cars-phyllis_gallery_09.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_10.webp",
+        "alt": "091694B6-E93A-466A-918E-44FB9D330084.png",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-phyllis_gallery_10.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_11.webp",
+        "alt": "9BE3C3F6-BF1D-4438-A290-5F6D9F84A04E.jpeg",
+        "w": 4284,
+        "h": 4284,
+        "file": "cars-phyllis_gallery_11.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_12.webp",
+        "alt": "IMG_0205.JPG",
+        "w": 2304,
+        "h": 1536,
+        "file": "cars-phyllis_gallery_12.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_13.webp",
+        "alt": "IMG_0127.JPG",
+        "w": 2304,
+        "h": 1536,
+        "file": "cars-phyllis_gallery_13.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_14.webp",
+        "alt": "IMG_0126.JPG",
+        "w": 2304,
+        "h": 1536,
+        "file": "cars-phyllis_gallery_14.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_15.webp",
+        "alt": "IMG_9618.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-phyllis_gallery_15.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_16.webp",
+        "alt": "IMG_9616.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-phyllis_gallery_16.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_17.webp",
+        "alt": "IMG_1723.heic",
+        "w": 1024,
+        "h": 683,
+        "file": "cars-phyllis_gallery_17.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_18.webp",
+        "alt": "IMG_1722.heic",
+        "w": 1024,
+        "h": 683,
+        "file": "cars-phyllis_gallery_18.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_19.webp",
+        "alt": "IMG_1724.heic",
+        "w": 683,
+        "h": 1024,
+        "file": "cars-phyllis_gallery_19.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_20.webp",
+        "alt": "IMG_1719.heic",
+        "w": 1024,
+        "h": 683,
+        "file": "cars-phyllis_gallery_20.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_21.webp",
+        "alt": "IMG_9748.heic",
+        "w": 1500,
+        "h": 2249,
+        "file": "cars-phyllis_gallery_21.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_22.webp",
+        "alt": "IMG_9749.heic",
+        "w": 1500,
+        "h": 2249,
+        "file": "cars-phyllis_gallery_22.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_23.webp",
+        "alt": "IMG_9745.heic",
+        "w": 1500,
+        "h": 2249,
+        "file": "cars-phyllis_gallery_23.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_24.webp",
+        "alt": "6S2A6162-Edit-2 (1).heic",
+        "w": 1500,
+        "h": 2249,
+        "file": "cars-phyllis_gallery_24.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_25.webp",
+        "alt": "6S2A6119.heic",
+        "w": 1500,
+        "h": 2316,
+        "file": "cars-phyllis_gallery_25.png"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_26.webp",
+        "alt": "IMG_1725.jpg",
+        "w": 2000,
+        "h": 3000,
+        "file": "cars-phyllis_gallery_26.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_27.webp",
+        "alt": "IMG_1728.jpg",
+        "w": 2000,
+        "h": 3000,
+        "file": "cars-phyllis_gallery_27.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_28.webp",
+        "alt": "AllImages-786.jpg",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-phyllis_gallery_28.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_29.webp",
+        "alt": "AllImages-782.jpg",
+        "w": 3000,
+        "h": 1999,
+        "file": "cars-phyllis_gallery_29.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_30.webp",
+        "alt": "AllImages-780.jpg",
+        "w": 3000,
+        "h": 1999,
+        "file": "cars-phyllis_gallery_30.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_31.webp",
+        "alt": "AllImages-775.jpg",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-phyllis_gallery_31.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_32.webp",
+        "alt": "IMG_7598.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-phyllis_gallery_32.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_33.webp",
+        "alt": "IMG_7593.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-phyllis_gallery_33.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_34.webp",
+        "alt": "IMG_7587.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-phyllis_gallery_34.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_35.webp",
+        "alt": "IMG_7575.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-phyllis_gallery_35.jpg"
+      },
+      {
+        "src": "/images/cars-phyllis_gallery_36.webp",
+        "alt": "IMG_7568.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-phyllis_gallery_36.jpg"
+      }
+    ]
+  },
+  "brenda": {
+    "slug": "brenda",
+    "title": "Brenda",
+    "subtitle": "1961 Buick Invicta Convertible",
+    "hero": {
+      "src": "/images/cars_cars_05.webp",
+      "alt": "IMG_8033.JPG",
+      "w": 939,
+      "h": 626,
+      "file": "cars_cars_05.jpg"
+    },
+    "images": [
+      {
+        "src": "/images/cars-brenda_gallery_01.webp",
+        "alt": "IMG_5910.jpeg",
+        "w": 1980,
+        "h": 3520,
+        "file": "cars-brenda_gallery_01.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_02.webp",
+        "alt": "IMG_2398.jpeg",
+        "w": 5135,
+        "h": 3423,
+        "file": "cars-brenda_gallery_02.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_03.webp",
+        "alt": "2FE6C646-2809-4EB2-B296-89E91CC93C23.jpeg",
+        "w": 3920,
+        "h": 5880,
+        "file": "cars-brenda_gallery_03.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_04.webp",
+        "alt": "IMG_2399.jpeg",
+        "w": 5135,
+        "h": 3423,
+        "file": "cars-brenda_gallery_04.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_05.webp",
+        "alt": "15BC2947-6216-41A7-875C-803566460C57.jpeg",
+        "w": 4000,
+        "h": 6000,
+        "file": "cars-brenda_gallery_05.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_06.webp",
+        "alt": "D7017FA9-CD32-4004-87BE-313B40BC25AF.jpeg",
+        "w": 4000,
+        "h": 6000,
+        "file": "cars-brenda_gallery_06.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_07.webp",
+        "alt": "image0.jpeg",
+        "w": 3384,
+        "h": 5076,
+        "file": "cars-brenda_gallery_07.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_08.webp",
+        "alt": "image1.jpeg",
+        "w": 4000,
+        "h": 6000,
+        "file": "cars-brenda_gallery_08.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_09.webp",
+        "alt": "image2.jpeg",
+        "w": 3523,
+        "h": 5284,
+        "file": "cars-brenda_gallery_09.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_10.webp",
+        "alt": "IMG_6862.jpg",
+        "w": 3000,
+        "h": 1996,
+        "file": "cars-brenda_gallery_10.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_11.webp",
+        "alt": "IMG_6851.jpg",
+        "w": 3000,
+        "h": 1996,
+        "file": "cars-brenda_gallery_11.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_12.webp",
+        "alt": "IMG_6850.jpg",
+        "w": 3000,
+        "h": 1996,
+        "file": "cars-brenda_gallery_12.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_13.webp",
+        "alt": "IMG_8034.JPG",
+        "w": 2048,
+        "h": 1536,
+        "file": "cars-brenda_gallery_13.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_14.webp",
+        "alt": "IMG_8035.JPG",
+        "w": 1200,
+        "h": 900,
+        "file": "cars-brenda_gallery_14.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_15.webp",
+        "alt": "IMG_8324.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-brenda_gallery_15.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_16.webp",
+        "alt": "IMG_3228.jpg",
+        "w": 1290,
+        "h": 1019,
+        "file": "cars-brenda_gallery_16.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_17.webp",
+        "alt": "IMG_3227.jpg",
+        "w": 1283,
+        "h": 1707,
+        "file": "cars-brenda_gallery_17.jpg"
+      },
+      {
+        "src": "/images/cars-brenda_gallery_18.webp",
+        "alt": "IMG_3234.jpg",
+        "w": 1290,
+        "h": 1810,
+        "file": "cars-brenda_gallery_18.jpg"
+      }
+    ]
+  },
+  "carmen": {
+    "slug": "carmen",
+    "title": "Carmen",
+    "subtitle": "1976 Cadillac Eldorado Convertible",
+    "hero": {
+      "src": "/images/cars_cars_06.webp",
+      "alt": "90F8C60F-9062-4D41-BF71-1844CAD44AE7.jpg",
+      "w": 1440,
+      "h": 1080,
+      "file": "cars_cars_06.jpg"
+    },
+    "images": [
+      {
+        "src": "/images/cars-carmen_gallery_01.webp",
+        "alt": "IMG_1532.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_01.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_02.webp",
+        "alt": "IMG_1524.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_02.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_03.webp",
+        "alt": "IMG_1537.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_03.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_04.webp",
+        "alt": "IMG_1527.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_04.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_05.webp",
+        "alt": "IMG_1521.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_05.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_06.webp",
+        "alt": "IMG_1519.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_06.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_07.webp",
+        "alt": "IMG_1472.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_07.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_08.webp",
+        "alt": "IMG_1470.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_08.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_08.webp",
+        "alt": "IMG_1470.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_08.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_09.webp",
+        "alt": "IMG_1485.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_09.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_10.webp",
+        "alt": "IMG_1488.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_10.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_11.webp",
+        "alt": "IMG_1489.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_11.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_12.webp",
+        "alt": "IMG_1486.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_12.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_13.webp",
+        "alt": "IMG_1564.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_13.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_14.webp",
+        "alt": "IMG_1566.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-carmen_gallery_14.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_15.webp",
+        "alt": "IMG_2169.HEIC",
+        "w": 4284,
+        "h": 5712,
+        "file": "cars-carmen_gallery_15.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_16.webp",
+        "alt": "IMG_1814.JPG",
+        "w": 1440,
+        "h": 960,
+        "file": "cars-carmen_gallery_16.jpg"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_17.webp",
+        "alt": "IMG_1812.PNG",
+        "w": 1206,
+        "h": 2622,
+        "file": "cars-carmen_gallery_17.png"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_18.webp",
+        "alt": "IMG_6889.JPG",
+        "w": 5472,
+        "h": 3648,
+        "file": "cars-carmen_gallery_18.jpg"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_19.webp",
+        "alt": "IMG_6888.JPG",
+        "w": 3648,
+        "h": 5472,
+        "file": "cars-carmen_gallery_19.jpg"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_20.webp",
+        "alt": "IMG_6885.JPG",
+        "w": 3648,
+        "h": 5472,
+        "file": "cars-carmen_gallery_20.jpg"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_21.webp",
+        "alt": "IMG_6884.JPG",
+        "w": 3648,
+        "h": 5472,
+        "file": "cars-carmen_gallery_21.jpg"
+      }
+    ]
+  },
+  "black-betty": {
+    "slug": "black-betty",
+    "title": "Black Betty",
+    "subtitle": "1950 Ford Custom Convertible",
+    "hero": {
+      "src": "/images/cars_cars_07.webp",
+      "alt": "IMG_6457.jpg",
+      "w": 3000,
+      "h": 2250,
+      "file": "cars_cars_07.jpg"
+    },
+    "images": [
+      {
+        "src": "/images/cars-black-betty_gallery_01.webp",
+        "alt": "IMG_6481.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_01.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_02.webp",
+        "alt": "IMG_6479.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_02.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_03.webp",
+        "alt": "IMG_6477.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_03.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_04.webp",
+        "alt": "IMG_6476.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_04.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_05.webp",
+        "alt": "IMG_6475.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_05.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_06.webp",
+        "alt": "IMG_6474.jpg",
+        "w": 3000,
+        "h": 1931,
+        "file": "cars-black-betty_gallery_06.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_07.webp",
+        "alt": "IMG_6473.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_07.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_08.webp",
+        "alt": "IMG_6471.jpg",
+        "w": 3000,
+        "h": 1823,
+        "file": "cars-black-betty_gallery_08.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_09.webp",
+        "alt": "IMG_6470.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_09.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_10.webp",
+        "alt": "IMG_6460.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_10.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_11.webp",
+        "alt": "IMG_6454.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_11.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_12.webp",
+        "alt": "IMG_6450.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_12.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_13.webp",
+        "alt": "IMG_6442.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_13.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_14.webp",
+        "alt": "IMG_6440.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_14.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_15.webp",
+        "alt": "IMG_6434.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_15.jpg"
+      },
+      {
+        "src": "/images/cars-black-betty_gallery_16.webp",
+        "alt": "IMG_6432.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-black-betty_gallery_16.jpg"
+      }
+    ]
+  },
+  "sylvia": {
+    "slug": "sylvia",
+    "title": "Sylvia",
+    "subtitle": "1970 Chevrolet Chevelle SS 454",
+    "hero": {
+      "src": "/images/cars_cars_08.webp",
+      "alt": "8910369473789180554.jpg",
+      "w": 2048,
+      "h": 1153,
+      "file": "cars_cars_08.jpg"
+    },
+    "images": [
+      {
+        "src": "/images/cars-sylvia_gallery_01.webp",
+        "alt": "IMG_2421.jpg",
+        "w": 480,
+        "h": 381,
+        "file": "cars-sylvia_gallery_01.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_02.webp",
+        "alt": "IMG_9968.JPG",
+        "w": 2313,
+        "h": 1542,
+        "file": "cars-sylvia_gallery_02.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_03.webp",
+        "alt": "image1.jpeg",
+        "w": 1934,
+        "h": 1288,
+        "file": "cars-sylvia_gallery_03.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_04.webp",
+        "alt": "IMG_9972.jpg",
+        "w": 3000,
+        "h": 1999,
+        "file": "cars-sylvia_gallery_04.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_05.webp",
+        "alt": "IMG_9971.jpg",
+        "w": 1999,
+        "h": 3000,
+        "file": "cars-sylvia_gallery_05.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_06.webp",
+        "alt": "IMG_2412.JPG",
+        "w": 3859,
+        "h": 4295,
+        "file": "cars-sylvia_gallery_06.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_07.webp",
+        "alt": "IMG_9970.jpg",
+        "w": 3000,
+        "h": 1999,
+        "file": "cars-sylvia_gallery_07.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_08.webp",
+        "alt": "IMG_9969.jpg",
+        "w": 3000,
+        "h": 1999,
+        "file": "cars-sylvia_gallery_08.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_09.webp",
+        "alt": "image0.jpeg",
+        "w": 1908,
+        "h": 1276,
+        "file": "cars-sylvia_gallery_09.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_10.webp",
+        "alt": "IMG_2422.jpg",
+        "w": 427,
+        "h": 640,
+        "file": "cars-sylvia_gallery_10.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_11.webp",
+        "alt": "IMG_5671.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_11.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_12.webp",
+        "alt": "IMG_5669.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_12.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_13.webp",
+        "alt": "IMG_5665.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_13.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_14.webp",
+        "alt": "IMG_5662.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_14.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_15.webp",
+        "alt": "IMG_5661.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_15.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_16.webp",
+        "alt": "IMG_5658.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_16.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_17.webp",
+        "alt": "IMG_2413.JPG",
+        "w": 5978,
+        "h": 3985,
+        "file": "cars-sylvia_gallery_17.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_18.webp",
+        "alt": "IMG_5655.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_18.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_19.webp",
+        "alt": "IMG_9967.jpg",
+        "w": 2000,
+        "h": 3000,
+        "file": "cars-sylvia_gallery_19.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_20.webp",
+        "alt": "IMG_5653.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_20.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_21.webp",
+        "alt": "IMG_5639.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_21.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_22.webp",
+        "alt": "IMG_5640.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_22.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_23.webp",
+        "alt": "IMG_5568.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_23.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_24.webp",
+        "alt": "IMG_5555.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-sylvia_gallery_24.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_25.webp",
+        "alt": "1185251204518087942.jpg",
+        "w": 2048,
+        "h": 1153,
+        "file": "cars-sylvia_gallery_25.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_26.webp",
+        "alt": "5275364923365918634.jpg",
+        "w": 2048,
+        "h": 1153,
+        "file": "cars-sylvia_gallery_26.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_27.webp",
+        "alt": "7667759694899420531.jpg",
+        "w": 2048,
+        "h": 1153,
+        "file": "cars-sylvia_gallery_27.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_28.webp",
+        "alt": "4524258881377038038.jpg",
+        "w": 2048,
+        "h": 1153,
+        "file": "cars-sylvia_gallery_28.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_29.webp",
+        "alt": "8910369473789180554.jpg",
+        "w": 2048,
+        "h": 1153,
+        "file": "cars-sylvia_gallery_29.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_30.webp",
+        "alt": "IMG_2424.jpg",
+        "w": 800,
+        "h": 534,
+        "file": "cars-sylvia_gallery_30.jpg"
+      },
+      {
+        "src": "/images/cars-sylvia_gallery_31.webp",
+        "alt": "IMG_2414.JPG",
+        "w": 3765,
+        "h": 4894,
+        "file": "cars-sylvia_gallery_31.jpg"
+      }
+    ]
+  },
+  "veronica": {
+    "slug": "veronica",
+    "title": "Veronica",
+    "subtitle": "1957 Chevrolet Bel Air",
+    "hero": {
+      "src": "/images/cars_cars_09.webp",
+      "alt": "IMG_7503.jpg",
+      "w": 3000,
+      "h": 2250,
+      "file": "cars_cars_09.jpg"
+    },
+    "images": [
+      {
+        "src": "/images/cars-veronica_gallery_01.webp",
+        "alt": "IMG_7853.heic",
+        "w": 2000,
+        "h": 3000,
+        "file": "cars-veronica_gallery_01.png"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_02.webp",
+        "alt": "IMG_7743.heic",
+        "w": 3000,
+        "h": 2000,
+        "file": "cars-veronica_gallery_02.png"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_03.webp",
+        "alt": "IMG_7708.heic",
+        "w": 2000,
+        "h": 3000,
+        "file": "cars-veronica_gallery_03.png"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_04.webp",
+        "alt": "IMG_7515.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_04.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_05.webp",
+        "alt": "IMG_7514.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_05.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_06.webp",
+        "alt": "IMG_7513.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_06.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_07.webp",
+        "alt": "IMG_7511.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_07.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_08.webp",
+        "alt": "IMG_7501.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_08.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_09.webp",
+        "alt": "IMG_7499.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_09.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_10.webp",
+        "alt": "IMG_7497.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_10.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_11.webp",
+        "alt": "IMG_7496.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_11.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_12.webp",
+        "alt": "IMG_7495.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_12.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_13.webp",
+        "alt": "IMG_7487.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_13.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_14.webp",
+        "alt": "IMG_7485.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_14.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_15.webp",
+        "alt": "IMG_7483.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_15.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_16.webp",
+        "alt": "IMG_7480.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_16.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_17.webp",
+        "alt": "IMG_7478.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_17.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_18.webp",
+        "alt": "IMG_7475.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_18.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_19.webp",
+        "alt": "IMG_7474.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_19.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_20.webp",
+        "alt": "IMG_7473.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_20.jpg"
+      },
+      {
+        "src": "/images/cars-veronica_gallery_21.webp",
+        "alt": "IMG_7463.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-veronica_gallery_21.jpg"
+      }
+    ]
+  },
+  "rosie": {
+    "slug": "rosie",
+    "title": "Rosie",
+    "subtitle": "1960 Chevrolet Corvette",
+    "hero": {
+      "src": "/images/cars_cars_10.webp",
+      "alt": "IMG_7672.jpg",
+      "w": 3000,
+      "h": 2250,
+      "file": "cars_cars_10.jpg"
+    },
+    "images": [
+      {
+        "src": "/images/cars-rosie_gallery_01.webp",
+        "alt": "IMG_7676.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_01.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_02.webp",
+        "alt": "IMG_7678.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_02.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_03.webp",
+        "alt": "IMG_7681.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_03.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_04.webp",
+        "alt": "IMG_7683.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_04.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_05.webp",
+        "alt": "IMG_7688.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_05.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_06.webp",
+        "alt": "IMG_7689.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_06.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_07.webp",
+        "alt": "IMG_7690.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_07.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_08.webp",
+        "alt": "IMG_7698.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_08.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_09.webp",
+        "alt": "IMG_7700.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_09.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_10.webp",
+        "alt": "IMG_7701.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_10.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_11.webp",
+        "alt": "IMG_7702.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_11.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_12.webp",
+        "alt": "IMG_7705.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_12.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_13.webp",
+        "alt": "IMG_7707.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_13.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_14.webp",
+        "alt": "IMG_7709.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_14.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_15.webp",
+        "alt": "IMG_7710.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_15.jpg"
+      },
+      {
+        "src": "/images/cars-rosie_gallery_16.webp",
+        "alt": "IMG_7713.jpg",
+        "w": 3000,
+        "h": 2250,
+        "file": "cars-rosie_gallery_16.jpg"
+      }
+    ]
+  },
+  "others": {
+    "slug": "others",
+    "title": "Others",
+    "subtitle": "other cars in the collection",
+    "hero": {
+      "src": "/images/cars_cars_11.webp",
+      "alt": "IMG_1636.PNG",
+      "w": 2000,
+      "h": 1600,
+      "file": "cars_cars_11.png"
+    },
+    "images": [
+      {
+        "src": "/images/cars-others_gallery_01.webp",
+        "alt": "IMG_9679.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-others_gallery_01.png"
+      },
+      {
+        "src": "/images/cars-others_gallery_02.webp",
+        "alt": "IMG_0110.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-others_gallery_02.png"
+      },
+      {
+        "src": "/images/cars-others_gallery_03.webp",
+        "alt": "IMG_1611.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-others_gallery_03.png"
+      },
+      {
+        "src": "/images/cars-others_gallery_04.webp",
+        "alt": "IMG_0877.HEIC",
+        "w": 5712,
+        "h": 4284,
+        "file": "cars-others_gallery_04.png"
+      }
+    ]
+  }
+}
