@@ -8,9 +8,11 @@
  * (same rule as lib/quotes.mjs).
  * Family names are the About page. Eric maintains the fleet (About).
  * The shop name is the 2ndchancespeedshop.com address on scheduled-tasks.
- * Ribbons, a Just Married sign, package hours, and package price are not
- * in those sources. The blog says decorations are allowed and the client
- * brings them. Backup-car and for-hire insurance stay off until Tim confirms.
+ * Tim, 2026-10-11: weddings stay on hourly pricing, so the package card
+ * stays off. Ribbons and a Just Married sign stay off. A second car is
+ * the same hourly rate as the main car, stored as a note. If the booked
+ * car is unavailable, a comparable backup is offered. Insurance stays off.
+ * Tim has Hagerty liability and collision only, not for-hire coverage.
  */
 
 export type PackageInclusion = {
@@ -21,7 +23,7 @@ export type PackageInclusion = {
 };
 
 export const weddingPackage = {
-  /** Turn on only after Tim sets the price and confirms what is included. */
+  /** Off. Tim is keeping hourly pricing because weddings vary. */
   enabled: false,
   title: "Weddings",
   priceUsd: null as number | null,
@@ -41,13 +43,21 @@ export const weddingPackage = {
 };
 
 export const secondCarAddon = {
-  /** Hidden, and ignored by quote and booking saves, until Tim turns this on. */
-  enabled: false,
+  /** Tim, 2026-10-11. Same hourly rate as the car being booked. No separate price. */
+  enabled: true,
   title: "Second car for parents or grandparents",
   priceUsd: null as number | null,
+  priceLabel: "same hourly rate as your main car",
   /** Appended to the existing details/notes text. No new database column. */
-  notesLine: "Second car requested for parents or grandparents.",
+  notesLine: "Second car requested for parents or grandparents, at the same hourly rate as the main car.",
 };
+
+export function secondCarPriceText() {
+  const label = secondCarAddon.priceLabel.trim();
+  if (label) return label;
+  if (secondCarAddon.priceUsd == null) return "Ask for a quote";
+  return `$${secondCarAddon.priceUsd}`;
+}
 
 export function withSecondCarNote(details: string, requested: boolean) {
   if (!requested || !secondCarAddon.enabled) return details;
@@ -64,7 +74,10 @@ export const whyBook = {
     "Family owned and operated by Tim Chance, Carl Chance, and Eric Edwards.",
     "Starting prices are published, and you can book online.",
   ],
-  backupCar: { enabled: false, text: "" },
+  backupCar: {
+    enabled: true,
+    text: "If the car you booked isn't available, we'll provide a comparable backup.",
+  },
   forHireInsurance: { enabled: false, text: "" },
 };
 

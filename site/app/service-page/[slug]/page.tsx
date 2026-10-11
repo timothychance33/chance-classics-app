@@ -8,6 +8,7 @@ import { FeaturedReview } from "@/components/FeaturedReview";
 import { Reviews } from "@/components/Reviews";
 import { StickyBookBar } from "@/components/StickyBookBar";
 import { DEPOSIT_USD, EXTRA_HOUR_USD, MILEAGE_RULE_TEXT } from "@/lib/booking-rules";
+import { factsForCar } from "@/data/carFacts";
 import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, pageMeta, serviceBySlug, serviceDescription, services } from "@/lib/content";
 import { carCapacity } from "@/lib/terms";
 
@@ -32,6 +33,8 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
   const service = serviceBySlug(slug);
   if (!service) notFound();
+  const facts = factsForCar(service.car);
+  const agreementCapacity = facts?.passengers == null ? carCapacity(service.portfolioSlug) : null;
   return (
     <article className="wrap page">
       <div className="service-top">
@@ -58,7 +61,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
           <li>{service.tagLine}</li>
           <li>${service.price} for the first 2 hours, then ${EXTRA_HOUR_USD} for each additional hour.</li>
           <li>A chauffeur is included. You don’t drive the car.</li>
-          {carCapacity(service.portfolioSlug) && <li>{carCapacity(service.portfolioSlug)}</li>}
+          {agreementCapacity && <li>{agreementCapacity}</li>}
           <li>{MILEAGE_RULE_TEXT}</li>
           <li>${DEPOSIT_USD} non-refundable deposit when you book. The balance is billed separately.</li>
         </ul>

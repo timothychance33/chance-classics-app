@@ -4,10 +4,11 @@
  *
  * Mileage, deposit, extra hour, and the 7-day lead: site/lib/booking-rules.ts
  * and the service listings. Passenger counts: site/data/carFacts.ts
- * (from the client agreements). Convertible parade list: isConvertible in
- * site/lib/content.ts. Decorations: the wedding-cost blog post in
- * site/lib/content.ts. Rain policy, parade signs/magnets, and any parade
- * lead time beyond 7 days are unknown and stay blank.
+ * (from the client agreements, with Tim's 2026-10-11 overrides for Bonnie and Patsy). Convertible parade list: isConvertible in
+ * site/lib/content.ts. Decorations: the wedding-cost blog post, plus Tim
+ * on 2026-10-11 (suction cups and magnets are fine; tape or anything sticky
+ * is not). Rain is Tim's line from the same day. A parade lead time beyond
+ * the 7-day minimum is still unknown and stays blank.
  */
 
 export type FaqItem = { q: string; a: string };
@@ -15,7 +16,7 @@ export type FaqItem = { q: string; a: string };
 export const faqItems: FaqItem[] = [
   {
     q: "What areas does Chance Classics serve?",
-    a: "Chance Classics is based in Benton and serves Shreveport, Bossier, and Northwest Louisiana. A pickup 30 miles or less from Benton has no mileage charge. Farther than that, the car is trailered and the charge is $3 per mile for the whole distance, from mile one.",
+    a: "Chance Classics is based in Benton. We work mostly in Northwest Louisiana and go as far as New Orleans, Longview, Jackson, and Hot Springs. A pickup 30 miles or less from Benton has no mileage charge. Farther than that, the car is trailered and the charge is $3 per mile for the whole distance, from mile one.",
   },
   {
     q: "How many classic cars does Chance Classics have?",
@@ -39,7 +40,7 @@ export const faqItems: FaqItem[] = [
   },
   {
     q: "What happens if it rains on my event day?",
-    a: "",
+    a: "We still show up in the rain and do our best.",
   },
   {
     q: "Can I use the car just for photos, not transportation?",
@@ -51,11 +52,11 @@ export const faqItems: FaqItem[] = [
   },
   {
     q: "Are decorations allowed?",
-    a: "Decorations are allowed. The client brings them.",
+    a: "Decorations are allowed. The client brings them. Suction cups and magnets are fine. Tape or anything sticky is not.",
   },
   {
     q: "How many passengers can ride in each car?",
-    a: "These counts are passengers besides the chauffeur. Patsy 6. Bonnie 4. Phyllis, Black Betty, Elsa, Veronica, Brenda, Sylvia, and Carmen 3 each. Rosie 1.",
+    a: "These counts are passengers besides the chauffeur. Patsy 7. Bonnie 6. Phyllis, Black Betty, Elsa, Veronica, Brenda, Sylvia, and Carmen 3 each. Rosie 1.",
   },
   {
     q: "How does mileage work?",
@@ -67,7 +68,7 @@ export const faqItems: FaqItem[] = [
   },
   {
     q: "Can we put signs or magnets on the car for a parade?",
-    a: "",
+    a: "Suction cups and magnets are fine. Tape or anything sticky is not.",
   },
   {
     q: "How far ahead does a parade need to be booked, beyond the 7-day minimum?",

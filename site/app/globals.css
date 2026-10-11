@@ -250,6 +250,7 @@ p { margin: 0 0 1em; }
 }
 .btn-quiet:hover, .btn-quiet:focus-visible { background: var(--btn); color: #fff; }
 .footer-social { display: flex; gap: 14px; justify-content: center; align-items: center; }
+.footer-social .icon-link { line-height: 1.2; min-height: 44px; }
 .fact-strip { margin: 8px 0 28px; }
 .fact-strip ul {
   display: grid;

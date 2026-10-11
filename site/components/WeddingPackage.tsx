@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { secondCarAddon, weddingPackage } from "@/data/packages";
+import { secondCarAddon, secondCarPriceText, weddingPackage } from "@/data/packages";
 
 export function WeddingPackage() {
   if (!weddingPackage.enabled) return null;
@@ -7,7 +7,7 @@ export function WeddingPackage() {
   const hours = weddingPackage.hoursOnSite;
   const framing = weddingPackage.framing.trim();
   const price = weddingPackage.priceUsd;
-  const addonPrice = secondCarAddon.priceUsd;
+  const addonPrice = secondCarPriceText();
   return (
     <section className="package-card" aria-labelledby="wedding-package">
       <h2 id="wedding-package">{weddingPackage.title}</h2>
@@ -24,7 +24,7 @@ export function WeddingPackage() {
       {secondCarAddon.enabled && (
         <p>
           {secondCarAddon.title}
-          {addonPrice == null ? " — Ask for a quote" : ` — $${addonPrice}`}
+          {` — ${addonPrice}`}
         </p>
       )}
       <p>

@@ -68,7 +68,13 @@ assert(quoteLinkOpen({ status: "sent", book_expires_at: "2026-10-18T00:00:00Z" }
 assert(!quoteLinkOpen({ status: "sent", created_at: "2026-10-04T00:00:00Z" }, new Date("2026-10-12T00:00:00Z")).ok, "default 7 days expires");
 assert(!quoteLinkOpen({ status: "booked", booking_id: "b1", book_expires_at: "2026-10-18T00:00:00Z" }, linkNow).ok, "used link is closed");
 assert(!quoteLinkOpen({ status: "declined", book_expires_at: "2026-10-18T00:00:00Z" }, linkNow).ok, "declined quote is closed");
-assert(withSecondCarNote("Drop-off: 200 Crockett St", true) === "Drop-off: 200 Crockett St", "second car stays out of notes until enabled");
+assert(
+  withSecondCarNote("Drop-off: 200 Crockett St", true) ===
+    "Drop-off: 200 Crockett St\nSecond car requested for parents or grandparents, at the same hourly rate as the main car.",
+  "second car note uses the main car's hourly rate",
+);
+assert(withSecondCarNote("Drop-off: 200 Crockett St", false) === "Drop-off: 200 Crockett St", "an unchecked second car stays out of notes");
+assert(!withSecondCarNote("Drop-off: 200 Crockett St", true).includes("$"), "the second car note has no separate price");
 const pay = quoteCheckoutMoney(680);
 assert(pay.deposit === 250 && pay.balance === 430 && pay.total === 680, "quote deposit stays 250");
 const lines = quoteCheckoutLines({

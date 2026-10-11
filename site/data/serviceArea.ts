@@ -1,8 +1,9 @@
 /**
  * Towns and venues named in rental.bookings pickup_location or return_location
  * (read-only, 2026-10-08). Private street addresses are not listed.
- * approved stays false until Tim says the name can go on the public page.
- * The page shows Benton, Shreveport, Bossier, and Northwest Louisiana either way.
+ * Tim, 2026-10-11: do not publish this list. The page uses his reach
+ * sentence instead: mostly Northwest Louisiana, as far as New Orleans,
+ * Longview, Jackson, and Hot Springs. approved stays false.
  */
 
 export type ServedPlace = {

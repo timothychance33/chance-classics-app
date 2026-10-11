@@ -190,14 +190,14 @@ export function pageMeta(opts: {
 
 export const quoteServices = byModelYear(
   [
-    "Patsy - 1953 Packard Limo",
+    "Patsy - 1953 Packard Executive Sedan",
     "Brenda - 1961 Buick Invicta Convertible",
     "Phyllis - 1941 Buick Super Convertible",
     "Rosie - 1960 Chevrolet Corvette",
     "Black Betty - 1950 Ford Custom Convertible",
     "Veronica - 1957 Chevrolet Bel Air",
     "Sylvia - 1970 Chevelle SS454",
-    "Elsa - 1954 Packard Caribbean (White)",
+    "Elsa - 1954 Packard Caribbean",
     "Carmen - 1976 Cadillac Eldorado",
     "Bonnie - 1937 Cadillac Fleetwood 75",
   ],

@@ -1,20 +1,15 @@
 /**
  * Public facts for each car. An empty string or null must not render.
- * Do not fill a field from a photo, a model-year guess, or a conflicting source.
+ * Tim confirmed colors, air conditioning, body styles, and the passenger
+ * overrides below on 2026-10-11. He declined name origins and histories.
+ * Those stay empty, and the Her story section does not render.
  *
- * Year, make, and model: site/data/services.json tag lines and the matching
- * client agreement title in site/data/agreements.json (they agree).
- * rental.cars was read on 2026-10-08. Where it disagrees, the field stays
- * with the published listing and the disagreement is noted here, not shown.
- * Passenger counts: the "maximum capacity" sentence in each agreement.
- * Colors: rental.cars.color when it is a plain color. Elsa is blank.
- * Body: "convertible" only when the published name says so, or when
- * site/lib/content.ts already treats Rosie as an open roadster.
- * Veronica and Sylvia are hardtops per the note in site/lib/content.ts.
- * Air conditioning, name origins, and histories are not in those sources.
+ * Year and make stay with the published listings in site/data/services.json
+ * except where Tim named a different model or body below.
+ * Passenger counts he did not override stay with the client agreements.
  */
 
-export type CarBody = "convertible" | "hardtop" | "limousine";
+export type CarBody = "convertible" | "roadster" | "sedan" | "coupe" | "hardtop" | "limousine";
 
 export type CarFacts = {
   car: string;
@@ -32,35 +27,36 @@ export type CarFacts = {
 
 export const carFacts: CarFacts[] = [
   {
-    // Agreement: 1937 Cadillac Fleetwood Series 75, 4 passengers.
-    // rental.cars.color Blue. rental.cars.model is "Series 76" — not shown.
+    // Tim, 2026-10-11: Briarcliff Blue, air conditioning, Fleetwood Series 75 sedan, 6 passengers.
+    // Series 75, not the database Series 76. Agreement had said 4 passengers.
     car: "Bonnie",
     year: 1937,
     make: "Cadillac",
     model: "Fleetwood Series 75",
-    color: "Blue",
-    passengers: 4,
-    body: null,
-    airConditioning: null,
+    color: "Briarcliff Blue",
+    passengers: 6,
+    body: "sedan",
+    airConditioning: true,
     nameOrigin: "",
     history: "",
   },
   {
-    // Agreement: 1941 Buick Super Convertible, 3 passengers. rental.cars.color Beige.
+    // Tim, 2026-10-11: Touquet Beige, no air conditioning, convertible.
+    // Agreement: 3 passengers. Year, make, and model from the published listing.
     car: "Phyllis",
     year: 1941,
     make: "Buick",
     model: "Super",
-    color: "Beige",
+    color: "Touquet Beige",
     passengers: 3,
     body: "convertible",
-    airConditioning: null,
+    airConditioning: false,
     nameOrigin: "",
     history: "",
   },
   {
-    // Listing tag line "Custom Deluxe"; agreement says "Custom". Color Black from rental.cars.
-    // rental.cars.notes says "Verify year/make/model".
+    // Tim, 2026-10-11: Black, no air conditioning, convertible, 3 passengers.
+    // Listing tag line is Custom Deluxe.
     car: "Black Betty",
     year: 1950,
     make: "Ford",
@@ -68,108 +64,106 @@ export const carFacts: CarFacts[] = [
     color: "Black",
     passengers: 3,
     body: "convertible",
-    airConditioning: null,
+    airConditioning: false,
     nameOrigin: "",
     history: "",
   },
   {
-    // Agreement: 1953 Packard Limousine, 6 passengers plus driver.
-    // rental.cars.notes says "7 passengers + driver" — not shown. Color is null in rental.cars.
+    // Tim, 2026-10-11: Black, no air conditioning, Executive Sedan, 7 passengers.
+    // Agreement had said Patrician Limousine and 6 passengers.
     car: "Patsy",
     year: 1953,
     make: "Packard",
-    model: "Patrician Limousine",
-    color: null,
-    passengers: 6,
-    body: "limousine",
-    airConditioning: null,
+    model: "Executive Sedan",
+    color: "Black",
+    passengers: 7,
+    body: "sedan",
+    airConditioning: false,
     nameOrigin: "",
     history: "",
   },
   {
-    // Agreement: 1954 Packard Caribbean Convertible, 3 passengers.
-    // rental.cars.color is "White/Blur" and the quote menu says "(White)". Neither is shown.
-    // rental.cars.notes says "Verify year/make/model".
+    // Tim, 2026-10-11: two-tone Polaris Blue over Ivory, no air conditioning, convertible.
+    // Ignore rental.cars.color "White/Blur" and the quote menu "(White)".
+    // Agreement: 3 passengers.
     car: "Elsa",
     year: 1954,
     make: "Packard",
     model: "Caribbean",
-    color: null,
+    color: "Two-tone Polaris Blue over Ivory",
     passengers: 3,
     body: "convertible",
-    airConditioning: null,
+    airConditioning: false,
     nameOrigin: "",
     history: "",
   },
   {
-    // Listing and agreement: 1957 Chevrolet Bel Air, 3 passengers. rental.cars.color Black.
-    // rental.cars.notes says "Verify year/make/model".
+    // Tim, 2026-10-11: Onyx Black, air conditioning, coupe.
+    // Agreement: 3 passengers. Year, make, and model from the published listing.
     car: "Veronica",
     year: 1957,
     make: "Chevrolet",
     model: "Bel Air",
-    color: "Black",
+    color: "Onyx Black",
     passengers: 3,
-    body: "hardtop",
-    airConditioning: null,
+    body: "coupe",
+    airConditioning: true,
     nameOrigin: "",
     history: "",
   },
   {
-    // Agreement: 1960 Chevrolet Corvette, 1 passenger plus driver.
-    // site/lib/content.ts treats Rosie as an open roadster. rental.cars.color Maroon.
-    // rental.cars.notes says "Verify year/make/model".
+    // Tim, 2026-10-11: Honduras Maroon, no air conditioning, roadster.
+    // Agreement: 1 passenger plus the driver.
     car: "Rosie",
     year: 1960,
     make: "Chevrolet",
     model: "Corvette",
-    color: "Maroon",
+    color: "Honduras Maroon",
     passengers: 1,
-    body: "convertible",
-    airConditioning: null,
+    body: "roadster",
+    airConditioning: false,
     nameOrigin: "",
     history: "",
   },
   {
-    // Agreement: 1961 Buick Invicta Convertible, 3 passengers.
-    // rental.cars.color Blue. J Williams's Google review calls Brenda "the blue beauty".
+    // Tim, 2026-10-11: Laguna Blue, no air conditioning, convertible.
+    // Replaces the earlier plain "Blue". Agreement: 3 passengers.
     car: "Brenda",
     year: 1961,
     make: "Buick",
     model: "Invicta",
-    color: "Blue",
+    color: "Laguna Blue",
     passengers: 3,
     body: "convertible",
-    airConditioning: null,
+    airConditioning: false,
     nameOrigin: "",
     history: "",
   },
   {
-    // Listing and agreement: 1970 Chevrolet Chevelle SS454, 3 passengers.
-    // rental.cars.color Silver. The Sylvia occasion photo alt also says silver.
-    // rental.cars.notes says "Verify year/make/model". Hardtop per site/lib/content.ts.
+    // Tim, 2026-10-11: Blade Silver Metallic, air conditioning, coupe.
+    // Agreement: 3 passengers. Year, make, and model from the published listing.
     car: "Sylvia",
     year: 1970,
     make: "Chevrolet",
     model: "Chevelle SS454",
-    color: "Silver",
+    color: "Blade Silver Metallic",
     passengers: 3,
-    body: "hardtop",
-    airConditioning: null,
+    body: "coupe",
+    airConditioning: true,
     nameOrigin: "",
     history: "",
   },
   {
-    // Agreement: 1976 Cadillac Eldorado Convertible, 3 passengers. rental.cars.color White.
-    // rental.cars.notes says "Verify year/make/model".
+    // Tim, 2026-10-11: Cotillion White, air conditioning, convertible.
+    // Agreement: 3 passengers. Year, make, and model from the published listing.
     car: "Carmen",
     year: 1976,
     make: "Cadillac",
     model: "Eldorado",
-    color: "White",
+    color: "Cotillion White",
     passengers: 3,
     body: "convertible",
-    airConditioning: null,
+    airConditioning: true,
     nameOrigin: "",
     history: "",
   },
@@ -185,6 +179,9 @@ export function carIdentity(facts: CarFacts) {
 
 export function bodyLabel(body: CarBody | null) {
   if (body === "convertible") return "Convertible";
+  if (body === "roadster") return "Roadster";
+  if (body === "sedan") return "Sedan";
+  if (body === "coupe") return "Coupe";
   if (body === "hardtop") return "Hardtop";
   if (body === "limousine") return "Limousine";
   return "";
