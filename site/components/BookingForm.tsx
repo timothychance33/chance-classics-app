@@ -192,21 +192,27 @@ export function BookingForm({ car, carName, basePrice }: Props) {
       </div>
       <label>
         Start time
-        <input
-          type="time"
+        <select
           name="start"
           required
-          min={fromMinutes(DAY_START_MIN)}
-          max={fromMinutes(LAST_START_MIN)}
-          step={SLOT_STEP_MIN * 60}
           value={start}
           aria-invalid={Boolean(startError)}
           aria-describedby="start-time-note"
+          disabled={!slotsReady || slots.length === 0}
           onChange={(event) => setStart(event.target.value)}
-        />
+        >
+          <option value="">
+            {!slotsReady ? "Checking open times…" : slots.length ? "Choose a start time" : "No open times"}
+          </option>
+          {slots.map((slot) => (
+            <option key={slot} value={slot}>
+              {formatStartLabel(slot)}
+            </option>
+          ))}
+        </select>
       </label>
       <p id="start-time-note" className="note" aria-live="polite">
-        {slotNote || "Start times are every 30 minutes, from 8:00 AM to 8:00 PM, and the rental has to finish the same day."}
+        {slotNote || "Start times are every 15 minutes (:00, :15, :30, :45), from 8:00 AM to 8:00 PM, and the rental has to finish the same day."}
         {startError ? ` ${startError}` : ""}
       </p>
       <div className="book-grid">
@@ -305,6 +311,16 @@ function clockValue(value: string) {
   return minutes == null ? "" : fromMinutes(minutes);
 }
 
+function formatStartLabel(value: string) {
+  const minutes = toMinutes(value);
+  if (minutes == null) return value;
+  const hours24 = Math.floor(minutes / 60);
+  const mins = String(minutes % 60).padStart(2, "0");
+  const suffix = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${mins} ${suffix}`;
+}
+
 function startTimeError(value: string, open: string[], ready: boolean) {
   if (!ready || !value) return "";
   const minutes = toMinutes(value);
@@ -314,7 +330,7 @@ function startTimeError(value: string, open: string[], ready: boolean) {
     || minutes > LAST_START_MIN
     || (minutes - DAY_START_MIN) % SLOT_STEP_MIN !== 0
   ) {
-    return "Choose a start time on the half hour between 8:00 AM and 8:00 PM.";
+    return "Choose a start time at :00, :15, :30, or :45 between 8:00 AM and 8:00 PM.";
   }
   if (!open.includes(fromMinutes(minutes))) return "That start time isn’t open for this rental length.";
   return "";
