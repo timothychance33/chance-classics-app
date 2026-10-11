@@ -309,10 +309,17 @@ p { margin: 0 0 1em; }
   padding: 20px 0 40px;
 }
 .split img { width: 100%; height: auto; }
-.family-photo {
-  width: min(100%, 480px);
-  height: auto;
+.family-photos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
   margin: 12px auto 48px;
+}
+.family-photo {
+  width: 100%;
+  height: auto;
+  margin: 0;
+  display: block;
 }
 .bio {
   width: min(100%, 640px);
@@ -631,7 +638,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   .has-sub.open > .sub { display: block; }
   .caret { position: absolute; right: 0; top: 8px; width: 44px; height: 44px; }
   .has-sub { position: relative; }
-  .fleet, .car-grid { grid-template-columns: 1fr 1fr; }
+  .fleet, .car-grid, .family-photos { grid-template-columns: 1fr; }
   .split, .svc-row, .svc-row.reverse, .service-top, .two { grid-template-columns: 1fr; direction: ltr; }
   .svc-row img { height: auto; aspect-ratio: 4/3; }
   .masonry { columns: 1; }

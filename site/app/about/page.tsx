@@ -8,7 +8,7 @@ export const metadata = pageMeta({
 });
 
 export default function AboutPage() {
-  const [driving, tim, carl] = aboutImages;
+  const [driving, tim, carl, familyCars] = aboutImages;
   return (
     <article className="wrap page center">
       <h1>Our Automotive Family</h1>
@@ -16,9 +16,14 @@ export default function AboutPage() {
         Chance Classic Car Rental consists of 2 generations of &quot;car guys&quot; who have spent the past 4 decades building and collecting classic cars. After being asked over and over if we would be willing to rent our cars for events or photo shoots, we decided to offer a select few from the collection to help people create the perfect event or picture.
       </p>
       <p><a className="btn" href="#family">View More</a></p>
-      {driving && (
-        <Picture className="family-photo" image={driving} alt="The family with one of the classic cars" />
-      )}
+      <div className="family-photos">
+        {driving && (
+          <Picture className="family-photo" image={driving} alt="The family with one of the classic cars" />
+        )}
+        {familyCars && (
+          <Picture className="family-photo" image={familyCars} alt="The family with two of the cars" />
+        )}
+      </div>
       <section className="bio" id="family">
         {tim && <Picture image={tim} alt="Tim Chance" />}
         <h2>Tim Chance</h2>
