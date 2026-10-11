@@ -17,7 +17,7 @@ export default function AboutPage() {
       </p>
       <p><a className="btn" href="#family">View More</a></p>
       {driving && (
-        <Picture className="family-photo" image={driving} alt="Driving one of the classic cars" />
+        <Picture className="family-photo" image={driving} alt="The family with one of the classic cars" />
       )}
       <section className="bio" id="family">
         {tim && <Picture image={tim} alt="Tim Chance" />}
