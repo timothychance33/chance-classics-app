@@ -23,6 +23,12 @@ export const BOOKING_BUFFER_HOURS = 2;
 const MINUTES_PER_DAY = 1440;
 export const SHOP_ADDRESS = "118 5th St E, Benton, LA 71006";
 export const MILEAGE_REVIEW_TEXT = "We'll confirm mileage.";
+/** Public examples. 30 miles or less is free. Over 30, the fee is the full distance times $3. */
+export const MILEAGE_EXAMPLES = [
+  "25 miles is $0.",
+  `45 miles is 45 × $${EXTRA_MILE_USD} = $${45 * EXTRA_MILE_USD}.`,
+  `100 miles is 100 × $${EXTRA_MILE_USD} = $${100 * EXTRA_MILE_USD}.`,
+] as const;
 export const MILEAGE_RULE_TEXT =
   "Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport).";
 export const MILEAGE_ACK =

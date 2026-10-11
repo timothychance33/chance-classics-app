@@ -1,5 +1,5 @@
 import { SITE_URL, pageMeta } from "@/lib/content";
-import { EXTRA_MILE_USD, MILE_THRESHOLD, SHOP_ADDRESS } from "@/lib/booking-rules";
+import { EXTRA_MILE_USD, MILE_THRESHOLD, MILEAGE_EXAMPLES, SHOP_ADDRESS } from "@/lib/booking-rules";
 
 export const metadata = pageMeta({
   title: "Service Area | Chance Classics, Classic Car Rental",
@@ -45,7 +45,11 @@ export default function ServiceAreaPage() {
         A pickup {MILE_THRESHOLD} miles or less from Benton has no mileage charge.
         Farther than {MILE_THRESHOLD} miles, the car is trailered and the charge is ${EXTRA_MILE_USD} per mile for the whole distance, from mile one.
       </p>
-      <p>25 miles is $0. 45 miles is 45 × ${EXTRA_MILE_USD} = $135.</p>
+      <ul className="mileage-examples">
+        {MILEAGE_EXAMPLES.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
     </article>
   );

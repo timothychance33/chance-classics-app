@@ -17,7 +17,10 @@ const jsonLd = {
   mainEntity: faqs.map((item) => ({
     "@type": "Question",
     name: item.q,
-    acceptedAnswer: { "@type": "Answer", text: item.a },
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.examples?.length ? `${item.a}\n${item.examples.join("\n")}` : item.a,
+    },
   })),
 };
 
@@ -43,6 +46,13 @@ export default function FaqPage() {
                 item.a
               )}
             </p>
+            {item.examples && (
+              <ul className="mileage-examples">
+                {item.examples.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            )}
           </details>
         ))}
       </div>

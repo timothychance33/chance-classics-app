@@ -11,7 +11,9 @@
  * the 7-day minimum is still unknown and stays blank.
  */
 
-export type FaqItem = { q: string; a: string };
+import { MILEAGE_EXAMPLES } from "@/lib/booking-rules";
+
+export type FaqItem = { q: string; a: string; examples?: readonly string[] };
 
 export const faqItems: FaqItem[] = [
   {
@@ -60,7 +62,8 @@ export const faqItems: FaqItem[] = [
   },
   {
     q: "How does mileage work?",
-    a: "A pickup 30 miles or less from Benton is $0. Past 30 miles, the car is trailered and the charge is $3 per mile for the entire distance, from mile one. 25 miles is $0. 45 miles is 45 × $3 = $135.",
+    a: "A pickup 30 miles or less from Benton has no mileage charge. Farther than 30 miles, the car is trailered and the charge is $3 per mile for the whole distance, from mile one.",
+    examples: MILEAGE_EXAMPLES,
   },
   {
     q: "What cars can do a parade?",

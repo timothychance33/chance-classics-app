@@ -612,6 +612,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
 .faq summary:after { content: "+"; font-family: var(--sans); font-weight: 300; }
 .faq details[open] summary:after { content: "–"; }
 .faq details p { margin: 0 0 14px; }
+.mileage-examples {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+.mileage-examples li { margin: 0; padding: 4px 0; }
 
 /* Blog */
 .posts {
