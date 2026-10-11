@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { carIdentity, factsForCar } from "@/data/carFacts";
 import { pageMeta, services } from "@/lib/content";
 
 export const metadata = pageMeta({
@@ -10,25 +11,32 @@ export const metadata = pageMeta({
 export default function BookOnlinePage() {
   return (
     <article className="wrap page">
-      <h1 className="center">Our Services</h1>
-      <div className="book-list">
-        {services.map((service) => (
-          <article key={service.slug} className="book-card">
-            <Link href={`/service-page/${service.slug}/`}>
-              <img src={service.image.src} alt="" width={service.image.w || 900} height={service.image.h || 600} />
-            </Link>
-            <h2><Link href={`/service-page/${service.slug}/`}>{service.name}</Link></h2>
-            <p className="tag">{service.tagLine}</p>
-            <p><Link className="more" href={`/service-page/${service.slug}/`}>Read More</Link></p>
-            <p className="price">${service.price}</p>
-            <p className="dur">2 hr</p>
-            <p className="book-actions">
-              <Link className="btn" href={`/service-page/${service.slug}/#book`}>Book</Link>
-              <Link className="btn btn-quiet" href={`/service-page/${service.slug}/`}>Meet {service.car}</Link>
-            </p>
-          </article>
-        ))}
-      </div>
+      <h1 className="center">Book Online</h1>
+      <ul className="book-list">
+        {services.map((service) => {
+          const facts = factsForCar(service.car);
+          const identity = facts ? carIdentity(facts) : service.name;
+          return (
+            <li key={service.slug} className="book-row">
+              <img
+                src={service.image.src}
+                alt=""
+                width={192}
+                height={144}
+              />
+              <div className="book-row-copy">
+                <h2>{service.car}</h2>
+                <p className="book-row-model">{identity}</p>
+                <p className="book-row-price">Starting at ${service.price}</p>
+              </div>
+              <p className="book-row-actions">
+                <Link className="btn" href={`/service-page/${service.slug}/#book`}>Book</Link>
+                <Link href={`/service-page/${service.slug}/`}>Meet {service.car}</Link>
+              </p>
+            </li>
+          );
+        })}
+      </ul>
     </article>
   );
 }

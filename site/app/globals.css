@@ -408,13 +408,48 @@ p { margin: 0 0 1em; }
 }
 
 /* Book online */
-.book-list { display: grid; gap: 36px; max-width: 720px; margin: 0 auto; }
-.book-card { text-align: center; }
-.book-card img { width: 100%; height: 380px; object-fit: cover; }
-.book-card h2 { font-size: 32px; margin: 14px 0 4px; }
-.book-card h2 a { text-decoration: none; }
-.book-card .tag { margin: 0 0 8px; }
-.book-card .more { font-size: 14px; }
+.book-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 28px;
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.book-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-areas:
+    "photo copy"
+    "photo actions";
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.book-row img {
+  grid-area: photo;
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  display: block;
+  background: #f7f7f7;
+}
+.book-row-copy { grid-area: copy; min-width: 0; }
+.book-row h2 { font-size: 22px; line-height: 1.2; margin: 0; }
+.book-row p { margin: 0; }
+.book-row-model,
+.book-row-price { font-size: 14px; line-height: 1.35; color: var(--ink-soft); }
+.book-row-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.book-row-actions .btn { min-height: 44px; padding-inline: 16px; }
+.book-row-actions a:not(.btn) { font-size: 15px; text-underline-offset: 3px; }
 .price {
   font-family: var(--serif);
   font-size: 28px;
@@ -614,7 +649,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   .fleet { grid-template-columns: repeat(3, 1fr); }
   .masonry { columns: 2; }
   .posts { grid-template-columns: 1fr; }
-  .book-card img, .service-top img, .svc-row img { height: 260px; }
+  .service-top img, .svc-row img { height: 260px; }
 }
 
 @media (max-width: 760px) {
@@ -638,13 +673,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   .has-sub.open > .sub { display: block; }
   .caret { position: absolute; right: 0; top: 8px; width: 44px; height: 44px; }
   .has-sub { position: relative; }
-  .fleet, .car-grid, .family-photos { grid-template-columns: 1fr; }
+  .fleet, .car-grid, .family-photos, .book-list { grid-template-columns: 1fr; }
   .split, .svc-row, .svc-row.reverse, .service-top, .two { grid-template-columns: 1fr; direction: ltr; }
   .svc-row img { height: auto; aspect-ratio: 4/3; }
   .masonry { columns: 1; }
   .logo img { width: min(280px, 78vw); }
   .tagline { font-size: 26px; }
-  .book-card img { height: auto; aspect-ratio: 4/3; }
   .thumbs img { width: calc(50% - 8px); height: auto; aspect-ratio: 1; }
 }
 
