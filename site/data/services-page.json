@@ -1,0 +1,23 @@
+[
+  {
+    "src": "/images/services_weddings_01.webp",
+    "alt": "photo shoot.jpg",
+    "w": 4032,
+    "h": 3024,
+    "file": "services_weddings_01.jpg"
+  },
+  {
+    "src": "/images/services_weddings_02.webp",
+    "alt": "IMG_5028.jpg",
+    "w": 2250,
+    "h": 3000,
+    "file": "services_weddings_02.jpg"
+  },
+  {
+    "src": "/images/services_photo-sessions_01.webp",
+    "alt": "1956_12-07-24_JonesWedding.JPG",
+    "w": 3000,
+    "h": 2000,
+    "file": "services_photo-sessions_01.jpg"
+  }
+]

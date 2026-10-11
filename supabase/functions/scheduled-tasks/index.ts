@@ -38,6 +38,9 @@ type Booking = Record<string, unknown> & {
   return_location?: string | null;
   customer_phone?: string | null;
   customer_email?: string | null;
+  day_of_contact_name?: string | null;
+  day_of_contact_phone?: string | null;
+  day_of_contact_role?: string | null;
   notes?: string | null;
   needs_trailer?: boolean | null;
   status?: string | null;
@@ -172,6 +175,17 @@ async function sendEmail(to: string, subject: string, html: string) {
 
 function fmtDate(d: string | null | undefined) { return d ?? "TBD"; }
 
+function dayOfContactEmailHtml(b: Booking) {
+  const name = String(b.day_of_contact_name || "").trim();
+  const phone = String(b.day_of_contact_phone || "").trim();
+  const role = String(b.day_of_contact_role || "").trim();
+  if (!name && !phone && !role) return "";
+  const href = phone.replace(/[^\d+]/g, "");
+  const phoneHtml = phone ? (href ? `<a href="tel:${esc(href)}">${esc(phone)}</a>` : esc(phone)) : "";
+  const who = [name ? esc(name) : "", role ? esc(role) : ""].filter(Boolean).join(" · ");
+  return `<p style="margin:8px 0 0;font-size:14px"><b>Day-of contact</b> — call during the event, not the booker<br>${who}${phoneHtml ? `<br>${phoneHtml}` : ""}</p>`;
+}
+
 function bookingCardHtml(b: Booking, carName: string | null, pay: number | null) {
   const time = [fmtTime(b.start_time), fmtTime(b.end_time)].filter(Boolean).join(" – ");
   const notes = driverFacingNotes(b.notes);
@@ -191,6 +205,7 @@ function bookingCardHtml(b: Booking, carName: string | null, pay: number | null)
     .join("");
   return `<div style="border:1px solid #c5d4e3;border-radius:10px;padding:12px 14px;margin:12px 0;background:#fff">
     <table style="border-collapse:collapse;width:100%">${body}</table>
+    ${dayOfContactEmailHtml(b)}
     ${b.needs_trailer ? `<p style="margin:8px 0 0;font-size:13px;font-weight:700">🚛 Car must be trailered</p>` : ""}
     ${pay != null ? `<p style="margin:8px 0 0;font-size:16px;font-weight:700;color:#3c6b4f">You earn $${pay}</p>` : ""}
   </div>`;

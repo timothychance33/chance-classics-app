@@ -1,0 +1,32 @@
+{
+  "images": [
+    {
+      "src": "/images/about_our-automotive-family_01.webp",
+      "alt": "The family with one of the classic cars",
+      "w": 1600,
+      "h": 1200,
+      "file": "about_our-automotive-family_01.jpg"
+    },
+    {
+      "src": "/images/about_tim-chance_01.webp",
+      "alt": "Chance Classics",
+      "w": 1206,
+      "h": 1542,
+      "file": "about_tim-chance_01.jpg"
+    },
+    {
+      "src": "/images/about_carl-chance_01.jpg",
+      "alt": "Chance Classics",
+      "w": 1200,
+      "h": 1500,
+      "file": "about_carl-chance_01.jpg"
+    },
+    {
+      "src": "/images/about_our-automotive-family_02.webp",
+      "alt": "The family with two of the cars",
+      "w": 1600,
+      "h": 1200,
+      "file": "about_our-automotive-family_02.jpg"
+    }
+  ]
+}

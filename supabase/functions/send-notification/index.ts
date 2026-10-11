@@ -19,7 +19,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   APP_URL, NOTIFY_SECRET, OWNER_EMAIL, cors, esc, sendEmail,
-  bookingBlock, driverBookingBlock, wrap, appButton, payLine, bookingTitle,
+  bookingBlock, driverBookingBlock, wrap, appButton, payLine, bookingTitle, dayOfContactEmailHtml,
 } from "./shared.ts";
 import { handleQuoteAlternatives, handleQuoteDeclined } from "./quotes.ts";
 import { allowNotify, roleTokens, secretMatches } from "./access.mjs";
@@ -101,6 +101,7 @@ Deno.serve(async (req) => {
           <p>Hi ${driverName}, a booking has been offered to you. You're next in line — claim it or pass to the next driver.</p>
           ${pay != null ? `<p style="font-size:18px;font-weight:700;color:#3c6b4f">You'd earn $${pay}</p>` : ""}
           <table style="border-collapse:collapse;margin:14px 0">${bookingBlock(b)}</table>
+          ${dayOfContactEmailHtml(b)}
           <p><a href="${APP_URL}" style="background:#6e1d1a;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;display:inline-block">Open the app to Claim or Pass</a></p>
           <p style="color:#6b6052;font-size:13px">Log in at <a href="${APP_URL}">${APP_URL}</a> with your email and password. On the Schedule tab you'll see this job with Claim and Pass buttons. If you don't claim it, please Pass so it moves to the next driver.</p>
         </div>`;
@@ -147,25 +148,37 @@ Deno.serve(async (req) => {
       if (!to) throw new Error("quote requires 'to'");
       const money = (n: unknown) => `$${Number(n || 0).toFixed(2)}`;
       const bookUrl = body.book_url || "https://www.chanceclassics.com/book-online?referral=quote_email";
+      const lockedBook = String(bookUrl).includes("/book/quote/");
       const lines: string[] = [];
-      lines.push(`<tr><td style="padding:6px 14px 6px 0">${q.car_name ?? "Classic car"} — base (up to 2 hours)</td><td style="padding:6px 0;text-align:right">${money(q.base_rate)}</td></tr>`);
-      if (q.overage > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Additional hours (${q.extra_hours})</td><td style="padding:6px 0;text-align:right">${money(q.overage)}</td></tr>`);
-      if (q.travel > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Travel (${q.miles} mi, trailered)</td><td style="padding:6px 0;text-align:right">${money(q.travel)}</td></tr>`);
+      lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(q.car_name ?? "Classic car")} — base (up to 2 hours)</td><td style="padding:6px 0;text-align:right">${money(q.base_rate)}</td></tr>`);
+      if (q.overage > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Additional hours (${esc(q.extra_hours)})</td><td style="padding:6px 0;text-align:right">${money(q.overage)}</td></tr>`);
+      if (Number(q.travel) > 0 || lockedBook) lines.push(`<tr><td style="padding:6px 14px 6px 0">Mileage fee (${esc(q.miles)} mi from Benton)</td><td style="padding:6px 0;text-align:right">${money(q.travel)}</td></tr>`);
       if (q.hotel_fee > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Overnight hotel accommodation</td><td style="padding:6px 0;text-align:right">${money(q.hotel_fee)}</td></tr>`);
+      const customItems = Array.isArray(q.custom_items) ? q.custom_items : [];
+      for (const item of customItems) {
+        if (!item || typeof item !== "object") continue;
+        const label = String((item as { label?: unknown }).label || "").trim();
+        if (!label) continue;
+        lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(label)}</td><td style="padding:6px 0;text-align:right">${money((item as { amount?: unknown }).amount)}</td></tr>`);
+      }
       lines.push(`<tr><td style="padding:6px 14px 6px 0;border-top:1px solid #ddd">Subtotal</td><td style="padding:6px 0;text-align:right;border-top:1px solid #ddd">${money(q.subtotal)}</td></tr>`);
       lines.push(`<tr><td style="padding:6px 14px 6px 0">Tax</td><td style="padding:6px 0;text-align:right">${money(q.tax)}</td></tr>`);
       lines.push(`<tr><td style="padding:8px 14px 8px 0;font-weight:800;font-size:17px">Total</td><td style="padding:8px 0;text-align:right;font-weight:800;font-size:17px">${money(q.total)}</td></tr>`);
+      const buttonLabel = lockedBook ? "Book Now" : `Book ${q.car_name ?? "online"}`;
+      const reserveNote = lockedBook
+        ? `This Book Now link is only for this quote. A $250 deposit holds the car after the payment goes through. The link expires${q.expires ? ` on ${esc(q.expires)}` : ""} and can be used once. Questions? Just reply to this email.`
+        : "This quote is an estimate and does not reserve your date. Questions? Just reply to this email.";
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:580px;margin:0 auto;color:#21130f">
           <h2 style="color:#6e1d1a">Your Chance Classics quote</h2>
-          <p>Hi ${q.customer_name ?? "there"}, thank you for your interest! Here is your quote${q.event_date ? ` for ${q.event_date}` : ""}:</p>
-          ${q.car_name ? `<p><b>${q.car_name}</b>${q.event_location ? ` · ${q.event_location}` : ""}</p>` : ""}
+          <p>Hi ${esc(q.customer_name ?? "there")}, thank you for your interest! Here is your quote${q.event_date ? ` for ${esc(q.event_date)}` : ""}:</p>
+          ${q.car_name ? `<p><b>${esc(q.car_name)}</b>${q.event_location ? ` · ${esc(q.event_location)}` : ""}</p>` : ""}
           <table style="border-collapse:collapse;width:100%;margin:14px 0">${lines.join("")}</table>
-          ${q.quote_notes ? `<p style="color:#6b6052">${q.quote_notes}</p>` : ""}
-          ${q.expires ? `<p style="color:#b8862c;font-weight:700;font-size:13px">This quote is valid through ${q.expires}.</p>` : ""}
-          <p style="margin-top:20px">Ready to book? Reserve your date for the ${q.car_name ?? "car"} here:</p>
-          <p><a href="${bookUrl}" style="background:#6e1d1a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Book ${q.car_name ?? "online"}</a></p>
-          <p style="color:#6b6052;font-size:13px;margin-top:18px">This quote is an estimate and does not reserve your date. Questions? Just reply to this email.</p>
+          ${q.quote_notes ? `<p style="color:#6b6052">${esc(q.quote_notes)}</p>` : ""}
+          ${q.expires ? `<p style="color:#b8862c;font-weight:700;font-size:13px">This quote is valid through ${esc(q.expires)}.</p>` : ""}
+          <p style="margin-top:20px">${lockedBook ? "Ready to book? This link checks out only this quote. The $250 deposit is due now." : `Ready to book? Reserve your date for the ${esc(q.car_name ?? "car")} here:`}</p>
+          <p><a href="${esc(bookUrl)}" style="background:#6e1d1a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">${esc(buttonLabel)}</a></p>
+          <p style="color:#6b6052;font-size:13px;margin-top:18px">${reserveNote}</p>
         </div>`;
       result = await sendEmail(to, `Your Chance Classics quote${q.event_date ? ` — ${q.event_date}` : ""}`, html);
     } else if (type === "quote_alternatives") {
@@ -181,6 +194,7 @@ Deno.serve(async (req) => {
           <p>Hi ${driverName}, this rental is open to <b>all drivers</b> — first to claim it gets it.</p>
           ${pay != null ? `<p style="font-size:20px;font-weight:800;color:#3c6b4f">Now paying $${pay}</p>` : ""}
           <table style="border-collapse:collapse;margin:14px 0">${bookingBlock(b)}</table>
+          ${dayOfContactEmailHtml(b)}
           <p><a href="${APP_URL}" style="background:#6e1d1a;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;display:inline-block">Claim it before someone else does</a></p>
         </div>`;
       result = await sendEmail(driverEmail, subject, html);
@@ -217,6 +231,7 @@ Deno.serve(async (req) => {
         ${changeRows}
         ${payLine(pay)}
         <table style="border-collapse:collapse;margin:14px 0">${driverBookingBlock(b)}</table>
+        ${dayOfContactEmailHtml(b)}
         ${appButton("Open the app")}
       `);
       result = await sendEmail(driverEmail, subject, html);
@@ -233,6 +248,7 @@ Deno.serve(async (req) => {
         <p>Hi ${esc(driverName)}, this job was assigned to you.</p>
         ${payLine(pay)}
         <table style="border-collapse:collapse;margin:14px 0">${driverBookingBlock(b)}</table>
+        ${dayOfContactEmailHtml(b)}
         ${appButton("Open the app")}
       `);
       result = await sendEmail(driverEmail, subject, html);
@@ -248,6 +264,7 @@ Deno.serve(async (req) => {
         <h2 style="color:#6e1d1a">You're no longer on this booking</h2>
         <p>Hi ${esc(driverName)}, you were taken off this job. You don't need to show up for it.</p>
         <table style="border-collapse:collapse;margin:14px 0">${driverBookingBlock(b)}</table>
+        ${dayOfContactEmailHtml(b)}
         ${appButton("Open the app")}
       `);
       result = await sendEmail(driverEmail, subject, html);

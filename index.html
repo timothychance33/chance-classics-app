@@ -183,6 +183,8 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .qline:last-child{border-bottom:0}
 .qline.muted{color:#9aa7b4}
 .qline.qtotal{font-weight:800;font-size:17px;border-top:2px solid var(--line);margin-top:4px;padding-top:10px}
+.qbook{margin:14px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.qbook input[readonly]{width:100%;font-size:13px}
 .dashhd{font:800 14px/1 "Playfair Display",serif;margin-bottom:10px}
 .dtrow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--paper-2);cursor:pointer;flex-wrap:wrap}
 .dtrow:last-child{border-bottom:0}
@@ -836,11 +838,62 @@ function driverNotifyBookingPayload(booking, car){
     car_id:booking.car_id, car_name:car?car.name:'',
     pickup_location:booking.pickup_location, return_location:booking.return_location,
     customer_phone:booking.customer_phone, customer_email:booking.customer_email,
+    day_of_contact_name:booking.day_of_contact_name||'',
+    day_of_contact_phone:booking.day_of_contact_phone||'',
+    day_of_contact_role:booking.day_of_contact_role||'',
     notes:driverFacingNotes(booking.notes),
     needs_trailer:!!booking.needs_trailer,
     status:booking.status,
     pay_tier:booking.pay_tier
   };
+}
+function bookingForDriverMail(booking, fallback){
+  const src=fallback||{};
+  const pick=key=>(booking&&booking[key])?booking[key]:(src[key]||'');
+  return {
+    ...booking,
+    day_of_contact_name:pick('day_of_contact_name'),
+    day_of_contact_phone:pick('day_of_contact_phone'),
+    day_of_contact_role:pick('day_of_contact_role'),
+  };
+}
+function dayOfTel(phone){
+  const href=String(phone||'').replace(/[^\d+]/g,'');
+  return href?('tel:'+href):'';
+}
+function dayOfParts(b){
+  if(!b) return null;
+  const name=String(b.day_of_contact_name||'').trim();
+  const phone=String(b.day_of_contact_phone||'').trim();
+  const role=String(b.day_of_contact_role||'').trim();
+  if(!name&&!phone&&!role) return null;
+  return {name,phone,role};
+}
+function dayOfPhoneLink(phone){
+  const raw=String(phone||'').trim();
+  if(!raw) return '';
+  const tel=dayOfTel(raw);
+  if(!tel) return esc(raw);
+  return `<a href="${esc(tel)}" onclick="event.stopPropagation()">${esc(raw)}</a>`;
+}
+function dayOfContactLine(b){
+  const p=dayOfParts(b);
+  if(!p) return '';
+  const who=[p.name,p.role].filter(Boolean).map(esc).join(' · ');
+  return `<div class="meta">Day-of: ${who}${p.phone?(who?' · ':'')+dayOfPhoneLink(p.phone):''}</div>`;
+}
+function dayOfContactBlock(b){
+  const p=dayOfParts(b);
+  if(!p) return '';
+  const who=p.name
+    ?`<div style="font-size:16px;margin-top:6px">${esc(p.name)}${p.role?` <span style="font-weight:400;color:#6b6052">· ${esc(p.role)}</span>`:''}</div>`
+    :(p.role?`<div style="font-size:16px;margin-top:6px">${esc(p.role)}</div>`:'');
+  const phone=p.phone?`<div style="font-size:16px;margin-top:4px">${dayOfPhoneLink(p.phone)}</div>`:'';
+  return `<div style="margin:4px 0 14px;padding:10px 12px;border:1px solid #c5d4e3;background:#f7f4ef">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052">Day-of contact</div>
+    <div style="font-size:13px;color:#6b6052;margin-top:2px">Call this person during the event. This is not the booker.</div>
+    ${who}${phone}
+  </div>`;
 }
 function driverMailSubject(kind, booking){
   const who=(booking&&(booking.customer_name||booking.event_type))||'booking';
@@ -1935,7 +1988,14 @@ function quoteBuilder(qid){
   const initHours=stashed?stashed.hours:(q.hours||INCLUDED_HOURS);
   const initMiles=stashed?stashed.miles:(q.miles||0);
   const initHotel=stashed?stashed.hotel>0:Number(q.hotel_fee)>0;
-  window._quoteEventDate=q.event_date||null;
+  const initDate=/^\d{4}-\d{2}-\d{2}/.test(String(q.event_date||''))?String(q.event_date).slice(0,10):'';
+  const initTime=clockInputValue(q.event_time);
+  const priceAuto=q.base_rate==null||q.base_rate==='';
+  const feeAuto=q.travel==null||q.travel==='';
+  const bookUrl=quoteBookUrl(ensureBookToken(q));
+  const initDays=remainingQuoteDays(q);
+  window._quoteLines=Array.isArray(q.line_items)?q.line_items.filter(l=>l&&typeof l==='object').map(l=>({label:String(l.label||''),amount:Number(l.amount)||0})):[];
+  window._quoteEventDate=initDate||q.event_date||null;
   window._quoteEventTime=q.event_time||null;
   window._quoteId=q.id;
   if(!stashed) window._quoteTrip={hours:initHours,miles:initMiles,hotel:initHotel?HOTEL_FEE:0,note:q.quote_notes||null};
@@ -1945,7 +2005,8 @@ function quoteBuilder(qid){
     const sentDate=q.sent_at||q.created_at;
     const daysAgo=sentDate?Math.floor((Date.now()-new Date(sentDate).getTime())/86400000):null;
     const sentDateStr=sentDate?new Date(sentDate).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'—';
-    const expDate=sentDate?new Date(new Date(sentDate).getTime()+QUOTE_VALID_DAYS*86400000).toLocaleDateString():null;
+    const expSource=q.book_expires_at||(sentDate?new Date(new Date(sentDate).getTime()+QUOTE_VALID_DAYS*86400000).toISOString():null);
+    const expDate=expSource?new Date(expSource).toLocaleDateString():null;
     const reminderStr=q.reminder_sent_at
       ?new Date(q.reminder_sent_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})+` (${Math.floor((Date.now()-new Date(q.reminder_sent_at).getTime())/86400000)}d ago)`
       :null;
@@ -1974,15 +2035,34 @@ function quoteBuilder(qid){
       ${q.details?`<div class="meta" style="margin-top:6px;padding:8px;background:var(--paper-2);border-radius:8px">${esc(q.details)}</div>`:''}
     </div>
     <div class="row two" style="margin-top:12px">
+      <div><label>Date</label><input id="q_date" type="date" value="${esc(initDate)}" onchange="window._quoteEventDate=this.value||null;quoteRecalc()"></div>
+      <div><label>Start time</label><input id="q_time" type="time" value="${esc(initTime)}"></div>
+    </div>
+    <div class="row two" style="margin-top:12px">
       <div><label>Car</label><select id="q_car" onchange="quoteRecalc()">${carOpts}</select></div>
       <div><label>Total hours</label><input id="q_hours" type="number" step="0.5" min="2" value="${initHours}" oninput="quoteRecalc()"></div>
     </div>
     <div id="q_avail"></div>
     <div><label>One-way miles from Benton (0 if within 30)</label><input id="q_miles" type="number" step="1" min="0" value="${initMiles}" oninput="quoteRecalc()"></div>
+    <div class="row two" style="margin-top:10px">
+      <div><label>Price (base, up to ${INCLUDED_HOURS} hrs)</label><input id="q_price" type="number" step="0.01" min="0" data-auto="${priceAuto?'1':'0'}" value="${priceAuto?'':esc(Number(q.base_rate).toFixed(2))}" oninput="quotePriceTouched()"></div>
+      <div><label>Mileage fee</label><input id="q_mileage_fee" type="number" step="0.01" min="0" data-auto="${feeAuto?'1':'0'}" value="${feeAuto?'':esc(Number(q.travel).toFixed(2))}" oninput="quoteFeeTouched()"></div>
+    </div>
     <label class="toggle" style="margin-top:10px"><input type="checkbox" id="q_hotel" ${initHotel?'checked':''} onchange="quoteRecalc()"><span class="toggleslide"></span><span>Overnight hotel accommodation — $${HOTEL_FEE}</span></label>
+    <div id="q_items" style="margin-top:10px"></div>
     <div id="q_alts"></div>
     <div id="q_breakdown" class="qbreak"></div>
     <div><label>Note to customer (optional)</label><textarea id="q_note" placeholder="e.g. Suggested arrival 45 min before ceremony...">${esc(q.quote_notes||'')}</textarea></div>
+    <div class="qbook">
+      <div class="dashhd">Book Now link</div>
+      <label>Customer link</label>
+      <input id="q_book_url" readonly value="${esc(bookUrl)}">
+      <div class="row two" style="margin-top:8px">
+        <div><label>Link valid for (days)</label><input id="q_valid_days" type="number" min="1" step="1" value="${initDays}"></div>
+        <div style="display:flex;align-items:flex-end"><button type="button" class="act" onclick="copyBookLink('${q.id}')">Copy link</button></div>
+      </div>
+      <div class="meta" style="margin-top:8px">The customer pays the $250 deposit on this link. The car is reserved only after payment. The link expires and works once.</div>
+    </div>
     <div id="q_send_row" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="act" onclick="sendQuote('${q.id}')" ${q.customer_email?'':'disabled title="No email on file"'}>${q.status==='sent'||q.status==='booked'?'Re-send to customer':'Send to customer'}</button>
       <button class="ghost" onclick="saveQuoteDraft('${q.id}')">Save draft</button>
@@ -1995,6 +2075,7 @@ function quoteBuilder(qid){
       <button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood)" onclick="deleteQuote('${q.id}')">🗑️ Delete this quote request</button>
     </div>
   `);
+  renderQuoteLines();
   quoteRecalc();
 }
 
@@ -2015,7 +2096,7 @@ async function sendReminderEmail(qid){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
   const car=q.car_id?carById(q.car_id):null;
   if(!confirm(`Send a reminder email to ${q.customer_email} about their $${q.total?Number(q.total).toFixed(2):''} quote?`)) return;
-  const bookUrl=(car&&car.book_url)?car.book_url:'https://www.chanceclassics.com/book-online?referral=quote_email';
+  const bookUrl=q.book_token?quoteBookUrl(q.book_token):(car&&car.book_url)?car.book_url:'https://www.chanceclassics.com/book-online?referral=quote_email';
   try{
     const r=await postNotification({
       type:'quote_reminder', to:q.customer_email, book_url:bookUrl,
@@ -2066,11 +2147,15 @@ function quoteTripInputs(){
   return trip;
 }
 function quoteRecalc(){
-  const carId=document.getElementById('q_car').value;
-  const hours=document.getElementById('q_hours').value;
-  const miles=document.getElementById('q_miles').value;
+  const carEl=document.getElementById('q_car');
+  const hoursEl=document.getElementById('q_hours');
+  if(!carEl||!hoursEl) return;
+  const carId=carEl.value;
+  const hours=hoursEl.value;
+  const milesEl=document.getElementById('q_miles');
+  const miles=milesEl?milesEl.value:0;
   const hotelOn=quoteHotelOn();
-  const c=calcQuote(carId,hours,miles,hotelOn?HOTEL_FEE:0);
+  const c=quoteMoneyParts()||calcQuote(carId,hours,miles,hotelOn?HOTEL_FEE:0);
   const m=n=>`$${n.toFixed(2)}`;
   const qid=window._quoteId;
   const q=qid?(DATA.quotes||[]).find(x=>x.id===qid):null;
@@ -2147,33 +2232,153 @@ function quoteRecalc(){
   const breakHint=clash
     ? `<div class="meta" style="margin-bottom:8px">Requested car (already booked). Tap Send this option on one open car, or send all open-car prices.</div>`
     : '';
+  const urlEl=document.getElementById('q_book_url');
+  if(urlEl && q) urlEl.value=quoteBookUrl(ensureBookToken(q));
+  const customLines=(c.custom||[]).map(line=>`<div class="qline"><span>${esc(line.label)}</span><span>${m(Number(line.amount)||0)}</span></div>`).join('');
   document.getElementById('q_breakdown').innerHTML=`
     ${breakHint}
     <div class="qline"><span>Base (up to ${INCLUDED_HOURS} hrs)</span><span>${m(c.base)}</span></div>
     ${c.overage>0?`<div class="qline"><span>+${c.extraH} extra hr × $${OVERAGE_RATE}</span><span>${m(c.overage)}</span></div>`:''}
-    ${c.travel>0?`<div class="qline"><span>Travel ${c.mi} mi × $${PER_MILE} (trailered)</span><span>${m(c.travel)}</span></div>`:`<div class="qline muted"><span>Travel (within ${FREE_MILES} mi)</span><span>$0.00</span></div>`}
+    <div class="qline${c.travel>0?'':' muted'}"><span>Mileage fee (${c.mi} mi from Benton)</span><span>${m(c.travel)}</span></div>
     ${c.hotel>0?`<div class="qline"><span>Overnight hotel accommodation</span><span>${m(c.hotel)}</span></div>`:`<div class="qline muted"><span>Overnight hotel (not included)</span><span>$0.00</span></div>`}
+    ${customLines}
     <div class="qline"><span>Subtotal</span><span>${m(c.subtotal)}</span></div>
     <div class="qline"><span>Tax (${(TAX_RATE*100).toFixed(0)}%)</span><span>${m(c.tax)}</span></div>
     <div class="qline qtotal"><span>Total</span><span>${m(c.total)}</span></div>`;
 }
 
+const SITE_BOOK_ORIGIN='https://www.chanceclassics.com';
+function quoteBookUrl(token){ return SITE_BOOK_ORIGIN+'/book/quote/'+token+'/'; }
+function remainingQuoteDays(q){
+  if(!q||!q.book_expires_at) return QUOTE_VALID_DAYS;
+  const ms=new Date(q.book_expires_at).getTime()-Date.now();
+  if(!Number.isFinite(ms)) return QUOTE_VALID_DAYS;
+  return Math.max(1, Math.ceil(ms/86400000));
+}
+function quotePriceTouched(){
+  const el=document.getElementById('q_price');
+  if(el) el.dataset.auto='0';
+  quoteRecalc();
+}
+function quoteFeeTouched(){
+  const el=document.getElementById('q_mileage_fee');
+  if(el) el.dataset.auto='0';
+  quoteRecalc();
+}
+function ensureBookToken(q){
+  if(q&&q.book_token) return q.book_token;
+  if(q&&window._bookTokenFor===q.id&&window._bookToken) return window._bookToken;
+  const bytes=new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  let bin='';
+  for(const b of bytes) bin+=String.fromCharCode(b);
+  const token=btoa(bin).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
+  window._bookToken=token;
+  window._bookTokenFor=q?q.id:'';
+  return token;
+}
+function clockInputValue(value){
+  if(!value) return '';
+  const ampm=String(value).match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+  if(ampm){
+    let h=Number(ampm[1]);
+    const pm=ampm[3].toLowerCase()==='pm';
+    if(h===12) h=pm?12:0; else if(pm) h+=12;
+    return String(h).padStart(2,'0')+':'+ampm[2];
+  }
+  const m=String(value).match(/^(\d{1,2}):(\d{2})/);
+  return m?String(m[1]).padStart(2,'0')+':'+m[2]:'';
+}
+function quoteMoneyParts(){
+  const carEl=document.getElementById('q_car');
+  const hoursEl=document.getElementById('q_hours');
+  if(!carEl||!hoursEl) return null;
+  const milesEl=document.getElementById('q_miles');
+  const miles=milesEl?milesEl.value:0;
+  const hotelOn=quoteHotelOn();
+  const auto=calcQuote(carEl.value,hoursEl.value,miles,hotelOn?HOTEL_FEE:0);
+  const feeEl=document.getElementById('q_mileage_fee');
+  const priceEl=document.getElementById('q_price');
+  if(priceEl&&priceEl.dataset.auto==='1') priceEl.value=Number(auto.base).toFixed(2);
+  if(feeEl&&feeEl.dataset.auto==='1') feeEl.value=Number(auto.travel).toFixed(2);
+  const base=priceEl&&priceEl.value!==''?Number(priceEl.value)||0:auto.base;
+  const travel=feeEl&&feeEl.value!==''?Number(feeEl.value)||0:auto.travel;
+  const custom=(window._quoteLines||[]).filter(l=>l&&String(l.label||'').trim()).map(l=>({label:String(l.label).trim(),amount:Number(l.amount)||0}));
+  const customSum=custom.reduce((sum,line)=>sum+line.amount,0);
+  const subtotal=base+auto.overage+travel+(hotelOn?HOTEL_FEE:0)+customSum;
+  const tax=subtotal*TAX_RATE;
+  const total=subtotal+tax;
+  return {base,extraH:auto.extraH,overage:auto.overage,mi:Number(miles)||0,travel,hotel:hotelOn?HOTEL_FEE:0,subtotal,tax,total,custom};
+}
+function renderQuoteLines(){
+  const el=document.getElementById('q_items');
+  if(!el) return;
+  const rows=(window._quoteLines||[]).map((line,i)=>`<div class="row two" style="margin-top:6px">
+      <input value="${esc(line.label)}" placeholder="Line item" oninput="quoteLineEdit(${i},'label',this.value)">
+      <div style="display:flex;gap:6px"><input type="number" step="0.01" value="${line.amount}" oninput="quoteLineEdit(${i},'amount',this.value)"><button type="button" class="ghost tinybtn" onclick="removeQuoteLine(${i})">Remove</button></div>
+    </div>`).join('');
+  el.innerHTML=`<label>Custom line items</label>${rows}<button type="button" class="ghost tinybtn" style="margin-top:8px" onclick="addQuoteLine()">Add line item</button>`;
+}
+function addQuoteLine(){
+  window._quoteLines=window._quoteLines||[];
+  window._quoteLines.push({label:'',amount:0});
+  renderQuoteLines();
+  quoteRecalc();
+}
+function removeQuoteLine(i){
+  (window._quoteLines||[]).splice(i,1);
+  renderQuoteLines();
+  quoteRecalc();
+}
+function quoteLineEdit(i,key,value){
+  if(!window._quoteLines||!window._quoteLines[i]) return;
+  window._quoteLines[i][key]=value;
+  quoteRecalc();
+}
+function quoteSavePatch(f){
+  return {car_id:f.car_id,hours:f.hours,miles:f.miles,base_rate:f.base_rate,overage:f.overage,
+    travel:f.travel,hotel_fee:f.hotel_fee,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
+    line_items:f.line_items,event_date:f.event_date,event_time:f.event_time,
+    book_token:f.book_token,book_expires_at:f.book_expires_at};
+}
+async function copyBookLink(qid){
+  if(!SB){ toast('Sign in before copying the link'); return; }
+  const f=quoteFields(qid);
+  const {error}=await SB.from('quote_requests').update(quoteSavePatch(f)).eq('id',qid);
+  if(error){toast(error.message);return}
+  const url=f.book_url;
+  try{ await navigator.clipboard.writeText(url); }
+  catch(e){
+    const el=document.getElementById('q_book_url');
+    if(el){ el.focus(); el.select(); document.execCommand('copy'); }
+  }
+  toast('Book Now link copied');
+}
+
 function quoteFields(qid){
+  const q=(DATA.quotes||[]).find(x=>x.id===qid);
   const carId=document.getElementById('q_car').value;
   const hours=parseFloat(document.getElementById('q_hours').value)||INCLUDED_HOURS;
   const miles=parseFloat(document.getElementById('q_miles').value)||0;
-  const note=document.getElementById('q_note').value||null;
-  const c=calcQuote(carId,hours,miles,quoteHotelOn()?HOTEL_FEE:0);
+  const noteEl=document.getElementById('q_note');
+  const note=noteEl?noteEl.value||null:null;
+  const c=quoteMoneyParts()||calcQuote(carId,hours,miles,quoteHotelOn()?HOTEL_FEE:0);
+  const days=Math.max(1, parseInt((document.getElementById('q_valid_days')||{}).value,10)||QUOTE_VALID_DAYS);
+  const token=ensureBookToken(q||{id:qid});
+  const dateEl=document.getElementById('q_date');
+  const timeEl=document.getElementById('q_time');
   return {car_id:carId,hours,miles,base_rate:c.base,overage:c.overage,travel:c.travel,hotel_fee:c.hotel,
-    subtotal:c.subtotal,tax:c.tax,total:c.total,quote_notes:note,extra_hours:c.extraH};
+    subtotal:c.subtotal,tax:c.tax,total:c.total,quote_notes:note,extra_hours:c.extraH,
+    line_items:c.custom||[], event_date:(dateEl&&dateEl.value)||(q&&q.event_date)||null,
+    event_time:(timeEl&&timeEl.value)||(q&&q.event_time)||null,
+    book_token:token, book_expires_at:new Date(Date.now()+days*86400000).toISOString(),
+    book_url:quoteBookUrl(token)};
 }
 
 async function saveQuoteDraft(qid){
   const f=quoteFields(qid);
   const {error}=await SB.from('quote_requests').update({
-    car_id:f.car_id,hours:f.hours,miles:f.miles,base_rate:f.base_rate,overage:f.overage,
-    travel:f.travel,hotel_fee:f.hotel_fee,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
-    status:'quoted'
+    ...quoteSavePatch(f), status:'quoted'
   }).eq('id',qid);
   if(error){toast(error.message);return}
   toast('Draft saved');closeModal();await loadAll();
@@ -2195,22 +2400,20 @@ async function sendQuote(qid){
   }
   if(!confirm(`Send this $${f.total.toFixed(2)} quote to ${q.customer_email}?`)) return;
   const nowIso=new Date().toISOString();
-  const expiresStr=new Date(Date.now()+QUOTE_VALID_DAYS*86400000).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const expiresStr=new Date(f.book_expires_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   // save first
   await SB.from('quote_requests').update({
-    car_id:f.car_id,hours:f.hours,miles:f.miles,base_rate:f.base_rate,overage:f.overage,
-    travel:f.travel,hotel_fee:f.hotel_fee,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
-    status:'sent', sent_at:nowIso
+    ...quoteSavePatch(f), status:'sent', sent_at:nowIso
   }).eq('id',qid);
   // send email
   try{
     await postNotification({
       type:'quote', to:q.customer_email,
-      book_url:(car&&car.book_url)?car.book_url:'https://www.chanceclassics.com/book-online?referral=quote_email',
-      quote:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:q.event_date,
+      book_url:f.book_url,
+      quote:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:f.event_date||q.event_date,
         event_location:q.event_location, base_rate:f.base_rate, overage:f.overage, extra_hours:f.extra_hours,
         travel:f.travel, miles:f.miles, hotel_fee:f.hotel_fee, subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes,
-        expires:expiresStr}
+        custom_items:f.line_items, expires:expiresStr}
     });
     toast('Quote sent to customer');
   }catch(e){ toast('Saved, but email failed: '+(e.message||e)); }
@@ -2296,6 +2499,7 @@ function bookingRowHtml(b){
       </div>
       <div class="meta">${esc(b.event_type||'—')}${b.start_time?' · '+fmtTime(b.start_time):''}</div>
       <div class="meta lcar">🚗 ${car?esc(car.name):'<em>no car</em>'} &nbsp;·&nbsp; 👤 ${drv?esc(drv.name):'<em>no driver</em>'}${pct!==null?` &nbsp;·&nbsp; ${pct}% prepped`:''}</div>
+      ${dayOfContactLine(b)}
       ${payline}
     </div>
     <div class="lactions">${actions}</div>
@@ -2485,6 +2689,7 @@ function calDay(day){
       <div class="lmain">
         <div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}</div>
         <div class="meta lcar">🚗 ${car?esc(car.name):'<em>no car</em>'} &nbsp;·&nbsp; 👤 ${drv?esc(drv.name):'<em>no driver</em>'}${b.event_type?' · '+esc(b.event_type):''}</div>
+        ${dayOfContactLine(b)}
         ${ownerCustomerAmountTagHtml(b)}
         ${isOwnerView()?ownerPayPillHtml(b):''}
       </div></div>`;
@@ -2848,8 +3053,9 @@ async function saveBooking(id){
         }
       }
     }
-    if(justOffered) notifyOfferTo(rec);  // email the #1 driver that a job awaits
-    notifyDriversAfterBookingWrite({previous:existing, next:{...rec,id:savedId}});
+    const mailed=bookingForDriverMail({...rec,id:savedId}, existing);
+    if(justOffered) notifyOfferTo(mailed);  // email the #1 driver that a job awaits
+    notifyDriversAfterBookingWrite({previous:existing, next:mailed});
     closeModal();toast('Booking saved');await loadAll();
   }catch(e){toast('Error: '+(e.message||e))}
 }
@@ -2931,6 +3137,7 @@ function bookingDetail(bid){
     ${row('Car', car?car.name:'—')}
     ${row('Pickup', b.pickup_location)}
     ${row('Drop-off', b.return_location)}
+    ${dayOfContactBlock(b)}
     ${row('Phone', b.customer_phone)}
     ${row('Email', b.customer_email)}
     ${b.needs_trailer?`<div style="margin-bottom:10px"><span class="trailertag">🚛 Car must be trailered</span></div>`:''}
