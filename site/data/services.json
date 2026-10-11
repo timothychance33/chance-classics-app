@@ -1,8 +1,8 @@
 [
   {
     "car": "Patsy",
-    "name": "1953 Packard Executive Sedan",
-    "tagLine": "Patsy - 1953 Packard Executive Sedan",
+    "name": "1953 Packard Limousine",
+    "tagLine": "Patsy - 1953 Packard Patrician Limousine",
     "slug": "1953-packard-limo",
     "oldSlugs": [
       "1953-packard-limo-2-hour-vehicle-rental"
@@ -12,7 +12,7 @@
     "portfolioSlug": "patsy",
     "image": {
       "src": "/images/book-online_1953-packard-limo_01.webp",
-      "alt": "1953 Packard Executive Sedan",
+      "alt": "1953 Packard Limousine",
       "w": 4032,
       "h": 3024,
       "file": "book-online_1953-packard-limo_01.png"
@@ -20,14 +20,14 @@
     "gallery": [
       {
         "src": "/images/service-1953-packard-limo_1953-packard-limo_02.webp",
-        "alt": "1953 Packard Executive Sedan",
+        "alt": "1953 Packard Limousine",
         "w": 4032,
         "h": 3024,
         "file": "service-1953-packard-limo_1953-packard-limo_02.png"
       },
       {
         "src": "/images/service-1953-packard-limo_1953-packard-limo_03.webp",
-        "alt": "1953 Packard Executive Sedan",
+        "alt": "1953 Packard Limousine",
         "w": 4032,
         "h": 3024,
         "file": "service-1953-packard-limo_1953-packard-limo_03.png"
@@ -41,7 +41,7 @@
       },
       {
         "src": "/images/service-1953-packard-limo_1953-packard-limo_04.webp",
-        "alt": "1953 Packard Executive Sedan",
+        "alt": "1953 Packard Limousine",
         "w": 4032,
         "h": 3024,
         "file": "service-1953-packard-limo_1953-packard-limo_04.png"

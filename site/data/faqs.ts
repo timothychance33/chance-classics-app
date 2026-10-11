@@ -4,7 +4,7 @@
  *
  * Mileage, deposit, extra hour, and the 7-day lead: site/lib/booking-rules.ts
  * and the service listings. Passenger counts: site/data/carFacts.ts
- * (from the client agreements, with Tim's 2026-10-11 overrides for Bonnie and Patsy). Convertible parade list: isConvertible in
+ * (from the client agreements, with Tim's override for Bonnie). Patsy is 6 besides the chauffeur. Convertible parade list: isConvertible in
  * site/lib/content.ts. Decorations: the wedding-cost blog post, plus Tim
  * on 2026-10-11 (suction cups and magnets are fine; tape or anything sticky
  * is not). Rain is Tim's line from the same day. A parade lead time beyond
@@ -56,7 +56,7 @@ export const faqItems: FaqItem[] = [
   },
   {
     q: "How many passengers can ride in each car?",
-    a: "These counts are passengers besides the chauffeur. Patsy 7. Bonnie 6. Phyllis, Black Betty, Elsa, Veronica, Brenda, Sylvia, and Carmen 3 each. Rosie 1.",
+    a: "These counts are passengers besides the chauffeur. Patsy 6. Bonnie 6. Phyllis, Black Betty, Elsa, Veronica, Brenda, Sylvia, and Carmen 3 each. Rosie 1.",
   },
   {
     q: "How does mileage work?",

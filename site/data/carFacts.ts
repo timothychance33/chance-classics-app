@@ -69,15 +69,16 @@ export const carFacts: CarFacts[] = [
     history: "",
   },
   {
-    // Tim, 2026-10-11: Black, no air conditioning, Executive Sedan, 7 passengers.
-    // Agreement had said Patrician Limousine and 6 passengers.
+    // Tim, 2026-10-11: Black, no air conditioning. Body stays limousine.
+    // Passengers are the driver plus 6, so 6 besides the chauffeur.
+    // Model is the published Patrician Limousine, not Executive Sedan.
     car: "Patsy",
     year: 1953,
     make: "Packard",
-    model: "Executive Sedan",
+    model: "Patrician Limousine",
     color: "Black",
-    passengers: 7,
-    body: "sedan",
+    passengers: 6,
+    body: "limousine",
     airConditioning: false,
     nameOrigin: "",
     history: "",
