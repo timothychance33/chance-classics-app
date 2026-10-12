@@ -22,6 +22,15 @@ for (const [slug, agreement] of cars) {
 }
 
 assert.match(page, /sharedTerms\(\)/, 'rental terms page shows the shared agreement');
+assert.doesNotMatch(page, /\$200 for each additional consecutive hour|until that difference is decided/);
 assert.doesNotMatch(JSON.stringify(agreements), /provided by Company|liquor service|except for alcohol/i);
+
+for (const [slug, agreement] of cars) {
+  const hours = agreement.blocks.filter((block) => block.type === 'p' && block.text.startsWith('(h)'));
+  assert.equal(hours.length, 1, `${slug} has one day-of hours clause`);
+  assert.match(hours[0].text, /additional hours on the day of the CLIENT/);
+  assert.match(hours[0].text, /an applicable rental fee of \$100 per hour for each additional consecutive hour/);
+  assert.doesNotMatch(hours[0].text, /\$200 per hour/);
+}
 
 console.log('rental-terms alcohol tests passed');
