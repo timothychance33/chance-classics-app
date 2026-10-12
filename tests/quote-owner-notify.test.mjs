@@ -15,6 +15,8 @@ import {
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const capture = readFileSync(join(root, 'supabase/functions/quote-capture/index.ts'), 'utf8');
 const config = readFileSync(join(root, 'supabase/config.toml'), 'utf8');
+const notify = readFileSync(join(root, 'supabase/functions/send-notification/index.ts'), 'utf8');
+const siteQuotes = readFileSync(join(root, 'site/app/api/quotes/route.ts'), 'utf8');
 
 const wixBody = {
   data: {
@@ -70,6 +72,13 @@ const labels = ownerQuoteRequestRows(quote).map(([label]) => label);
 assert.deepEqual(labels, [
   'Customer', 'Email', 'Phone', 'Service / car', 'Car', 'Event', 'Date', 'Time', 'Location', 'Details', 'Event planner',
 ]);
+const withDropoff = ownerQuoteRequestRows({
+  ...quote,
+  id: 'q-100',
+  dropoff_location: '200 Crockett St',
+});
+assert.equal(withDropoff[0][0], 'Request id');
+assert.equal(withDropoff.find(([label]) => label === 'Drop-off')[1], '200 Crockett St');
 
 const html = ownerQuoteRequestHtml(quote, 'https://app.chanceclassics.com');
 assert.match(html, /Ada Lovelace/);
@@ -135,5 +144,21 @@ assert.match(capture, /quote-capture owner notify failed/);
 
 assert.match(config, /\[functions\.quote-capture\]/);
 assert.match(config, /verify_jwt = false/);
+
+const siteInsert = siteQuotes.lastIndexOf('.insert(');
+const siteMail = siteQuotes.indexOf('await emailOwnerAboutQuote');
+assert.ok(siteInsert > 0 && siteMail > siteInsert, 'site quote email runs only after the insert');
+assert.match(siteQuotes, /dropoff_location/);
+assert.match(siteQuotes, /car_name/);
+assert.doesNotMatch(siteQuotes, /sendEmail\(/);
+
+assert.match(notify, /type === "quote_request"/);
+assert.match(notify, /quote_request requires a quote/);
+const quoteTypeAt = notify.indexOf('type === "quote_request"');
+const quoteBranch = notify.slice(quoteTypeAt, notify.indexOf('unknown type', quoteTypeAt));
+assert.match(quoteBranch, /sendEmail\(OWNER_EMAIL, subject, html\)/);
+assert.match(quoteBranch, /ownerQuoteRequestHtml/);
+assert.doesNotMatch(quoteBranch, /body\.to/);
+assert.doesNotMatch(quoteBranch, /sendEmail\(\s*(q\.customer_email|body\.to)/);
 
 console.log('quote-owner-notify tests passed');

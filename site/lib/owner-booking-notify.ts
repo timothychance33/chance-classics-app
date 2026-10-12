@@ -85,6 +85,11 @@ export async function postOwnerBookingEmail(booking: Record<string, unknown>) {
   return postOwnerNotice({ type: "booking_created", booking });
 }
 
+/** Email Tim the full site quote request. The customer is not a recipient. */
+export async function emailOwnerAboutQuote(quote: Record<string, unknown>) {
+  return postOwnerNotice({ type: "quote_request", quote });
+}
+
 function missingNotices(error: { code?: string; message?: string } | null) {
   if (!error) return false;
   return error.code === "42P01"
