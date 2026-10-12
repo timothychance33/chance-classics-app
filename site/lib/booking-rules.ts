@@ -6,6 +6,17 @@ export const CANCEL_HOURS = 72;
 export const BASE_HOURS = 2;
 export const EXTRA_HOUR_USD = 100;
 export const DEPOSIT_USD = 250;
+export const SALES_TAX_RATE = 0.1025;
+
+export function roundMoney(amount: number) {
+  return Math.round((Number(amount) + Number.EPSILON) * 100) / 100;
+}
+
+/** Sales tax on the rental subtotal, rounded to cents. */
+export function salesTax(subtotal: number) {
+  const cents = Math.round(Math.max(0, Number(subtotal) || 0) * 100);
+  return Math.round(cents * SALES_TAX_RATE) / 100;
+}
 export const HOLD_MINUTES = 30;
 export const MILE_RADIUS = 30;
 export const EXTRA_MILE_USD = 3;
@@ -167,15 +178,19 @@ export function quoteTotal(basePrice: number, hours: number, mileageFee = 0) {
   const extraHours = Math.max(0, hours - BASE_HOURS);
   const listing = basePrice + extraHours * EXTRA_HOUR_USD;
   const fee = Math.max(0, mileageFee);
-  const total = listing + fee;
+  const subtotal = roundMoney(listing + fee);
+  const tax = salesTax(subtotal);
+  const total = roundMoney(subtotal + tax);
   return {
     hours,
     extraHours,
     listing,
     mileageFee: fee,
+    subtotal,
+    tax,
     total,
     deposit: DEPOSIT_USD,
-    balance: total - DEPOSIT_USD,
+    balance: roundMoney(total - DEPOSIT_USD),
   };
 }
 
@@ -304,7 +319,7 @@ export function quoteCheckoutLines(quote: {
       if (label) lines.push({ label, amount });
     }
   }
-  if (Number(quote.tax)) add("Tax", Number(quote.tax));
+  if (Number(quote.tax)) add("Sales tax (10.25%)", Number(quote.tax));
   return lines;
 }
 

@@ -1,5 +1,8 @@
+import { ServiceAreaMap } from "@/components/ServiceAreaMap";
 import { SITE_URL, pageMeta } from "@/lib/content";
 import { EXTRA_MILE_USD, MILE_THRESHOLD, MILEAGE_EXAMPLES, SHOP_ADDRESS } from "@/lib/booking-rules";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = pageMeta({
   title: "Service Area | Chance Classics, Classic Car Rental",
@@ -40,6 +43,7 @@ export default function ServiceAreaPage() {
       <h1>Service area</h1>
       <p>Chance Classics is based at {SHOP_ADDRESS}.</p>
       <p>We work mostly in Northwest Louisiana and go as far as New Orleans, Longview, Jackson, and Hot Springs.</p>
+      <ServiceAreaMap apiKey={process.env.GOOGLE_MAPS_API_KEY || ""} />
       <h2>Mileage</h2>
       <p>
         A pickup {MILE_THRESHOLD} miles or less from Benton has no mileage charge.

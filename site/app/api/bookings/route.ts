@@ -95,12 +95,15 @@ export async function POST(request: Request) {
       `Car: ${service.car} (${service.name})`,
       `Occasion: ${value.occasion}`,
       `Duration: ${value.hours} hours`,
-      `Listing total: $${money.listing}`,
+      `Listing total: $${money.listing.toFixed(2)}`,
       mileage.needsReview
         ? "Mileage: We'll confirm mileage. Flagged for review."
-        : `Mileage: ${mileage.miles} miles from Benton to pickup, fee $${mileage.fee}, billed with the balance.`,
-      `Deposit due: $${money.deposit}`,
-      `Balance billed separately: $${money.balance}`,
+        : `Mileage: ${mileage.miles} miles from Benton to pickup, fee $${Number(mileage.fee).toFixed(2)}, billed with the balance.`,
+      `Subtotal: $${money.subtotal.toFixed(2)}`,
+      `Sales tax (10.25%): $${money.tax.toFixed(2)}`,
+      `Booking total: $${money.total.toFixed(2)}`,
+      `Deposit due: $${money.deposit.toFixed(2)}`,
+      `Balance billed separately: $${money.balance.toFixed(2)}`,
       "Waiver accepted: Yes",
       "Vehicle reliability acknowledged: Yes",
       `Confirmed only after the $${money.deposit} deposit is paid.`,
@@ -144,7 +147,13 @@ export async function POST(request: Request) {
         mode: "payment",
         customer_email: value.email,
         client_reference_id: bookingId,
-        metadata: { booking_id: bookingId, source, car: service.car },
+        metadata: {
+          booking_id: bookingId,
+          source,
+          car: service.car,
+          total_usd: money.total.toFixed(2),
+          deposit_usd: money.deposit.toFixed(2),
+        },
         line_items: [
           {
             quantity: 1,
@@ -153,7 +162,7 @@ export async function POST(request: Request) {
               unit_amount: money.deposit * 100,
               product_data: {
                 name: `$${money.deposit} non-refundable deposit — ${service.car}`,
-                description: `${service.name}, ${value.date} ${value.start}–${value.end}. Listing $${money.listing}. ${mileage.message} Balance $${money.balance} is billed separately.`,
+                description: `${service.name}, ${value.date} ${value.start}–${value.end}. Subtotal $${money.subtotal.toFixed(2)}. Sales tax (10.25%) $${money.tax.toFixed(2)}. Total $${money.total.toFixed(2)}. ${mileage.message} Balance $${money.balance.toFixed(2)} is billed separately.`,
               },
             },
           },
