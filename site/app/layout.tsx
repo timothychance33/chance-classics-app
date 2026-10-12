@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Nunito_Sans, Playfair_Display } from "next/font/google";
 import Script from "next/script";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { OG_IMAGE, SITE_URL } from "@/lib/content";
@@ -91,6 +93,8 @@ fbq('track', 'PageView');`}
         <main id="main">{children}</main>
         <Footer />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
