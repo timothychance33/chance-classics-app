@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(label)}</td><td style="padding:6px 0;text-align:right">${money((item as { amount?: unknown }).amount)}</td></tr>`);
       }
       lines.push(`<tr><td style="padding:6px 14px 6px 0;border-top:1px solid #ddd">Subtotal</td><td style="padding:6px 0;text-align:right;border-top:1px solid #ddd">${money(q.subtotal)}</td></tr>`);
-      lines.push(`<tr><td style="padding:6px 14px 6px 0">Tax</td><td style="padding:6px 0;text-align:right">${money(q.tax)}</td></tr>`);
+      lines.push(`<tr><td style="padding:6px 14px 6px 0">Sales tax (10.25%)</td><td style="padding:6px 0;text-align:right">${money(q.tax)}</td></tr>`);
       lines.push(`<tr><td style="padding:8px 14px 8px 0;font-weight:800;font-size:17px">Total</td><td style="padding:8px 0;text-align:right;font-weight:800;font-size:17px">${money(q.total)}</td></tr>`);
       const buttonLabel = lockedBook ? "Book Now" : `Book ${q.car_name ?? "online"}`;
       const reserveNote = lockedBook

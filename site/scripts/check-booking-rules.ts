@@ -14,6 +14,7 @@ import {
   dayOfContactColumns,
   dayOfContactNotes,
   quoteTotal,
+  salesTax,
   DEPOSIT_USD,
   rangesOverlap,
   validateBooking,
@@ -45,10 +46,16 @@ assert(!slotTaken("2026-10-11", "02:00", 2, overnight), "2:00 AM is exactly when
 assert(!slotTaken("2026-10-10", "18:00", 2, overnight), "6:00–8:00 PM ends as the pre-booking buffer begins");
 assert(rangesOverlap(60, 120, 90, 150) && !rangesOverlap(60, 120, 120, 180), "range math");
 
+const baseHours = quoteTotal(500, 2, 0);
+assert(
+  baseHours.subtotal === 500 && baseHours.tax === 51.25 && baseHours.total === 551.25 && baseHours.deposit === 250 && baseHours.balance === 301.25,
+  "$500 subtotal is $51.25 tax, $551.25 total, $250 deposit, $301.25 balance",
+);
+assert(salesTax(500) === 51.25 && salesTax(635) === 65.09, "sales tax rounds to cents");
 const money = quoteTotal(500, 4);
-assert(money.listing === 700 && money.total === 700 && money.deposit === 250 && money.balance === 450, "listing price");
+assert(money.listing === 700 && money.subtotal === 700 && money.tax === 71.75 && money.total === 771.75 && money.deposit === 250 && money.balance === 521.75, "listing price includes tax");
 const withMileage = quoteTotal(500, 2, 180);
-assert(withMileage.deposit === 250 && withMileage.balance === 430 && withMileage.total === 680, "mileage stays on the balance");
+assert(withMileage.subtotal === 680 && withMileage.tax === 69.7 && withMileage.total === 749.7 && withMileage.deposit === 250 && withMileage.balance === 499.7, "mileage is taxed with the rental");
 
 assert(mileageCharge(25).miles === 25 && mileageCharge(25).fee === 0, "25 has no fee");
 assert(mileageCharge(30).miles === 30 && mileageCharge(30).fee === 0, "30 has no fee");
@@ -87,28 +94,42 @@ assert(
 assert(withSecondCarNote("Drop-off: 200 Crockett St", false) === "Drop-off: 200 Crockett St", "an unchecked second car stays out of notes");
 assert(!withSecondCarNote("Drop-off: 200 Crockett St", true).includes("$"), "the second car note has no separate price");
 const pay = quoteCheckoutMoney(680);
-assert(pay.deposit === 250 && pay.balance === 430 && pay.total === 680, "quote deposit stays 250");
+assert(pay.deposit === 250 && pay.balance === 430 && pay.total === 680, "a stored quote total is not taxed again");
 const depositPatch = confirmedDepositUpdate({
   status: "hold",
   paymentStatus: "unpaid",
   existingTotal: null,
   existingPaid: null,
-  totalUsd: 500,
+  totalUsd: 551.25,
   depositUsd: depositDollarsFromSession({ amount_total: 25000, metadata: { deposit_usd: "250.00" } }),
   sessionId: "cs_test_deposit",
-  notes: "Listing total: $500\nMileage: 25 miles from Benton to pickup, fee $0, billed with the balance.",
+  notes: "Listing total: $500.00\nSubtotal: $500.00\nSales tax (10.25%): $51.25\nBooking total: $551.25\nMileage: 25 miles from Benton to pickup, fee $0.00, billed with the balance.",
   includeSessionId: true,
 });
 assert(depositPatch.status === "confirmed" && depositPatch.payment_status === "deposit", "a paid deposit is confirmed");
-assert(depositPatch.total_usd === 500 && depositPatch.amount_paid_usd === 250, "total and amount paid are stored");
+assert(depositPatch.total_usd === 551.25 && depositPatch.amount_paid_usd === 250, "total with tax and amount paid are stored");
 assert(!("balance_due_usd" in depositPatch), "balance due stays a generated column");
-assert(Number(depositPatch.total_usd) - Number(depositPatch.amount_paid_usd) === 250, "generated balance is total minus paid");
+assert(Number(depositPatch.total_usd) - Number(depositPatch.amount_paid_usd) === 301.25, "generated balance is total with tax minus the deposit");
 assert(depositPatch.stripe_deposit_session_id === "cs_test_deposit", "checkout session id is stored");
-assert(String(depositPatch.notes).includes("Price: $500.00 ($250.00 due)"), "garage price line matches the balance");
+assert(String(depositPatch.notes).includes("Price: $551.25 ($301.25 due)"), "garage price line matches the balance");
+assert(totalDollarsFromCheckout({
+  notes: "Listing total: $500.00\nMileage: 25 miles from Benton to pickup, fee $0.00, billed with the balance.",
+  mileageFeeUsd: 0,
+}) === 551.25, "a listing note is taxed");
 assert(totalDollarsFromCheckout({
   notes: "Listing total: $500\nMileage: 45 miles from Benton to pickup, fee $135, billed with the balance.",
   mileageFeeUsd: 135,
-}) === 635, "mileage is part of the booking total");
+}) === 700.09, "mileage is part of the taxed booking total");
+assert(totalDollarsFromCheckout({
+  metadata: { total_usd: "551.25" },
+  notes: "Listing total: $500",
+}) === 551.25, "checkout metadata total already includes tax");
+assert(totalDollarsFromCheckout({
+  notes: "Quote total: $551.25\nListing total: $500",
+}) === 551.25, "a stored quote total is not taxed again");
+assert(totalDollarsFromCheckout({
+  notes: "Listing total: $500.00\nSales tax (10.25%): $51.25\nBooking total: $551.25",
+}) === 551.25, "booking total is used as written");
 const kept = confirmedDepositUpdate({
   status: "prepping",
   paymentStatus: "paid",
@@ -133,6 +154,7 @@ const lines = quoteCheckoutLines({
   tax: 68,
   line_items: [{ label: "Flowers", amount: 40 }],
 });
+assert(lines.some((line) => line.label === "Sales tax (10.25%)" && line.amount === 68), "quote checkout shows sales tax");
 assert(lines.some((line) => line.label.includes("60 mi") && line.amount === 180), "mileage fee is the pickup distance");
 assert(lines.some((line) => line.label === "Flowers" && line.amount === 40), "custom line item");
 assert(!lines.some((line) => /drop-off/i.test(line.label)), "drop-off is not a price line");

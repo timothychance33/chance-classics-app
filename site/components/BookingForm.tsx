@@ -358,8 +358,16 @@ export function BookingForm({ car, carName, basePrice }: Props) {
             ? "Enter the pickup address to calculate mileage."
             : mileage?.message || "Checking mileage…"}
         </p>
-        <p className="price">
-          Listing ${money.listing}. Mileage {mileage?.fee == null ? "to be confirmed" : `$${mileage.fee}`}. Deposit due now ${money.deposit}. Balance ${money.balance} is billed separately.
+        <p className="price" data-price-breakdown>
+          Listing {usd(money.listing)}. Mileage {mileage?.fee == null ? "to be confirmed" : usd(mileage.fee)}.
+          <br />
+          Subtotal {usd(money.subtotal)}{mileage?.fee == null ? " before mileage" : ""}.
+          <br />
+          Sales tax (10.25%) {usd(money.tax)}.
+          <br />
+          Total {usd(money.total)}{mileage?.fee == null ? " before mileage" : ""}.
+          <br />
+          Deposit due now {usd(money.deposit)}. Balance {usd(money.balance)} is billed separately.
         </p>
       </div>
       {message && <p className="form-error" role="alert">{message}</p>}
@@ -369,6 +377,11 @@ export function BookingForm({ car, carName, basePrice }: Props) {
       </p>
     </form>
   );
+}
+
+function usd(amount: number) {
+  const rounded = Math.round(amount * 100) / 100;
+  return Number.isInteger(rounded) ? `$${rounded}` : `$${rounded.toFixed(2)}`;
 }
 
 function clockValue(value: string) {

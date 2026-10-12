@@ -118,7 +118,7 @@ export async function POST(request: Request) {
             unit_amount: Math.round(money.deposit * 100),
             product_data: {
               name: `$${money.deposit} non-refundable deposit — ${carName}`,
-              description: `${carName}, ${quote.event_date} ${slot.start}–${slot.end}. Quote total $${money.total}. Balance $${money.balance} is billed separately. The car is reserved after this payment is confirmed.`,
+              description: `${carName}, ${quote.event_date} ${slot.start}–${slot.end}. Quote total $${money.total.toFixed(2)} includes sales tax${Number(quote.tax) ? ` of $${Number(quote.tax).toFixed(2)}` : ""}. Balance $${money.balance.toFixed(2)} is billed separately. The car is reserved after this payment is confirmed.`,
             },
           },
         },

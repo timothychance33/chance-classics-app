@@ -1,5 +1,12 @@
 /** Same $250 as DEPOSIT_USD in booking-rules.ts. Kept local so this file has no path alias. */
 const DEPOSIT_FALLBACK_USD = 250;
+/** Same 10.25% as SALES_TAX_RATE in booking-rules.ts. */
+const SALES_TAX_RATE = 0.1025;
+
+function salesTaxOn(subtotal: number) {
+  const cents = Math.round(Math.max(0, Number(subtotal) || 0) * 100);
+  return Math.round(cents * SALES_TAX_RATE) / 100;
+}
 
 /** Garage jobs with a collected deposit use confirmed, not the import default `new`. */
 export const CONFIRMED_DEPOSIT_STATUS = "confirmed";
@@ -24,7 +31,11 @@ export function depositDollarsFromSession(session: {
   return moneyNumber(session.metadata?.deposit_usd) ?? DEPOSIT_FALLBACK_USD;
 }
 
-/** Booking total (listing or quote, plus mileage). Not the $250 deposit. */
+/**
+ * Tax-inclusive booking total. Not the $250 deposit.
+ * Checkout metadata and "Booking total" / "Quote total" are already final.
+ * A listing-only note gets 10.25% sales tax on listing plus mileage.
+ */
 export function totalDollarsFromCheckout(input: {
   metadata?: { total_usd?: string | null } | null;
   notes?: string | null;
@@ -33,6 +44,8 @@ export function totalDollarsFromCheckout(input: {
   const fromMeta = moneyNumber(input.metadata?.total_usd);
   if (fromMeta != null) return fromMeta;
   const notes = String(input.notes || "");
+  const bookingTotal = notes.match(/Booking total:\s*\$([0-9]+(?:\.[0-9]+)?)/i);
+  if (bookingTotal) return moneyNumber(bookingTotal[1]);
   const quote = notes.match(/Quote total:\s*\$([0-9]+(?:\.[0-9]+)?)/i);
   if (quote) return moneyNumber(quote[1]);
   const listing = notes.match(/Listing total:\s*\$([0-9]+(?:\.[0-9]+)?)/i);
@@ -41,7 +54,10 @@ export function totalDollarsFromCheckout(input: {
   if (listingUsd == null) return null;
   const feeLine = notes.match(/fee \$([0-9]+(?:\.[0-9]+)?)/i);
   const fee = moneyNumber(input.mileageFeeUsd) ?? moneyNumber(feeLine?.[1]) ?? 0;
-  return Math.round((listingUsd + fee) * 100) / 100;
+  const subtotal = Math.round((listingUsd + fee) * 100) / 100;
+  const taxLine = notes.match(/Sales tax[^$\n]*\$([0-9]+(?:\.[0-9]+)?)/i);
+  const tax = taxLine ? (moneyNumber(taxLine[1]) ?? 0) : salesTaxOn(subtotal);
+  return Math.round((subtotal + tax) * 100) / 100;
 }
 
 export function notesAfterDeposit(notes: string, total: number | null, paid: number | null) {
