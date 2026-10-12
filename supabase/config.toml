@@ -26,5 +26,12 @@ verify_jwt = false
 [functions.create-crew-login]
 verify_jwt = false
 
+# Verify JWT stays OFF. quote-mileage checks the caller itself:
+# a signed-in garage admin via the Authorization bearer token.
+# Drivers and anonymous callers are denied. There is no URL secret.
+# The function reads GOOGLE_MAPS_API_KEY, the same key the website uses.
+[functions.quote-mileage]
+verify_jwt = false
+
 [functions.scheduled-tasks]
 verify_jwt = false
