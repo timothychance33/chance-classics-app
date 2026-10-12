@@ -43,11 +43,14 @@ export default async function CarGalleryPage({ params }: { params: Promise<{ slu
         <h1 className="center">{gallery.title}</h1>
         <p className="center">{gallery.subtitle}</p>
         {gallery.note && <p className="note">{gallery.note}</p>}
-        <p className="center">
+        <p className="center gallery-actions">
           {service ? (
-            <Link href={`/service-page/${service.slug}/#book`}>Book</Link>
+            <>
+              <Link className="btn" href={`/service-page/${service.slug}/#book`}>Book</Link>
+              <Link className="btn btn-quiet" href={`/service-page/${service.slug}/`}>Meet {gallery.title}</Link>
+            </>
           ) : (
-            <Link href="/quoterequest/">Request a Quote</Link>
+            <Link className="btn" href="/quoterequest/">Request a Quote</Link>
           )}
         </p>
         {photos.length > 0 && <LightboxGallery images={photos} />}

@@ -3,7 +3,7 @@ import { pageMeta } from "@/lib/content";
 
 export const metadata = pageMeta({
   title: "Cars | Chance Classics, Classic Car Rental",
-  description: "Photographs of the classic cars available from Chance Classics in Benton, Louisiana.",
+  description: "Here are some photographs of the cars we currently have available. Click an image below for more pictures.",
   path: "/portfolio",
 });
 

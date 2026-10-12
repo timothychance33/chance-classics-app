@@ -14,7 +14,7 @@ export default function RentalTermsPage() {
     <article className="wrap page legal">
       <h1>Rental terms</h1>
       <p>
-        Booking on this site uses the listing price on the car’s page: that amount for the first 2 hours, then ${EXTRA_HOUR_USD} for each additional hour. Additional consecutive hours requested on the day of the event are ${EXTRA_HOUR_USD} per hour when the vehicle is available. The agreement text below is the captured client agreement, with the car-specific price and passenger count moved onto each car page.
+        Booking on this site uses the listing price on the car’s page: that amount for the first 2 hours, then ${EXTRA_HOUR_USD} for each additional hour. Additional consecutive hours requested on the day of the event are ${EXTRA_HOUR_USD} per hour when the vehicle is available.
       </p>
       <h2>Listing price by car</h2>
       <ul>

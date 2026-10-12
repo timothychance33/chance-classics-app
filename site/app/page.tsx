@@ -27,7 +27,8 @@ export default function HomePage() {
         {byModelYear(home.fleet, (car) => car.caption, (car) => car.name).map((car) => {
           const service = services.find((item) => item.car === car.name);
           const model = car.caption.split(" / ")[0];
-          const meetHref = service ? `/service-page/${service.slug}/` : `${car.href.replace(/\/$/, "")}/`;
+          const galleryHref = `${car.href.replace(/\/$/, "")}/`;
+          const meetHref = service ? `/service-page/${service.slug}/` : galleryHref;
           const bookHref = service ? `/service-page/${service.slug}/#book` : meetHref;
           return (
             <CarTile
@@ -38,6 +39,7 @@ export default function HomePage() {
               image={car.image}
               bookHref={bookHref}
               meetHref={meetHref}
+              galleryHref={galleryHref}
             />
           );
         })}
