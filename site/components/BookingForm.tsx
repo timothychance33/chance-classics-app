@@ -52,6 +52,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const [slotsReady, setSlotsReady] = useState(false);
   const [slotNote, setSlotNote] = useState("");
   const [start, setStart] = useState("");
+  const [clock, setClock] = useState<ClockDraft>({ hour: "", minute: "", period: "" });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -108,7 +109,11 @@ export function BookingForm({ car, carName, basePrice }: Props) {
         const next = data.connected === false ? openStartTimes(hours, []) : Array.isArray(data.slots) ? data.slots : [];
         setSlots(next);
         setSlotsReady(true);
-        setStart((current) => (current && next.includes(clockValue(current)) ? clockValue(current) : ""));
+        setStart((current) => {
+          const kept = current && next.includes(clockValue(current)) ? clockValue(current) : "";
+          setClock(kept ? clockDraft(kept) : { hour: "", minute: "", period: "" });
+          return kept;
+        });
         if (data.connected === false) {
           setSlotNote(`${data.message || "Open times can’t be checked yet."} These hours are not reserved.`);
           return;
@@ -119,6 +124,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
         if (!ignore) {
           setSlots([]);
           setStart("");
+          setClock({ hour: "", minute: "", period: "" });
           setSlotsReady(true);
           setSlotNote("Open times could not be loaded.");
         }
@@ -129,6 +135,20 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   }, [car, date, hours]);
 
   const startError = startTimeError(start, slots, slotsReady);
+  const timeDisabled = !slotsReady || slots.length === 0;
+  const periodsOpen = useMemo(() => openPeriods(slots), [slots]);
+  const hourChoices = useMemo(() => hoursForPeriod(clock.period, slots), [clock.period, slots]);
+
+  function minuteDisabled(minute: string) {
+    if (!clock.hour || !clock.period) return false;
+    return !slots.includes(composeStart(clock.hour, minute, clock.period));
+  }
+
+  function chooseClock(next: ClockDraft, open: string[]) {
+    const adjusted = adjustClock(next, open);
+    setClock(adjusted);
+    setStart(adjusted.hour && adjusted.minute && adjusted.period ? composeStart(adjusted.hour, adjusted.minute, adjusted.period) : "");
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -202,27 +222,60 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           </select>
         </label>
       </div>
-      <label>
-        Start time
-        <select
-          name="start"
-          required
-          value={start}
-          aria-invalid={Boolean(startError)}
-          aria-describedby="start-time-note"
-          disabled={!slotsReady || slots.length === 0}
-          onChange={(event) => setStart(event.target.value)}
-        >
-          <option value="">
-            {!slotsReady ? "Checking open times…" : slots.length ? "Choose a start time" : "No open times"}
-          </option>
-          {slots.map((slot) => (
-            <option key={slot} value={slot}>
-              {formatStartLabel(slot)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <fieldset className="time-picker-field" aria-describedby="start-time-note">
+        <legend>Start time</legend>
+        <div className="time-picker">
+          <label>
+            <span>Hour</span>
+            <select
+              name="start-hour"
+              required
+              value={clock.hour}
+              aria-invalid={Boolean(startError)}
+              disabled={timeDisabled}
+              onChange={(event) => chooseClock({ ...clock, hour: event.target.value }, slots)}
+            >
+              <option value="">Hour</option>
+              {hourChoices.map((hour) => (
+                <option key={hour} value={hour}>{hour}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Minutes</span>
+            <select
+              name="start-minute"
+              required
+              value={clock.minute}
+              aria-invalid={Boolean(startError)}
+              disabled={timeDisabled}
+              onChange={(event) => chooseClock({ ...clock, minute: event.target.value }, slots)}
+            >
+              <option value="">Min</option>
+              {MINUTE_CHOICES.map((minute) => (
+                <option key={minute} value={minute} disabled={minuteDisabled(minute)}>{minute}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>AM/PM</span>
+            <select
+              name="start-period"
+              required
+              value={clock.period}
+              aria-invalid={Boolean(startError)}
+              disabled={timeDisabled}
+              onChange={(event) => chooseClock({ ...clock, period: event.target.value }, slots)}
+            >
+              <option value="">AM/PM</option>
+              {PERIOD_CHOICES.map((period) => (
+                <option key={period} value={period} disabled={!periodsOpen.has(period)}>{period}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <input type="hidden" name="start" value={start} />
+      </fieldset>
       <p id="start-time-note" className="note" aria-live="polite">
         {slotNote || "Start times are every 15 minutes (:00, :15, :30, :45), from 8:00 AM to 8:00 PM, and the rental has to finish the same day."}
         {startError ? ` ${startError}` : ""}
@@ -323,14 +376,66 @@ function clockValue(value: string) {
   return minutes == null ? "" : fromMinutes(minutes);
 }
 
-function formatStartLabel(value: string) {
+const MINUTE_CHOICES = ["00", "15", "30", "45"] as const;
+const PERIOD_CHOICES = ["AM", "PM"] as const;
+const AM_HOURS = [8, 9, 10, 11];
+const PM_HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8];
+
+type ClockDraft = { hour: string; minute: string; period: string };
+
+function clockDraft(value: string): ClockDraft {
   const minutes = toMinutes(value);
-  if (minutes == null) return value;
+  if (minutes == null) return { hour: "", minute: "", period: "" };
   const hours24 = Math.floor(minutes / 60);
-  const mins = String(minutes % 60).padStart(2, "0");
-  const suffix = hours24 >= 12 ? "PM" : "AM";
-  const hours12 = hours24 % 12 || 12;
-  return `${hours12}:${mins} ${suffix}`;
+  return {
+    hour: String(hours24 % 12 || 12),
+    minute: String(minutes % 60).padStart(2, "0"),
+    period: hours24 >= 12 ? "PM" : "AM",
+  };
+}
+
+function composeStart(hour: string, minute: string, period: string) {
+  const hour12 = Number(hour);
+  const mins = Number(minute);
+  if (!Number.isInteger(hour12) || !Number.isInteger(mins)) return "";
+  let hours24 = hour12 % 12;
+  if (period === "PM") hours24 += 12;
+  return fromMinutes(hours24 * 60 + mins);
+}
+
+function openPeriods(slots: string[]) {
+  const periods = new Set<string>();
+  for (const slot of slots) {
+    const draft = clockDraft(slot);
+    if (draft.period) periods.add(draft.period);
+  }
+  return periods;
+}
+
+function hoursForPeriod(period: string, slots: string[]) {
+  const open = new Set<number>();
+  for (const slot of slots) {
+    const draft = clockDraft(slot);
+    if (!draft.hour) continue;
+    if (period && draft.period !== period) continue;
+    open.add(Number(draft.hour));
+  }
+  const order = period === "AM" ? AM_HOURS : period === "PM" ? PM_HOURS : [...AM_HOURS, ...PM_HOURS];
+  return order.filter((hour, index) => open.has(hour) && order.indexOf(hour) === index);
+}
+
+function adjustClock(next: ClockDraft, slots: string[]) {
+  const adjusted = { ...next };
+  if (adjusted.period && !openPeriods(slots).has(adjusted.period)) adjusted.period = "";
+  const hours = hoursForPeriod(adjusted.period, slots);
+  if (adjusted.hour && !hours.includes(Number(adjusted.hour))) {
+    adjusted.hour = "";
+    adjusted.minute = "";
+  }
+  if (adjusted.hour && adjusted.minute && adjusted.period && !slots.includes(composeStart(adjusted.hour, adjusted.minute, adjusted.period))) {
+    adjusted.minute = "";
+  }
+  return adjusted;
 }
 
 function startTimeError(value: string, open: string[], ready: boolean) {
