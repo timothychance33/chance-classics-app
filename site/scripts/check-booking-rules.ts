@@ -1,4 +1,5 @@
 import { withSecondCarNote } from "../data/packages.ts";
+import { FREE_MILE_RADIUS, freeMileageRadiusMeters, mountShopMap, SHOP_ADDRESS_LABEL, SHOP_POINT } from "../lib/shop-map.ts";
 import {
   addDays,
   bookingSource,
@@ -16,6 +17,8 @@ import {
   quoteTotal,
   salesTax,
   DEPOSIT_USD,
+  MILE_THRESHOLD,
+  SHOP_ADDRESS,
   rangesOverlap,
   validateBooking,
   validateDayOfContact,
@@ -191,5 +194,25 @@ if (dayOf.ok) {
 assert(bookingSource({ stripeSecret: "sk_test_x", vercelEnv: "production" }) === "site-test", "test key");
 assert(bookingSource({ stripeSecret: "sk_live_x", vercelEnv: "preview" }) === "site-test", "preview");
 assert(bookingSource({ stripeSecret: "sk_live_x", vercelEnv: "production" }) === "site", "live");
+
+assert(FREE_MILE_RADIUS === MILE_THRESHOLD && SHOP_ADDRESS_LABEL === SHOP_ADDRESS, "map uses the same shop and 30-mile rule");
+assert(freeMileageRadiusMeters() === 30 * 1609.344, "free mileage circle is 30 miles");
+assert(SHOP_POINT.lat > 32.69 && SHOP_POINT.lat < 32.71 && SHOP_POINT.lng < -93.73 && SHOP_POINT.lng > -93.75, "shop pin is in Benton");
+const drawn: { marker?: { title?: string; position?: { lat: number } }; circle?: { radius?: number; geodesic?: boolean }; fitted?: boolean } = {};
+mountShopMap(null as unknown as HTMLElement, {
+  Map: class {
+    fitBounds() { drawn.fitted = true; }
+  } as unknown as new (el: HTMLElement, opts: object) => { fitBounds: (bounds: object, padding?: number) => void },
+  Marker: class {
+    constructor(opts: { title?: string; position?: { lat: number } }) { drawn.marker = opts; }
+  } as unknown as new (opts: object) => unknown,
+  Circle: class {
+    constructor(opts: { radius?: number; geodesic?: boolean }) { drawn.circle = opts; }
+    getBounds() { return { ok: true }; }
+  } as unknown as new (opts: object) => { getBounds: () => object },
+});
+assert(drawn.marker?.title === "Chance Classics, 118 5th St E, Benton, LA 71006", "map pin names the shop");
+assert(drawn.circle?.radius === freeMileageRadiusMeters() && drawn.circle?.geodesic === true, "map circle is the free mileage zone");
+assert(drawn.fitted === true, "map frames the 30-mile circle");
 
 console.log("booking rules ok");
