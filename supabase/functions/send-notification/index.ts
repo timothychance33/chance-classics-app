@@ -23,6 +23,7 @@ import {
 } from "./shared.ts";
 import { handleQuoteAlternatives, handleQuoteDeclined } from "./quotes.ts";
 import { allowNotify, roleTokens, secretMatches } from "./access.mjs";
+import { ownerBookingCreatedHtml, ownerBookingCreatedSubject } from "../_shared/owner-booking-email.mjs";
 
 function bearerToken(req: Request): string {
   const header = req.headers.get("Authorization") || "";
@@ -33,10 +34,13 @@ function bearerToken(req: Request): string {
 async function authorize(req: Request, body: any): Promise<boolean> {
   const type = typeof body?.type === "string" ? body.type : "";
   if (secretMatches(NOTIFY_SECRET, req.headers.get("x-notify-secret") || "")) return true;
-
-  const token = bearerToken(req);
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  // The site server already holds this key for rental writes. It is the
+  // fallback when NOTIFY_SECRET is not set on Vercel.
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const token = bearerToken(req);
+  if (secretMatches(serviceKey, token)) return true;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   if (!token || !supabaseUrl || !serviceKey) return false;
 
   const sb = createClient(supabaseUrl, serviceKey, {
@@ -268,6 +272,11 @@ Deno.serve(async (req) => {
         ${appButton("Open the app")}
       `);
       result = await sendEmail(driverEmail, subject, html);
+    } else if (type === "booking_created") {
+      if (!b.id) throw new Error("booking_created requires booking id");
+      const subject = ownerBookingCreatedSubject(b);
+      const html = ownerBookingCreatedHtml(b, APP_URL);
+      result = await sendEmail(OWNER_EMAIL, subject, html);
     } else {
       throw new Error("unknown type");
     }

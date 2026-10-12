@@ -25,6 +25,9 @@ assert.deepEqual(allowNotify({ secretOk: false, roles: 'driver,mechanic', type: 
 assert.deepEqual(allowNotify({ secretOk: false, roles: ['driver'], type: 'claimed' }), { ok: true, via: 'driver' });
 assert.deepEqual(allowNotify({ secretOk: false, roles: ['driver'], type: 'passed' }), { ok: true, via: 'driver' });
 assert.deepEqual(allowNotify({ secretOk: false, roles: ['driver'], type: 'quote' }), { ok: false, via: 'denied' });
+assert.deepEqual(allowNotify({ secretOk: false, roles: ['driver'], type: 'booking_created' }), { ok: false, via: 'denied' });
+assert.equal(allowNotify({ secretOk: false, roles: ['admin'], type: 'booking_created' }).via, 'admin');
+assert.equal(allowNotify({ secretOk: true, roles: [], type: 'booking_created' }).via, 'secret');
 assert.deepEqual(allowNotify({ secretOk: false, roles: ['driver'], type: 'quote_declined' }), { ok: false, via: 'denied' });
 assert.deepEqual(allowNotify({ secretOk: false, roles: ['mechanic'], type: 'claimed' }), { ok: false, via: 'denied' });
 assert.deepEqual(allowNotify({ secretOk: false, roles: [], type: 'offer' }), { ok: false, via: 'denied' });

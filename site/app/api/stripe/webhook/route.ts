@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { validateDayOfContact } from "@/lib/booking-rules";
 import { confirmedDepositUpdate, depositDollarsFromSession, totalDollarsFromCheckout } from "@/lib/deposit-payment";
 import { confirmPaidQuote } from "@/lib/quote-booking";
+import { emailOwnerAboutBooking, quoteLinkedBookingId } from "@/lib/owner-booking-notify";
 import { rentalDb } from "@/lib/rental-db";
 import { updateBooking } from "@/lib/site-booking";
 
@@ -51,6 +52,17 @@ export async function POST(request: Request) {
       if (!confirmed.ok && "error" in confirmed && confirmed.status >= 400) {
         return NextResponse.json({ error: confirmed.error }, { status: confirmed.status });
       }
+      const createdId = confirmed.ok && "bookingId" in confirmed && confirmed.bookingId
+        ? String(confirmed.bookingId)
+        : confirmed.ok && "already" in confirmed
+          ? await quoteLinkedBookingId(db, quoteId)
+          : "";
+      if (createdId) {
+        const mailed = await emailOwnerAboutBooking(db, createdId);
+        if (!mailed.ok) {
+          return NextResponse.json({ error: "The booking was saved, but the owner email did not send." }, { status: 500 });
+        }
+      }
       return NextResponse.json({ received: true, ...confirmed });
     } catch (error) {
       const message = error instanceof Error ? error.message : "The quote booking could not be saved.";
@@ -95,6 +107,10 @@ export async function POST(request: Request) {
   });
   const updated = await updateBooking(db, bookingId, patch);
   if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 500 });
+  const mailed = await emailOwnerAboutBooking(db, String(bookingId));
+  if (!mailed.ok) {
+    return NextResponse.json({ error: "The booking was saved, but the owner email did not send." }, { status: 500 });
+  }
 
   const carId = updated.data.car_id;
   if (carId) {

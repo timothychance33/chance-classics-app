@@ -286,10 +286,18 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 
 /* forms */
 label{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052;margin:10px 0 4px}
+label.followup{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:15px;font-weight:600;letter-spacing:.04em;cursor:pointer;color:var(--ink)}
 input,select,textarea{
   width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;
   background:#fff;font-size:15px;font-family:inherit;color:var(--ink);line-height:1.3;
   -webkit-appearance:none;appearance:none
+}
+/* The reset above removes the check glyph. Restore it so a box stays
+   visibly checked when reviewed_at / photos_received_at (and other flags) are set. */
+input[type=checkbox]{
+  width:18px;height:18px;padding:0;margin:0;flex:none;
+  accent-color:var(--green);background:none;border-radius:3px;
+  -webkit-appearance:auto;appearance:auto
 }
 select{background-image:url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%236b6052' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px}
 textarea{min-height:70px;resize:vertical}
@@ -747,6 +755,41 @@ async function notify(type, booking, extra){
     };
     await postNotification(payload);
   }catch(e){ console.error('notify failed',e); }
+}
+function plannerFromNotes(notes){
+  const m=String(notes||'').match(/^Event Planner(?: Name and Contact Info)?:\s*(.+)$/im);
+  return m?m[1].trim():'';
+}
+async function notifyOwnerNewBooking(booking){
+  try{
+    const car=carById(booking&&booking.car_id);
+    const price=storedCustomerAmount(booking);
+    const r=await postNotification({
+      type:'booking_created',
+      booking:{
+        id:booking.id,
+        customer_name:booking.customer_name||'',
+        customer_phone:booking.customer_phone||'',
+        customer_email:booking.customer_email||'',
+        car_name:car?car.name:'',
+        event_date:booking.event_date?fmtEventDate(booking.event_date):'',
+        start_time:booking.start_time?fmtTime(normTime(booking.start_time)):'',
+        end_time:booking.end_time?fmtTime(normTime(booking.end_time)):'',
+        pickup_location:booking.pickup_location||'',
+        return_location:booking.return_location||'',
+        event_location:'',
+        price:price!=null?price.toFixed(2):'',
+        planner:plannerFromNotes(booking.notes),
+        notes:booking.notes||'',
+        day_of_contact_name:booking.day_of_contact_name||'',
+        day_of_contact_phone:booking.day_of_contact_phone||'',
+        day_of_contact_role:booking.day_of_contact_role||'',
+        total_usd:booking.total_usd!=null?booking.total_usd:''
+      }
+    });
+    if(!r.ok){ console.error('owner booking notify failed', r.status); return false; }
+    return true;
+  }catch(e){ console.error('owner booking notify failed', e); return false; }
 }
 // Email the driver who currently has the offer (by offer_rank)
 async function notifyOfferTo(booking){
@@ -1268,10 +1311,11 @@ async function toggleFollowupFlag(bid, col, on, el){
   if(!isOwnerView()) return;
   const ok=await persistFollowupFlag(bid,col,on);
   if(!ok){ if(el) el.checked=!on; return }
+  if(el) el.checked=!!on;
   toast((col==='reviewed_at'?'Reviewed':'Photos received')+(on?' ✓':' cleared'));
 }
 function followupFlagsHtml(b){
-  const box=(col,label)=>`<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:15px;cursor:pointer"><input type="checkbox" style="width:auto" ${b[col]?'checked':''} onchange="toggleFollowupFlag('${b.id}','${col}',this.checked,this)"> ${label}</label>`;
+  const box=(col,label)=>`<label class="followup"><input type="checkbox" ${b[col]?'checked':''} onchange="toggleFollowupFlag('${b.id}','${col}',this.checked,this)"> ${label}</label>`;
   return `<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052;margin-bottom:6px">Follow-up</div>${box('reviewed_at','Reviewed')}${box('photos_received_at','Photos received')}</div>`;
 }
 async function markDriverPaid(bid){
@@ -3157,11 +3201,13 @@ async function saveBooking(id){
   if(rec.driver_id){ rec.offer_rank=null; rec.assigned_by='owner'; } // admin-assigned
   try{
     let savedId=id||null;
+    let ownerMailed=true;
     if(id){
       const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
     }else{
       const {data,error}=await SB.from('bookings').insert(rec).select().single();if(error)throw error;
       savedId=data&&data.id;
+      ownerMailed=await notifyOwnerNewBooking({...rec,id:savedId});
       // copy car prep template into booking
       if(rec.car_id){
         const tpl=DATA.templates.filter(t=>t.car_id===rec.car_id);
@@ -3173,7 +3219,7 @@ async function saveBooking(id){
     const mailed=bookingForDriverMail({...rec,id:savedId}, existing);
     if(justOffered) notifyOfferTo(mailed);  // email the #1 driver that a job awaits
     notifyDriversAfterBookingWrite({previous:existing, next:mailed});
-    closeModal();toast('Booking saved');await loadAll();
+    closeModal();toast(ownerMailed===false?'Booking saved, but the email to you failed':'Booking saved');await loadAll();
   }catch(e){toast('Error: '+(e.message||e))}
 }
 async function delBooking(id){
