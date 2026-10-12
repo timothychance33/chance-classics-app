@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { validateDayOfContact } from "@/lib/booking-rules";
+import { confirmedDepositUpdate, depositDollarsFromSession, totalDollarsFromCheckout } from "@/lib/deposit-payment";
 import { confirmPaidQuote } from "@/lib/quote-booking";
 import { rentalDb } from "@/lib/rental-db";
+import { updateBooking } from "@/lib/site-booking";
 
 export const runtime = "nodejs";
 
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
       const confirmed = await confirmPaidQuote(db, quoteId, {
         stripeSecret: secret,
         vercelEnv: process.env.VERCEL_ENV,
-      }, dayOf.ok ? dayOf.value : null);
+      }, dayOf.ok ? dayOf.value : null, session.id);
       if (!confirmed.ok && "error" in confirmed && confirmed.status >= 400) {
         return NextResponse.json({ error: confirmed.error }, { status: confirmed.status });
       }
@@ -59,21 +61,39 @@ export async function POST(request: Request) {
   const bookingId = session.metadata?.booking_id || session.client_reference_id;
   if (!bookingId) return NextResponse.json({ error: "Missing booking." }, { status: 400 });
 
-  const existing = await db.from("bookings").select("id,status,notes,car_id").eq("id", bookingId).maybeSingle();
+  const columns = "id,status,notes,car_id,payment_status,total_usd,amount_paid_usd,mileage_fee_usd,stripe_deposit_session_id";
+  let existing = await db.from("bookings").select(columns).eq("id", bookingId).maybeSingle();
+  let includeSessionId = true;
+  if (existing.error && /stripe_deposit_session_id/i.test(existing.error.message || "")) {
+    includeSessionId = false;
+    existing = await db.from("bookings").select(
+      "id,status,notes,car_id,payment_status,total_usd,amount_paid_usd,mileage_fee_usd",
+    ).eq("id", bookingId).maybeSingle();
+  }
   if (existing.error) return NextResponse.json({ error: existing.error.message }, { status: 500 });
   if (!existing.data) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
   if (existing.data.status === "cancelled") {
     return NextResponse.json({ error: "This hold expired before payment." }, { status: 409 });
   }
 
-  const note = String(existing.data.notes || "");
-  const paidNote = note.includes("Deposit paid") ? note : `${note}\nDeposit paid. Booking confirmed.`;
-  const updated = await db
-    .from("bookings")
-    .update({ status: "new", payment_status: "deposit", notes: paidNote })
-    .eq("id", bookingId)
-    .select("id,car_id,status")
-    .single();
+  const row = existing.data;
+  const patch = confirmedDepositUpdate({
+    status: row.status,
+    paymentStatus: row.payment_status,
+    existingTotal: row.total_usd == null ? null : Number(row.total_usd),
+    existingPaid: row.amount_paid_usd == null ? null : Number(row.amount_paid_usd),
+    existingSessionId: includeSessionId ? row.stripe_deposit_session_id : null,
+    totalUsd: totalDollarsFromCheckout({
+      metadata: session.metadata,
+      notes: row.notes,
+      mileageFeeUsd: row.mileage_fee_usd == null ? null : Number(row.mileage_fee_usd),
+    }),
+    depositUsd: depositDollarsFromSession(session),
+    sessionId: session.id,
+    notes: row.notes,
+    includeSessionId,
+  });
+  const updated = await updateBooking(db, bookingId, patch);
   if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 500 });
 
   const carId = updated.data.car_id;

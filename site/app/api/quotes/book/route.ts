@@ -107,6 +107,8 @@ export async function POST(request: Request) {
         day_of_contact_name: dayOf.value.name,
         day_of_contact_phone: dayOf.value.phone,
         day_of_contact_role: dayOf.value.role,
+        total_usd: money.total.toFixed(2),
+        deposit_usd: money.deposit.toFixed(2),
       },
       line_items: [
         {

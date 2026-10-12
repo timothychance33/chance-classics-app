@@ -14,10 +14,16 @@ import {
   dayOfContactColumns,
   dayOfContactNotes,
   quoteTotal,
+  DEPOSIT_USD,
   rangesOverlap,
   validateBooking,
   validateDayOfContact,
 } from "../lib/booking-rules.ts";
+import {
+  confirmedDepositUpdate,
+  depositDollarsFromSession,
+  totalDollarsFromCheckout,
+} from "../lib/deposit-payment.ts";
 
 function assert(cond: boolean, message: string) {
   if (!cond) throw new Error(message);
@@ -82,6 +88,41 @@ assert(withSecondCarNote("Drop-off: 200 Crockett St", false) === "Drop-off: 200 
 assert(!withSecondCarNote("Drop-off: 200 Crockett St", true).includes("$"), "the second car note has no separate price");
 const pay = quoteCheckoutMoney(680);
 assert(pay.deposit === 250 && pay.balance === 430 && pay.total === 680, "quote deposit stays 250");
+const depositPatch = confirmedDepositUpdate({
+  status: "hold",
+  paymentStatus: "unpaid",
+  existingTotal: null,
+  existingPaid: null,
+  totalUsd: 500,
+  depositUsd: depositDollarsFromSession({ amount_total: 25000, metadata: { deposit_usd: "250.00" } }),
+  sessionId: "cs_test_deposit",
+  notes: "Listing total: $500\nMileage: 25 miles from Benton to pickup, fee $0, billed with the balance.",
+  includeSessionId: true,
+});
+assert(depositPatch.status === "confirmed" && depositPatch.payment_status === "deposit", "a paid deposit is confirmed");
+assert(depositPatch.total_usd === 500 && depositPatch.amount_paid_usd === 250, "total and amount paid are stored");
+assert(!("balance_due_usd" in depositPatch), "balance due stays a generated column");
+assert(Number(depositPatch.total_usd) - Number(depositPatch.amount_paid_usd) === 250, "generated balance is total minus paid");
+assert(depositPatch.stripe_deposit_session_id === "cs_test_deposit", "checkout session id is stored");
+assert(String(depositPatch.notes).includes("Price: $500.00 ($250.00 due)"), "garage price line matches the balance");
+assert(totalDollarsFromCheckout({
+  notes: "Listing total: $500\nMileage: 45 miles from Benton to pickup, fee $135, billed with the balance.",
+  mileageFeeUsd: 135,
+}) === 635, "mileage is part of the booking total");
+const kept = confirmedDepositUpdate({
+  status: "prepping",
+  paymentStatus: "paid",
+  existingTotal: 500,
+  existingPaid: 500,
+  existingSessionId: "cs_already",
+  totalUsd: 500,
+  depositUsd: 250,
+  sessionId: "cs_retry",
+  notes: "Deposit paid. Booking confirmed.",
+  includeSessionId: true,
+});
+assert(kept.status === "prepping" && kept.payment_status === "paid" && kept.amount_paid_usd === 500, "a later payment is not reset to the deposit");
+assert(depositDollarsFromSession({ amount_total: null, metadata: null }) === DEPOSIT_USD, "missing checkout amount still uses the deposit");
 const lines = quoteCheckoutLines({
   car_name: "Patsy",
   base_rate: 500,

@@ -144,7 +144,13 @@ export async function POST(request: Request) {
         mode: "payment",
         customer_email: value.email,
         client_reference_id: bookingId,
-        metadata: { booking_id: bookingId, source, car: service.car },
+        metadata: {
+          booking_id: bookingId,
+          source,
+          car: service.car,
+          total_usd: money.total.toFixed(2),
+          deposit_usd: money.deposit.toFixed(2),
+        },
         line_items: [
           {
             quantity: 1,

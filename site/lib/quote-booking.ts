@@ -12,6 +12,7 @@ import {
   type QuoteLine,
 } from "@/lib/booking-rules";
 import type { rentalDb } from "@/lib/rental-db";
+import { notesAfterDeposit } from "@/lib/deposit-payment";
 import { busyRanges, insertBooking, releaseStaleHolds } from "@/lib/site-booking";
 
 type Db = NonNullable<ReturnType<typeof rentalDb>>;
@@ -142,6 +143,7 @@ export async function confirmPaidQuote(
   quoteId: string,
   env: { stripeSecret?: string; vercelEnv?: string },
   dayOf: DayOfContact | null = null,
+  stripeSessionId: string | null = null,
 ) {
   const loaded = await db.from("quote_requests").select("*").eq("id", quoteId).maybeSingle();
   if (loaded.error) throw new Error(loaded.error.message);
@@ -173,7 +175,6 @@ export async function confirmPaidQuote(
     `Balance billed separately: $${money.balance}`,
     "Waiver accepted: Yes",
     "Vehicle reliability acknowledged: Yes",
-    "Deposit paid. Booking confirmed.",
   ].filter(Boolean).join("\n");
 
   const row = {
@@ -187,10 +188,13 @@ export async function confirmPaidQuote(
     pickup_location: quote.event_location,
     return_location: dropoffFromQuote(quote) || null,
     car_id: quote.car_id,
-    status: "new",
+    status: "confirmed",
     payment_status: "deposit",
+    total_usd: money.total,
+    amount_paid_usd: money.deposit,
+    ...(stripeSessionId ? { stripe_deposit_session_id: stripeSessionId } : {}),
     source,
-    notes,
+    notes: notesAfterDeposit(notes, money.total, money.deposit),
     mileage_miles: quote.miles,
     mileage_fee_usd: quote.travel,
     mileage_needs_review: false,
