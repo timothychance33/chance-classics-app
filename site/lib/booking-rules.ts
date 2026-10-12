@@ -48,10 +48,10 @@ export function mileageCharge(pickupMiles: number): MileageCharge {
   return { miles, fee };
 }
 
-/** Shop hours are not listed in the capture. Slots are every 30 minutes, 8:00 AM–8:00 PM Central, and must finish the same day. */
+/** Shop hours are not listed in the capture. Slots are every 15 minutes (:00, :15, :30, :45), 8:00 AM–8:00 PM Central, and must finish the same day. */
 export const DAY_START_MIN = 8 * 60;
 export const LAST_START_MIN = 20 * 60;
-export const SLOT_STEP_MIN = 30;
+export const SLOT_STEP_MIN = 15;
 
 export const WAIVER_TEXT =
   "I HAVE READ THE CHANCE CLASSICS, LLC CONTRACT and CONDITIONS AGREEMENT AND ACCEPT IT";
