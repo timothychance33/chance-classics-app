@@ -64,6 +64,10 @@ assert.match(html, /FOLLOWUP_FLAG_COLS=\['reviewed_at','photos_received_at'\]/, 
 assert.match(html, /SB\.from\('bookings'\)\.update\(\{\[col\]:when\}\)\.eq\('id',bid\)/, 'flags set/clear the bookings column like driver_paid_at');
 assert.match(html, />\s*\$\{label\}<\/label>/, 'checkbox label text is rendered');
 assert.match(html, /box\('reviewed_at','Reviewed'\)\}\$\{box\('photos_received_at','Photos received'\)/, 'labels are Reviewed and Photos received');
+assert.match(html, /\$\{b\[col\]\?'checked':''\}/, 'checkbox is checked when reviewed_at / photos_received_at is set');
+assert.match(html, /if\(el\) el\.checked=!!on;/, 'toggle leaves the box checked after a successful save');
+assert.match(html, /input\[type=checkbox\]\{[\s\S]*?appearance:\s*auto/, 'form reset does not hide the checkbox glyph');
+assert.match(html, /label\.followup\{[^}]*display:\s*flex/, 'follow-up rows lay the box beside the label');
 
 // Same set/clear rule as persistFollowupFlag: checked → timestamp, unchecked → null
 function followupFlagValue(on, now){ return on ? now : null; }
