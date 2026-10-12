@@ -22,8 +22,23 @@ for (const [slug, agreement] of cars) {
 }
 
 assert.match(page, /sharedTerms\(\)/, 'rental terms page shows the shared agreement');
-assert.doesNotMatch(page, /\$200 for each additional consecutive hour|until that difference is decided/);
+assert.match(page, /listing price on the car/);
+assert.match(page, /Additional consecutive hours requested on the day of the event are \$\{EXTRA_HOUR_USD\} per hour/);
+assert.match(page, /Listing price by car/);
+assert.doesNotMatch(page, /captured client agreement|moved onto each car page|until that difference is decided|\$200 for each additional consecutive hour/);
 assert.doesNotMatch(JSON.stringify(agreements), /provided by Company|liquor service|except for alcohol/i);
+assert.doesNotMatch(JSON.stringify(agreements), /fourteen \(14\) days|14 days/);
+
+const balance = 'Balance must be paid by the day before the booked event';
+const clauseQ = 'The rental balance is due by the day before the booked event';
+for (const [slug, agreement] of cars) {
+  const blocks = agreement.blocks.filter((block) => block.type === 'p');
+  const balanceBlocks = blocks.filter((block) => block.text === balance);
+  assert.equal(balanceBlocks.length, 1, `${slug} states the balance is due the day before`);
+  const q = blocks.filter((block) => block.text.startsWith('(q)'));
+  assert.equal(q.length, 1, `${slug} has one clause (q)`);
+  assert.ok(q[0].text.includes(clauseQ), `${slug} clause (q) uses the day-before balance deadline`);
+}
 
 for (const [slug, agreement] of cars) {
   const hours = agreement.blocks.filter((block) => block.type === 'p' && block.text.startsWith('(h)'));
