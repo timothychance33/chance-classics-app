@@ -763,6 +763,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
 .occasion-cars img { width: 120px; height: 90px; object-fit: cover; }
 
 .book-form, .car-facts { max-width: 720px; margin: 36px 0; }
+.book-form { scroll-margin-top: 16px; }
+.book-form:focus { outline: 2px solid var(--btn); outline-offset: 4px; }
 .book-form label, .book-grid label { display: block; margin: 12px 0; }
 .book-form input:not([type="checkbox"]):not([type="radio"]),
 .book-form select,
