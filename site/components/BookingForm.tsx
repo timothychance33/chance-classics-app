@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AddressField } from "@/components/AddressField";
+import { scrollToBookForm } from "@/components/BookLink";
 import { DayOfContactFields } from "@/components/DayOfContactFields";
 import { SecondCarField } from "@/components/SecondCarField";
 import {
@@ -34,6 +35,17 @@ type Props = { car: string; carName: string; basePrice: number };
 
 export function BookingForm({ car, carName, basePrice }: Props) {
   const earliest = useMemo(() => earliestBookableDate(), []);
+  useEffect(() => {
+    if (window.location.hash !== "#book") return;
+    scrollToBookForm();
+    const timer = window.setTimeout(() => {
+      const form = document.getElementById("book");
+      if (window.location.hash !== "#book" || !form) return;
+      const top = form.getBoundingClientRect().top;
+      if (top < -8 || top > 80) scrollToBookForm();
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [date, setDate] = useState(earliest);
   const [hours, setHours] = useState(BASE_HOURS);
   const [slots, setSlots] = useState<string[]>([]);
@@ -169,7 +181,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   }
 
   return (
-    <form id="book" className="book-form" onSubmit={submit}>
+    <form id="book" className="book-form" tabIndex={-1} onSubmit={submit}>
       <h2>Book {carName}</h2>
       <p>
         ${basePrice} covers the first 2 hours. Each extra hour is ${EXTRA_HOUR_USD}. A ${DEPOSIT_USD} non-refundable deposit holds the time. Book at least 7 days ahead. You can cancel up to 72 hours before the event; inside 72 hours the deposit and fees already paid are forfeited.

@@ -56,7 +56,7 @@ const jsonLd = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${playfair.variable} ${nunito.variable}`}>
+    <html lang="en" className={`${playfair.variable} ${nunito.variable}`} data-scroll-behavior="smooth">
       <body>
         <Script id="gtm" strategy="afterInteractive">
           {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':

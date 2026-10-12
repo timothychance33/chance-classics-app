@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookingForm } from "@/components/BookingForm";
+import { BookLink } from "@/components/BookLink";
 import { CarFactsStrip } from "@/components/CarFactsStrip";
 import { CarStory } from "@/components/CarStory";
 import { EventPhotos } from "@/components/EventPhotos";
@@ -46,7 +47,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
           <p>Customer&apos;s Place</p>
           <p className="price">${service.price}</p>
           <p className="book-actions">
-            <a className="btn" href="#book">Book</a>
+            <BookLink className="btn" href="#book">Book</BookLink>
             <Link href="/quoterequest/">Prefer to talk? Request a quote</Link>
           </p>
         </div>
