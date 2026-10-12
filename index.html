@@ -756,6 +756,41 @@ async function notify(type, booking, extra){
     await postNotification(payload);
   }catch(e){ console.error('notify failed',e); }
 }
+function plannerFromNotes(notes){
+  const m=String(notes||'').match(/^Event Planner(?: Name and Contact Info)?:\s*(.+)$/im);
+  return m?m[1].trim():'';
+}
+async function notifyOwnerNewBooking(booking){
+  try{
+    const car=carById(booking&&booking.car_id);
+    const price=storedCustomerAmount(booking);
+    const r=await postNotification({
+      type:'booking_created',
+      booking:{
+        id:booking.id,
+        customer_name:booking.customer_name||'',
+        customer_phone:booking.customer_phone||'',
+        customer_email:booking.customer_email||'',
+        car_name:car?car.name:'',
+        event_date:booking.event_date?fmtEventDate(booking.event_date):'',
+        start_time:booking.start_time?fmtTime(normTime(booking.start_time)):'',
+        end_time:booking.end_time?fmtTime(normTime(booking.end_time)):'',
+        pickup_location:booking.pickup_location||'',
+        return_location:booking.return_location||'',
+        event_location:'',
+        price:price!=null?price.toFixed(2):'',
+        planner:plannerFromNotes(booking.notes),
+        notes:booking.notes||'',
+        day_of_contact_name:booking.day_of_contact_name||'',
+        day_of_contact_phone:booking.day_of_contact_phone||'',
+        day_of_contact_role:booking.day_of_contact_role||'',
+        total_usd:booking.total_usd!=null?booking.total_usd:''
+      }
+    });
+    if(!r.ok){ console.error('owner booking notify failed', r.status); return false; }
+    return true;
+  }catch(e){ console.error('owner booking notify failed', e); return false; }
+}
 // Email the driver who currently has the offer (by offer_rank)
 async function notifyOfferTo(booking){
   if(booking.offer_rank==null) return;
@@ -3166,11 +3201,13 @@ async function saveBooking(id){
   if(rec.driver_id){ rec.offer_rank=null; rec.assigned_by='owner'; } // admin-assigned
   try{
     let savedId=id||null;
+    let ownerMailed=true;
     if(id){
       const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
     }else{
       const {data,error}=await SB.from('bookings').insert(rec).select().single();if(error)throw error;
       savedId=data&&data.id;
+      ownerMailed=await notifyOwnerNewBooking({...rec,id:savedId});
       // copy car prep template into booking
       if(rec.car_id){
         const tpl=DATA.templates.filter(t=>t.car_id===rec.car_id);
@@ -3182,7 +3219,7 @@ async function saveBooking(id){
     const mailed=bookingForDriverMail({...rec,id:savedId}, existing);
     if(justOffered) notifyOfferTo(mailed);  // email the #1 driver that a job awaits
     notifyDriversAfterBookingWrite({previous:existing, next:mailed});
-    closeModal();toast('Booking saved');await loadAll();
+    closeModal();toast(ownerMailed===false?'Booking saved, but the email to you failed':'Booking saved');await loadAll();
   }catch(e){toast('Error: '+(e.message||e))}
 }
 async function delBooking(id){
