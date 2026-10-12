@@ -29,7 +29,7 @@ import {
   depositDollarsFromSession,
   totalDollarsFromCheckout,
 } from "../lib/deposit-payment.ts";
-import { balanceReminderMonday, chargeAmounts, depositCheckoutSaveCard } from "../lib/saved-card.ts";
+import { balanceReminderMonday, chargeAmounts, depositCheckoutSaveCard, refundAmounts } from "../lib/saved-card.ts";
 
 function assert(cond: boolean, message: string) {
   if (!cond) throw new Error(message);
@@ -189,6 +189,14 @@ assert(balanceReminderMonday("2026-10-13") === "2026-10-05", "Tuesday uses the p
 assert(balanceReminderMonday("2026-10-19") === "2026-10-12", "next Monday uses this Monday");
 const saveCard = depositCheckoutSaveCard();
 assert(saveCard.customer_creation === "always" && saveCard.payment_intent_data.setup_future_usage === "off_session", "deposit checkout saves the card");
+const taggedCard = depositCheckoutSaveCard({ booking_id: "abc", purpose: "deposit", reason: "deposit" });
+assert(taggedCard.payment_intent_data.metadata?.booking_id === "abc" && taggedCard.payment_intent_data.metadata?.reason === "deposit", "deposit payment intent carries the booking");
+const depositRefund = refundAmounts({ total: 551.25, paid: 250, amount: 100, reason: "deposit" });
+assert(!("error" in depositRefund) && depositRefund.total === 551.25 && depositRefund.paid === 150, "a deposit refund lowers amount paid only");
+const balanceRefund = refundAmounts({ total: 551.25, paid: 551.25, amount: 301.25, reason: "balance" });
+assert(!("error" in balanceRefund) && balanceRefund.total === 551.25 && balanceRefund.paid === 250, "a balance refund lowers amount paid only");
+const overageRefund = refundAmounts({ total: 651.25, paid: 350, amount: 100, reason: "overage" });
+assert(!("error" in overageRefund) && overageRefund.total === 551.25 && overageRefund.paid === 250, "an overage refund lowers the total and the amount paid");
 assert(saveCard.custom_text.submit.message === CARD_SAVE_TEXT, "checkout consent names balance, overages, and damage");
 assert(depositDollarsFromSession({ amount_total: null, metadata: null }) === DEPOSIT_USD, "missing checkout amount still uses the deposit");
 const lines = quoteCheckoutLines({

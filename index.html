@@ -793,6 +793,95 @@ async function notifyOwnerNewBooking(booking){
     return true;
   }catch(e){ console.error('owner booking notify failed', e); return false; }
 }
+function ownerMoneyText(value){
+  if(value==null||value==='') return '—';
+  const n=Number(value);
+  if(!Number.isFinite(n)) return '—';
+  return '$'+n.toFixed(2);
+}
+function ownerBookingPayload(booking){
+  const car=carById(booking&&booking.car_id);
+  const price=storedCustomerAmount(booking);
+  const total=booking&&booking.total_usd!=null&&booking.total_usd!==''?Number(booking.total_usd):(price!=null?price:null);
+  const paid=booking&&booking.amount_paid_usd!=null&&booking.amount_paid_usd!==''?Number(booking.amount_paid_usd):null;
+  let balance=null;
+  if(booking&&booking.balance_due_usd!=null&&booking.balance_due_usd!=='') balance=Number(booking.balance_due_usd);
+  else if(total!=null&&paid!=null) balance=Math.round((total-paid)*100)/100;
+  return {
+    id:booking.id,
+    customer_name:booking.customer_name||'',
+    customer_phone:booking.customer_phone||'',
+    customer_email:booking.customer_email||'',
+    car_name:car?car.name:'',
+    event_date:booking.event_date?fmtEventDate(booking.event_date):'',
+    start_time:booking.start_time?fmtTime(normTime(booking.start_time)):'',
+    end_time:booking.end_time?fmtTime(normTime(booking.end_time)):'',
+    pickup_location:booking.pickup_location||'',
+    return_location:booking.return_location||'',
+    event_location:'',
+    price:price!=null?price.toFixed(2):(total!=null?Number(total).toFixed(2):''),
+    planner:plannerFromNotes(booking.notes),
+    notes:booking.notes||'',
+    day_of_contact_name:booking.day_of_contact_name||'',
+    day_of_contact_phone:booking.day_of_contact_phone||'',
+    day_of_contact_role:booking.day_of_contact_role||'',
+    total_usd:total!=null?total:'',
+    status:booking.status||'',
+    payment_status:booking.payment_status||'',
+    amount_paid:paid,
+    balance
+  };
+}
+function ownerAmountsMatch(a,b){
+  const na=a==null||a===''?null:Math.round(Number(a)*100);
+  const nb=b==null||b===''?null:Math.round(Number(b)*100);
+  if(!Number.isFinite(na)&&!Number.isFinite(nb)) return true;
+  return na===nb;
+}
+function ownerBookingChanges(previous,next){
+  if(!previous||!next) return [];
+  const changes=[];
+  const fields=[
+    ['event_date','Date',function(v){return fmtEventDate(v)||'—';}],
+    ['start_time','Start',function(v){return v?fmtTime(normTime(v)):'—';}],
+    ['end_time','End',function(v){return v?fmtTime(normTime(v)):'—';}],
+    ['car_id','Car',function(v){const c=carById(v);return c?c.name:'—';}],
+    ['status','Status',function(v){return v||'—';}],
+    ['payment_status','Payment',function(v){return v||'—';}]
+  ];
+  for(const field of fields){
+    const key=field[0], label=field[1], fmt=field[2];
+    let same;
+    if(key==='start_time'||key==='end_time') same=normTime(previous[key])===normTime(next[key]);
+    else if(key==='event_date') same=String(previous[key]||'').slice(0,10)===String(next[key]||'').slice(0,10);
+    else same=String(previous[key]||'')===String(next[key]||'');
+    if(!same) changes.push({label:label, from:fmt(previous[key]), to:fmt(next[key])});
+  }
+  const prevAmt=storedCustomerAmount(previous);
+  const nextAmt=storedCustomerAmount(next);
+  if(!ownerAmountsMatch(prevAmt,nextAmt)){
+    changes.push({label:'Customer amount', from:ownerMoneyText(prevAmt), to:ownerMoneyText(nextAmt)});
+  }
+  if(!ownerAmountsMatch(previous.total_usd, next.total_usd)){
+    changes.push({label:'Total', from:ownerMoneyText(previous.total_usd), to:ownerMoneyText(next.total_usd)});
+  }
+  if(!ownerAmountsMatch(previous.amount_paid_usd, next.amount_paid_usd)){
+    changes.push({label:'Amount paid', from:ownerMoneyText(previous.amount_paid_usd), to:ownerMoneyText(next.amount_paid_usd)});
+  }
+  return changes;
+}
+async function notifyOwnerBookingChanged(booking, changes){
+  try{
+    if(!booking||!booking.id||!changes||!changes.length) return true;
+    const r=await postNotification({
+      type:'booking_changed',
+      booking:ownerBookingPayload(booking),
+      changes:changes
+    });
+    if(!r.ok){ console.error('owner booking change notify failed', r.status); return false; }
+    return true;
+  }catch(e){ console.error('owner booking change notify failed', e); return false; }
+}
 // Email the driver who currently has the offer (by offer_rank)
 async function notifyOfferTo(booking){
   if(booking.offer_rank==null) return;
@@ -1547,12 +1636,18 @@ async function saveOwnerCustomerAmount(bid, inputId, after){
   const hadStored=storedCustomerAmount(local)!=null;
   const notes=setWixPriceInNotes(local.notes, amount);
   const prev=local.notes;
-  local.notes=notes;
+    local.notes=notes;
   if(typeof SB!=='undefined' && SB){
     const {error}=await SB.from('bookings').update({notes}).eq('id',local.id);
     if(error){ local.notes=prev; toast(error.message); return; }
   }
-  toast(hadStored?'Customer amount updated':'Customer amount saved');
+  let amountMailed=true;
+  if(String(local.status||'').toLowerCase()!=='hold'){
+    amountMailed=await notifyOwnerBookingChanged(local, ownerBookingChanges({...local, notes:prev}, local));
+  }
+  toast(amountMailed===false
+    ? 'Customer amount saved, but the email to you failed'
+    : (hadStored?'Customer amount updated':'Customer amount saved'));
   renderEarnings();
   if(after==='drill' && earnDrill) openEarnWindow(earnDrill.kind, earnDrill.carId);
   else if(after==='detail') bookingDetail(local.id);
@@ -3206,6 +3301,14 @@ async function saveBooking(id){
     let ownerMailed=true;
     if(id){
       const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
+      if(existing){
+        const next={...existing, ...rec, id:id};
+        const prevStatus=String(existing.status||'').toLowerCase();
+        const nextStatus=String(next.status||'').toLowerCase();
+        if(!(prevStatus==='hold' && nextStatus==='hold')){
+          ownerMailed=await notifyOwnerBookingChanged(next, ownerBookingChanges(existing, next));
+        }
+      }
     }else{
       const {data,error}=await SB.from('bookings').insert(rec).select().single();if(error)throw error;
       savedId=data&&data.id;
@@ -3229,8 +3332,16 @@ async function delBooking(id){
   const existing=DATA.bookings.find(x=>x.id===id);
   const {error}=await SB.from('bookings').delete().eq('id',id);
   if(error){toast(error.message);return}
+  let ownerMailed=true;
+  if(existing && String(existing.status||'').toLowerCase()!=='hold'){
+    const changes=ownerBookingChanges(existing, {...existing, status:'cancelled'});
+    const statusChange=changes.find(function(change){return change.label==='Status';});
+    if(statusChange) statusChange.to='deleted';
+    else changes.unshift({label:'Status', from:existing.status||'—', to:'deleted'});
+    ownerMailed=await notifyOwnerBookingChanged({...existing, status:'cancelled'}, changes);
+  }
   notifyDriversAfterBookingWrite({previous:existing, deleted:true});
-  closeModal();toast('Deleted');await loadAll();
+  closeModal();toast(ownerMailed===false?'Deleted, but the email to you failed':'Deleted');await loadAll();
 }
 
 // PREP list for a single booking (admin/mechanic)
@@ -3355,7 +3466,10 @@ async function chargeSavedCard(bid){
       if(msg) msg.textContent=data.error||'The charge did not go through.';
       return;
     }
-    toast(data.already?'That charge was already recorded':'Card charged');
+    if(data.ownerEmailFailed && msg) msg.textContent=data.ownerEmailError||'Charged, but the email to you did not send.';
+    toast(data.ownerEmailFailed
+      ? 'Charged, but the email to you did not send'
+      : (data.already?'That charge was already recorded':'Card charged'));
     await loadAll();
     bookingDetail(bid);
   }catch(e){

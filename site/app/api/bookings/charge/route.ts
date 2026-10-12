@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { applySucceededCharge } from "@/lib/booking-charge";
 import { authorizeCharge, chargeCors } from "@/lib/charge-auth";
+import { emailOwnerAboutMoney, failedChargeNoticeIds, paymentNoticeIds } from "@/lib/owner-booking-notify";
 import { rentalDb } from "@/lib/rental-db";
 import { bookingTotals, chargeDescription, isChargeReason } from "@/lib/saved-card";
 
@@ -29,6 +30,25 @@ function stripeMessage(error: unknown) {
   return message.slice(0, 300);
 }
 
+async function tellOwnerAboutCharge(
+  db: NonNullable<ReturnType<typeof rentalDb>>,
+  bookingId: string,
+  input: {
+    amount: number;
+    reason: "balance" | "overage" | "damage" | "failed";
+    chargeReason?: "balance" | "overage" | "damage";
+    detail?: string;
+    noticeIds: string[];
+    amountPaid?: number | null;
+    balance?: number | null;
+  },
+) {
+  if (!input.noticeIds.length) return "";
+  const mailed = await emailOwnerAboutMoney(db, bookingId, input, { sendIfUntracked: true });
+  if (!mailed.ok) return mailed.error || "The email to you did not send.";
+  return "";
+}
+
 async function payLink(stripe: Stripe, input: {
   origin: string;
   customerId: string;
@@ -52,6 +72,7 @@ async function payLink(stripe: Stripe, input: {
         booking_id: input.bookingId,
         purpose: "charge",
         reason: input.reason,
+        source: "checkout",
       },
     },
     line_items: [
@@ -140,6 +161,7 @@ export async function POST(request: Request) {
         booking_id: bookingId,
         purpose: "charge",
         reason,
+        source: "off_session",
       },
     }, idempotencyKey ? { idempotencyKey } : undefined);
   } catch (error) {
@@ -167,10 +189,21 @@ export async function POST(request: Request) {
           pay_url: session.url,
           error_message: "The bank needs the customer to approve this charge.",
         });
+        const emailError = await tellOwnerAboutCharge(db, bookingId, {
+          amount: Math.round(amount * 100) / 100,
+          reason: "failed",
+          chargeReason: reason,
+          detail: "The bank needs the customer to approve this charge.",
+          noticeIds: failedIntent?.id
+            ? failedChargeNoticeIds(failedIntent.id)
+            : requestId ? [`failed:${bookingId}:${requestId}`] : [],
+        });
         return json(request, {
           ok: false,
           code: "authentication_required",
-          error: "The bank needs the customer to approve this charge. Send them this pay link.",
+          error: emailError
+            ? `The bank needs the customer to approve this charge. Send them this pay link. ${emailError}`
+            : "The bank needs the customer to approve this charge. Send them this pay link.",
           payUrl: session.url,
         }, 402);
       } catch (linkError) {
@@ -189,7 +222,18 @@ export async function POST(request: Request) {
       stripe_payment_intent_id: failedIntent?.id || null,
       error_message: stripeMessage(error),
     });
-    return json(request, { error: stripeMessage(error) }, 402);
+    const declineMail = await tellOwnerAboutCharge(db, bookingId, {
+      amount: Math.round(amount * 100) / 100,
+      reason: "failed",
+      chargeReason: reason,
+      detail: stripeMessage(error),
+      noticeIds: failedIntent?.id
+        ? failedChargeNoticeIds(failedIntent.id)
+        : requestId ? [`failed:${bookingId}:${requestId}`] : [],
+    });
+    return json(request, {
+      error: declineMail ? `${stripeMessage(error)} ${declineMail}` : stripeMessage(error),
+    }, 402);
   }
 
   if (intent.status !== "succeeded") {
@@ -213,10 +257,19 @@ export async function POST(request: Request) {
           pay_url: session.url,
           error_message: "The bank needs the customer to approve this charge.",
         });
+        const emailError = await tellOwnerAboutCharge(db, bookingId, {
+          amount: Math.round(amount * 100) / 100,
+          reason: "failed",
+          chargeReason: reason,
+          detail: "The bank needs the customer to approve this charge.",
+          noticeIds: failedChargeNoticeIds(intent.id),
+        });
         return json(request, {
           ok: false,
           code: "authentication_required",
-          error: "The bank needs the customer to approve this charge. Send them this pay link.",
+          error: emailError
+            ? `The bank needs the customer to approve this charge. Send them this pay link. ${emailError}`
+            : "The bank needs the customer to approve this charge. Send them this pay link.",
           payUrl: session.url,
         }, 402);
       } catch (linkError) {
@@ -227,7 +280,18 @@ export async function POST(request: Request) {
         }, 402);
       }
     }
-    return json(request, { error: `The charge did not complete (${intent.status}).` }, 402);
+    const stalledMail = await tellOwnerAboutCharge(db, bookingId, {
+      amount: Math.round(amount * 100) / 100,
+      reason: "failed",
+      chargeReason: reason,
+      detail: `The charge did not complete (${intent.status}).`,
+      noticeIds: failedChargeNoticeIds(intent.id),
+    });
+    return json(request, {
+      error: stalledMail
+        ? `The charge did not complete (${intent.status}). ${stalledMail}`
+        : `The charge did not complete (${intent.status}).`,
+    }, 402);
   }
 
   const applied = await applySucceededCharge(db, {
@@ -246,6 +310,13 @@ export async function POST(request: Request) {
   }
   const paid = "paid" in applied ? applied.paid : totals.paid;
   const balance = "balance" in applied ? applied.balance : null;
+  const emailError = await tellOwnerAboutCharge(db, bookingId, {
+    amount: intent.amount_received ? intent.amount_received / 100 : amountCents / 100,
+    reason,
+    noticeIds: paymentNoticeIds({ paymentIntentId: intent.id }),
+    amountPaid: paid,
+    balance,
+  });
   return json(request, {
     ok: true,
     paymentIntentId: intent.id,
@@ -253,5 +324,6 @@ export async function POST(request: Request) {
     balance,
     paymentStatus: "paymentStatus" in applied ? applied.paymentStatus : row.payment_status,
     already: applied.already === true,
+    ...(emailError ? { ownerEmailFailed: true, ownerEmailError: emailError } : {}),
   });
 }

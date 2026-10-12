@@ -125,7 +125,11 @@ export async function POST(request: Request) {
           },
         },
       ],
-      ...depositCheckoutSaveCard(),
+      ...depositCheckoutSaveCard({
+        quote_id: quote.id,
+        purpose: "deposit",
+        reason: "deposit",
+      }),
       success_url: `${origin}/booking/confirmed/`,
       cancel_url: `${origin}/book/quote/${token}/`,
     });

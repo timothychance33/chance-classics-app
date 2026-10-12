@@ -169,7 +169,11 @@ export async function POST(request: Request) {
             },
           },
         ],
-        ...depositCheckoutSaveCard(),
+        ...depositCheckoutSaveCard({
+          booking_id: bookingId,
+          purpose: "deposit",
+          reason: "deposit",
+        }),
         success_url: `${origin}/booking/confirmed/`,
         cancel_url: `${origin}/service-page/${service.slug}/?booking=cancelled#book`,
       });

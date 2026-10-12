@@ -12,16 +12,24 @@ export function isChargeReason(value: unknown): value is ChargeReason {
 }
 
 /** Fields that save the deposit card for later off-session charges. */
-export function depositCheckoutSaveCard(): {
+export function depositCheckoutSaveCard(metadata?: Record<string, string>): {
   customer_creation: "always";
   payment_method_types: ["card"];
-  payment_intent_data: { setup_future_usage: "off_session" };
+  payment_intent_data: {
+    setup_future_usage: "off_session";
+    metadata?: Record<string, string>;
+  };
   custom_text: { submit: { message: string } };
 } {
+  const payment_intent_data: {
+    setup_future_usage: "off_session";
+    metadata?: Record<string, string>;
+  } = { setup_future_usage: "off_session" };
+  if (metadata && Object.keys(metadata).length) payment_intent_data.metadata = metadata;
   return {
     customer_creation: "always",
     payment_method_types: ["card"],
-    payment_intent_data: { setup_future_usage: "off_session" },
+    payment_intent_data,
     custom_text: { submit: { message: CARD_SAVE_TEXT } },
   };
 }
@@ -140,6 +148,29 @@ export function balanceReminderMonday(isoDate: string) {
   const weekMonday = addDays(date, -daysFromMonday);
   if (dow === 1 || dow === 2) return addDays(weekMonday, -7);
   return weekMonday;
+}
+
+/**
+ * Deposit and balance refunds lower amount paid only.
+ * Overage and damage refunds lower the total and amount paid together,
+ * so the previous balance stays put.
+ */
+export function refundAmounts(input: {
+  total: number | null;
+  paid: number | null;
+  amount: number;
+  reason: "deposit" | "balance" | "overage" | "damage";
+}): { total: number | null; paid: number } | { error: string } {
+  const amount = roundMoney(input.amount);
+  if (!(amount > 0)) return { error: "Refund amount must be greater than zero." };
+  const paid = roundMoney(Math.max(0, (input.paid ?? 0) - amount));
+  const shrinksTotal = input.reason === "overage" || input.reason === "damage";
+  const total = input.total == null
+    ? null
+    : shrinksTotal
+      ? roundMoney(Math.max(0, input.total - amount))
+      : roundMoney(input.total);
+  return { total, paid };
 }
 
 export function chargeDescription(reason: ChargeReason) {

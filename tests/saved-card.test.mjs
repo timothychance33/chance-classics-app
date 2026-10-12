@@ -20,9 +20,8 @@ const quoteBook = read('site/app/api/quotes/book/route.ts');
 const saveCard = read('site/lib/saved-card.ts');
 assert.match(saveCard, /customer_creation:\s*"always"/);
 assert.match(saveCard, /setup_future_usage:\s*"off_session"/);
-for (const source of [bookings, quoteBook]) {
-  assert.match(source, /depositCheckoutSaveCard\(\)/);
-}
+assert.match(bookings, /depositCheckoutSaveCard\(\{[\s\S]*booking_id: bookingId/);
+assert.match(quoteBook, /depositCheckoutSaveCard\(\{[\s\S]*quote_id: quote\.id/);
 assert.match(read('site/components/BookingForm.tsx'), /CARD_SAVE_TEXT/);
 assert.match(read('site/components/QuoteCheckout.tsx'), /CARD_SAVE_TEXT/);
 assert.match(read('site/lib/booking-rules.ts'), /extra hours, mileage overages, and damage/);
@@ -32,6 +31,9 @@ assert.match(webhook, /stripe_customer_id/);
 assert.match(webhook, /stripe_payment_method_id/);
 assert.match(webhook, /purpose === "charge"/);
 assert.match(webhook, /applySucceededCharge/);
+assert.match(webhook, /emailOwnerAboutMoney/);
+assert.match(webhook, /charge\.refunded/);
+assert.match(webhook, /reason: "deposit"/);
 
 const charge = read('site/app/api/bookings/charge/route.ts');
 assert.match(charge, /off_session:\s*true/);
@@ -39,6 +41,9 @@ assert.match(charge, /confirm:\s*true/);
 assert.match(charge, /authentication_required/);
 assert.match(charge, /payUrl/);
 assert.match(charge, /authorizeCharge/);
+assert.match(charge, /source: "off_session"/);
+assert.match(charge, /emailOwnerAboutMoney/);
+assert.match(charge, /failedChargeNoticeIds/);
 
 const migration = read('supabase/migrations/20261012203000_saved_card_and_charges.sql');
 assert.match(migration, /stripe_customer_id/);
@@ -47,6 +52,11 @@ assert.match(migration, /balance_reminder_sent_at/);
 assert.match(migration, /rental\.booking_charges/);
 assert.match(migration, /enable row level security/);
 assert.match(migration, /'balance', 'overage', 'damage'/);
+const notices = read('supabase/migrations/20261012220000_owner_money_notices.sql');
+assert.match(notices, /rental\.owner_money_notices/);
+assert.match(notices, /rental\.booking_refunds/);
+assert.match(notices, /refunded_usd/);
+assert.match(notices, /enable row level security/);
 
 const scheduled = read('supabase/functions/scheduled-tasks/index.ts');
 assert.match(scheduled, /balanceReminderMonday/);
