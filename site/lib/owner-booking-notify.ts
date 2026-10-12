@@ -3,32 +3,21 @@ import { ownerBookingCreatedRows, shouldEmailOwnerAboutBooking } from "./owner-b
 
 type Db = NonNullable<ReturnType<typeof rentalDb>>;
 
-const BOOKING_COLUMNS = [
-  "id",
-  "customer_name",
-  "customer_email",
-  "customer_phone",
-  "event_type",
-  "event_date",
-  "start_time",
-  "end_time",
-  "pickup_location",
-  "return_location",
-  "car_id",
-  "status",
-  "notes",
-  "total_usd",
-  "day_of_contact_name",
-  "day_of_contact_phone",
-  "day_of_contact_role",
-].join(",");
+const BOOKING_COLUMNS =
+  "id,customer_name,customer_email,customer_phone,event_type,event_date,start_time,end_time,pickup_location,return_location,car_id,status,notes,total_usd,day_of_contact_name,day_of_contact_phone,day_of_contact_role";
 
 function missingColumn(message: string, column: string) {
   return new RegExp(column, "i").test(message || "");
 }
 
 async function selectBooking(db: Db, bookingId: string) {
-  const withStamp = await db.from("bookings").select(`${BOOKING_COLUMNS},owner_notified_at`).eq("id", bookingId).maybeSingle();
+  const withStamp = await db
+    .from("bookings")
+    .select(
+      "id,customer_name,customer_email,customer_phone,event_type,event_date,start_time,end_time,pickup_location,return_location,car_id,status,notes,total_usd,day_of_contact_name,day_of_contact_phone,day_of_contact_role,owner_notified_at" satisfies `${typeof BOOKING_COLUMNS},owner_notified_at`,
+    )
+    .eq("id", bookingId)
+    .maybeSingle();
   if (!withStamp.error) return { row: withStamp.data, tracksNotified: true };
   if (!missingColumn(withStamp.error.message || "", "owner_notified_at")) {
     throw new Error(withStamp.error.message || "The booking could not be loaded.");
