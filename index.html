@@ -486,6 +486,7 @@ const SUPABASE_KEY_INLINE = 'sb_publishable_G1LkmrTPhy0rKAJpV-rwjw_Ulo1bKOj';
 // Edge function that creates/links crew logins. Session token only.
 const CREW_LOGIN_FN_URL = SUPABASE_URL + '/functions/v1/create-crew-login';
 const NOTIFY_FN_URL = SUPABASE_URL + '/functions/v1/send-notification';
+const MILEAGE_FN_URL = SUPABASE_URL + '/functions/v1/quote-mileage';
 
 // Resolve the key: inline value wins; otherwise use a saved on-device value.
 function resolveKey(){
@@ -724,6 +725,16 @@ async function postNotification(payload){
     headers:await sessionBearerHeaders(),
     body:JSON.stringify(payload)
   });
+}
+async function postQuoteMileage(pickup){
+  const r=await fetch(MILEAGE_FN_URL,{
+    method:'POST',
+    headers:await sessionBearerHeaders(),
+    body:JSON.stringify({pickup})
+  });
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error||'Mileage lookup failed');
+  return data;
 }
 // Send an email notification (offer / claimed / passed / driver assignment edits). Fire-and-forget.
 async function notify(type, booking, extra){
@@ -1648,12 +1659,24 @@ function showOtherQuotes(){
   openModal('Old quotes', body);
 }
 
+function wholeQuoteMiles(value){
+  const n=Number(value);
+  if(!Number.isFinite(n)||n<=0) return 0;
+  return Math.ceil(n-1e-6);
+}
+function mileageFeeNote(miles){
+  const raw=String(miles??'').trim();
+  if(raw==='') return '';
+  const whole=wholeQuoteMiles(raw);
+  if(whole<=FREE_MILES) return whole+' miles from Benton to pickup. No mileage fee.';
+  return whole+' miles from Benton to pickup. Mileage fee $'+(whole*PER_MILE)+', billed with the balance.';
+}
 function calcQuote(carId, hours, miles, hotelFee){
   const car=carById(carId);
   const base=car?Number(car.base_rate||0):0;
   const extraH=Math.max(0,(Number(hours)||0)-INCLUDED_HOURS);
   const overage=extraH*OVERAGE_RATE;
-  const mi=Number(miles)||0;
+  const mi=wholeQuoteMiles(miles);
   const travel=mi>FREE_MILES?mi*PER_MILE:0;
   const hotel=(Number(hotelFee)||0)>0?HOTEL_FEE:0;
   const subtotal=base+overage+travel+hotel;
@@ -1986,7 +2009,9 @@ function quoteBuilder(qid){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q) return;
   const stashed=(window._quoteId===q.id && window._quoteTrip)?window._quoteTrip:null;
   const initHours=stashed?stashed.hours:(q.hours||INCLUDED_HOURS);
-  const initMiles=stashed?stashed.miles:(q.miles||0);
+  const milesSaved=q.miles!=null && q.miles!=='';
+  const milesAuto=stashed?!!stashed.milesAuto:!milesSaved;
+  const initMiles=stashed?stashed.miles:(milesSaved?q.miles:'');
   const initHotel=stashed?stashed.hotel>0:Number(q.hotel_fee)>0;
   const initDate=/^\d{4}-\d{2}-\d{2}/.test(String(q.event_date||''))?String(q.event_date).slice(0,10):'';
   const initTime=clockInputValue(q.event_time);
@@ -1998,7 +2023,7 @@ function quoteBuilder(qid){
   window._quoteEventDate=initDate||q.event_date||null;
   window._quoteEventTime=q.event_time||null;
   window._quoteId=q.id;
-  if(!stashed) window._quoteTrip={hours:initHours,miles:initMiles,hotel:initHotel?HOTEL_FEE:0,note:q.quote_notes||null};
+  if(!stashed) window._quoteTrip={hours:initHours,miles:initMiles===''?0:Number(initMiles)||0,hotel:initHotel?HOTEL_FEE:0,note:q.quote_notes||null,milesAuto};
   const carOpts=quoteCarOptions(q.car_id, q.event_date, quoteSlot(initHours));
   let statusLine='';
   if(q.status==='sent'){
@@ -2043,7 +2068,13 @@ function quoteBuilder(qid){
       <div><label>Total hours</label><input id="q_hours" type="number" step="0.5" min="2" value="${initHours}" oninput="quoteRecalc()"></div>
     </div>
     <div id="q_avail"></div>
-    <div><label>One-way miles from Benton (0 if within 30)</label><input id="q_miles" type="number" step="1" min="0" value="${initMiles}" oninput="quoteRecalc()"></div>
+    <div style="margin-top:10px">
+      <label>One-way miles from Benton</label>
+      <input id="q_miles" type="number" step="1" min="0" data-auto="${milesAuto?'1':'0'}" value="${initMiles===''||initMiles==null?'':esc(initMiles)}" oninput="quoteMilesTouched()">
+      <div class="meta" style="margin-top:4px">Same rule as Book Online. Base is 118 5th St E, Benton, LA. 30 miles or less is $0. Over 30, the car is trailered at $3 per mile for the full distance, from mile one.</div>
+      <div class="meta" id="q_mileage_note" style="margin-top:4px"></div>
+      <button type="button" class="ghost tinybtn" id="q_mileage_lookup" style="margin-top:6px" onclick="lookupQuoteMiles()">Look up from pickup</button>
+    </div>
     <div class="row two" style="margin-top:10px">
       <div><label>Price (base, up to ${INCLUDED_HOURS} hrs)</label><input id="q_price" type="number" step="0.01" min="0" data-auto="${priceAuto?'1':'0'}" value="${priceAuto?'':esc(Number(q.base_rate).toFixed(2))}" oninput="quotePriceTouched()"></div>
       <div><label>Mileage fee</label><input id="q_mileage_fee" type="number" step="0.01" min="0" data-auto="${feeAuto?'1':'0'}" value="${feeAuto?'':esc(Number(q.travel).toFixed(2))}" oninput="quoteFeeTouched()"></div>
@@ -2077,6 +2108,7 @@ function quoteBuilder(qid){
   `);
   renderQuoteLines();
   quoteRecalc();
+  maybeAutofillQuoteMileage();
 }
 
 async function deleteQuote(qid){
@@ -2139,10 +2171,11 @@ function quoteTripInputs(){
     return {...window._quoteTrip, note:noteEl?noteEl.value||null:window._quoteTrip.note};
   }
   const hours=hoursEl?parseFloat(hoursEl.value)||INCLUDED_HOURS:INCLUDED_HOURS;
-  const miles=milesEl?parseFloat(milesEl.value)||0:0;
+  const miles=wholeQuoteMiles(milesEl?milesEl.value:0);
   const hotel=quoteHotelOn()?HOTEL_FEE:0;
   const note=noteEl?noteEl.value||null:null;
-  const trip={hours, miles, hotel, note};
+  const milesAuto=!!(milesEl&&milesEl.dataset.auto==='1');
+  const trip={hours, miles, hotel, note, milesAuto};
   window._quoteTrip=trip;
   return trip;
 }
@@ -2234,6 +2267,11 @@ function quoteRecalc(){
     : '';
   const urlEl=document.getElementById('q_book_url');
   if(urlEl && q) urlEl.value=quoteBookUrl(ensureBookToken(q));
+  const mileageNote=document.getElementById('q_mileage_note');
+  if(mileageNote && mileageNote.dataset.state!=='pending' && mileageNote.dataset.state!=='review'){
+    const text=mileageFeeNote(milesEl?milesEl.value:'');
+    if(text) mileageNote.textContent=text;
+  }
   const customLines=(c.custom||[]).map(line=>`<div class="qline"><span>${esc(line.label)}</span><span>${m(Number(line.amount)||0)}</span></div>`).join('');
   document.getElementById('q_breakdown').innerHTML=`
     ${breakHint}
@@ -2264,6 +2302,84 @@ function quoteFeeTouched(){
   const el=document.getElementById('q_mileage_fee');
   if(el) el.dataset.auto='0';
   quoteRecalc();
+}
+function quoteMilesTouched(){
+  const el=document.getElementById('q_miles');
+  if(el){
+    el.dataset.auto='0';
+    delete el.dataset.lookupSeq;
+  }
+  const note=document.getElementById('q_mileage_note');
+  if(note) delete note.dataset.state;
+  quoteRecalc();
+}
+function setMileageNote(text, state){
+  const note=document.getElementById('q_mileage_note');
+  if(!note) return;
+  note.textContent=text||'';
+  if(state) note.dataset.state=state;
+  else delete note.dataset.state;
+}
+let _quoteMileageSeq=0;
+function maybeAutofillQuoteMileage(){
+  const el=document.getElementById('q_miles');
+  if(!el||el.dataset.auto!=='1') return;
+  const raw=String(el.value||'').trim();
+  if(raw!==''&&Number(raw)!==0) return;
+  const qid=window._quoteId;
+  if(qid) autofillQuoteMileage(qid);
+}
+function lookupQuoteMiles(){
+  const qid=window._quoteId;
+  if(!qid) return;
+  const el=document.getElementById('q_miles');
+  if(el) el.dataset.auto='1';
+  const note=document.getElementById('q_mileage_note');
+  if(note) delete note.dataset.state;
+  autofillQuoteMileage(qid,{force:true});
+}
+async function autofillQuoteMileage(qid, opts){
+  const force=!!(opts&&opts.force);
+  const seq=++_quoteMileageSeq;
+  const still=()=>_quoteMileageSeq===seq && window._quoteId===qid;
+  const q=(DATA.quotes||[]).find(x=>x.id===qid);
+  const pickup=q?String(q.event_location||'').trim():'';
+  try{
+    const el=document.getElementById('q_miles');
+    if(!el) return;
+    if(!force && el.dataset.auto!=='1') return;
+    if(pickup.length<4){
+      setMileageNote(pickup?'We\'ll confirm mileage. Type the one-way miles from Benton.':'No pickup address on this request. Type the one-way miles from Benton.','review');
+      return;
+    }
+    setMileageNote('Checking mileage from the pickup address…','pending');
+    el.dataset.lookupSeq=String(seq);
+    if(typeof SB==='undefined'||!SB){
+      setMileageNote('We\'ll confirm mileage. Type the one-way miles from Benton.','review');
+      return;
+    }
+    const data=await postQuoteMileage(pickup.slice(0,300));
+    if(!still()) return;
+    const milesEl=document.getElementById('q_miles');
+    if(!milesEl||milesEl.dataset.lookupSeq!==String(seq)) return;
+    if(!force && milesEl.dataset.auto!=='1') return;
+    if(data.needsReview||data.miles==null){
+      setMileageNote(data.message||'We\'ll confirm mileage. Type the one-way miles from Benton.','review');
+      return;
+    }
+    milesEl.value=String(data.miles);
+    milesEl.dataset.auto='0';
+    if(force){
+      const feeEl=document.getElementById('q_mileage_fee');
+      if(feeEl) feeEl.dataset.auto='1';
+    }
+    setMileageNote('','done');
+    quoteRecalc();
+  }catch(e){
+    if(!still()) return;
+    const signedOut=e&&e.message==='Sign in again to continue';
+    setMileageNote(signedOut?'Sign in again to look up mileage. You can still type the miles.':'We\'ll confirm mileage. Type the one-way miles from Benton.','review');
+  }
 }
 function ensureBookToken(q){
   if(q&&q.book_token) return q.book_token;
@@ -2308,7 +2424,7 @@ function quoteMoneyParts(){
   const subtotal=base+auto.overage+travel+(hotelOn?HOTEL_FEE:0)+customSum;
   const tax=Math.round(Math.round(subtotal*100)*TAX_RATE)/100;
   const total=Math.round((subtotal+tax)*100)/100;
-  return {base,extraH:auto.extraH,overage:auto.overage,mi:Number(miles)||0,travel,hotel:hotelOn?HOTEL_FEE:0,subtotal,tax,total,custom};
+  return {base,extraH:auto.extraH,overage:auto.overage,mi:auto.mi,travel,hotel:hotelOn?HOTEL_FEE:0,subtotal,tax,total,custom};
 }
 function renderQuoteLines(){
   const el=document.getElementById('q_items');
@@ -2359,15 +2475,16 @@ function quoteFields(qid){
   const q=(DATA.quotes||[]).find(x=>x.id===qid);
   const carId=document.getElementById('q_car').value;
   const hours=parseFloat(document.getElementById('q_hours').value)||INCLUDED_HOURS;
-  const miles=parseFloat(document.getElementById('q_miles').value)||0;
+  const milesRaw=parseFloat(document.getElementById('q_miles').value);
+  const milesInput=Number.isFinite(milesRaw)?milesRaw:0;
   const noteEl=document.getElementById('q_note');
   const note=noteEl?noteEl.value||null:null;
-  const c=quoteMoneyParts()||calcQuote(carId,hours,miles,quoteHotelOn()?HOTEL_FEE:0);
+  const c=quoteMoneyParts()||calcQuote(carId,hours,milesInput,quoteHotelOn()?HOTEL_FEE:0);
   const days=Math.max(1, parseInt((document.getElementById('q_valid_days')||{}).value,10)||QUOTE_VALID_DAYS);
   const token=ensureBookToken(q||{id:qid});
   const dateEl=document.getElementById('q_date');
   const timeEl=document.getElementById('q_time');
-  return {car_id:carId,hours,miles,base_rate:c.base,overage:c.overage,travel:c.travel,hotel_fee:c.hotel,
+  return {car_id:carId,hours,miles:c.mi,base_rate:c.base,overage:c.overage,travel:c.travel,hotel_fee:c.hotel,
     subtotal:c.subtotal,tax:c.tax,total:c.total,quote_notes:note,extra_hours:c.extraH,
     line_items:c.custom||[], event_date:(dateEl&&dateEl.value)||(q&&q.event_date)||null,
     event_time:(timeEl&&timeEl.value)||(q&&q.event_time)||null,
