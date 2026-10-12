@@ -69,6 +69,9 @@ export async function openTimesForCar(db: Db, carId: string, date: string, hours
 function optionalBookingColumn(name: string) {
   return /^(mileage_|day_of_contact_)/.test(name)
     || name === "stripe_deposit_session_id"
+    || name === "stripe_balance_session_id"
+    || name === "stripe_customer_id"
+    || name === "stripe_payment_method_id"
     || name === "total_usd"
     || name === "amount_paid_usd";
 }
@@ -81,7 +84,7 @@ function columnNamedInError(message: string) {
 export async function insertBooking(db: Db, row: Record<string, unknown>) {
   let payload = { ...row };
   let inserted = await db.from("bookings").insert(payload).select("id").single();
-  for (let attempt = 0; attempt < 8 && inserted.error; attempt += 1) {
+  for (let attempt = 0; attempt < 16 && inserted.error; attempt += 1) {
     const named = columnNamedInError(inserted.error.message || "");
     if (!named || !optionalBookingColumn(named) || !(named in payload)) break;
     const next = { ...payload };
@@ -96,7 +99,7 @@ export async function insertBooking(db: Db, row: Record<string, unknown>) {
 export async function updateBooking(db: Db, id: string, row: Record<string, unknown>) {
   let payload = { ...row };
   let updated = await db.from("bookings").update(payload).eq("id", id).select("id,car_id,status").single();
-  for (let attempt = 0; attempt < 8 && updated.error; attempt += 1) {
+  for (let attempt = 0; attempt < 16 && updated.error; attempt += 1) {
     const named = columnNamedInError(updated.error.message || "");
     if (!named || !optionalBookingColumn(named) || !(named in payload)) break;
     const next = { ...payload };

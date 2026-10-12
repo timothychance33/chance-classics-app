@@ -67,6 +67,10 @@ export const SLOT_STEP_MIN = 15;
 export const WAIVER_TEXT =
   "I HAVE READ THE CHANCE CLASSICS, LLC CONTRACT and CONDITIONS AGREEMENT AND ACCEPT IT";
 
+/** Shown before deposit checkout and on the Stripe pay button. The card is saved for later charges. */
+export const CARD_SAVE_TEXT =
+  "This card is saved for the balance, extra hours, mileage overages, and damage, per the rental terms.";
+
 /** Captured agreement clause (n). The live Wix form's shorter label was not stored; the sync only kept "classic vehicles" as a match. */
 export const RELIABILITY_TEXT =
   "The COMPANY shall not be held responsible for late arrival caused by (but not limited to) acts of nature, acts of war, acts of terrorism, traffic delays, vehicle breakdown, incorrect pickup and drop-off information, inclement weather and any situation beyond the COMPANY’s control. In such event, the COMPANY’s liability, expressed or implied, is limited to the amount the CLIENT paid for the rental vehicle. If the booked vintage vehicle should breakdown, the COMPANY will make every effort to provide a replacement vintage vehicle for your event, at the COMPANY’s discretion.";

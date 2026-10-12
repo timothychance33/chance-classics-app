@@ -9,6 +9,7 @@ import {
   quoteTimeFree,
 } from "@/lib/quote-booking";
 import { rentalDb } from "@/lib/rental-db";
+import { CARD_SAVE_TEXT, depositCheckoutSaveCard } from "@/lib/saved-card";
 
 function tokenOf(value: string) {
   const token = value.trim();
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
       metadata: {
         quote_id: quote.id,
         book_token: token,
+        purpose: "deposit",
         source,
         car: carName,
         day_of_contact_name: dayOf.value.name,
@@ -118,11 +120,12 @@ export async function POST(request: Request) {
             unit_amount: Math.round(money.deposit * 100),
             product_data: {
               name: `$${money.deposit} non-refundable deposit — ${carName}`,
-              description: `${carName}, ${quote.event_date} ${slot.start}–${slot.end}. Quote total $${money.total.toFixed(2)} includes sales tax${Number(quote.tax) ? ` of $${Number(quote.tax).toFixed(2)}` : ""}. Balance $${money.balance.toFixed(2)} is billed separately. The car is reserved after this payment is confirmed.`,
+              description: `${carName}, ${quote.event_date} ${slot.start}–${slot.end}. Quote total $${money.total.toFixed(2)} includes sales tax${Number(quote.tax) ? ` of $${Number(quote.tax).toFixed(2)}` : ""}. Balance $${money.balance.toFixed(2)} is billed separately. The car is reserved after this payment is confirmed. ${CARD_SAVE_TEXT}`,
             },
           },
         },
       ],
+      ...depositCheckoutSaveCard(),
       success_url: `${origin}/booking/confirmed/`,
       cancel_url: `${origin}/book/quote/${token}/`,
     });

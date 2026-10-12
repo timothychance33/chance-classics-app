@@ -12,6 +12,7 @@ import { withSecondCarNote } from "@/data/packages";
 import { serviceBySlug } from "@/lib/content";
 import { quoteDrivingMileage } from "@/lib/mileage";
 import { rentalDb } from "@/lib/rental-db";
+import { CARD_SAVE_TEXT, depositCheckoutSaveCard } from "@/lib/saved-card";
 import { busyRanges, carIdForName, insertBooking, releaseStaleHolds } from "@/lib/site-booking";
 
 export async function POST(request: Request) {
@@ -149,6 +150,7 @@ export async function POST(request: Request) {
         client_reference_id: bookingId,
         metadata: {
           booking_id: bookingId,
+          purpose: "deposit",
           source,
           car: service.car,
           total_usd: money.total.toFixed(2),
@@ -162,11 +164,12 @@ export async function POST(request: Request) {
               unit_amount: money.deposit * 100,
               product_data: {
                 name: `$${money.deposit} non-refundable deposit — ${service.car}`,
-                description: `${service.name}, ${value.date} ${value.start}–${value.end}. Subtotal $${money.subtotal.toFixed(2)}. Sales tax (10.25%) $${money.tax.toFixed(2)}. Total $${money.total.toFixed(2)}. ${mileage.message} Balance $${money.balance.toFixed(2)} is billed separately.`,
+                description: `${service.name}, ${value.date} ${value.start}–${value.end}. Subtotal $${money.subtotal.toFixed(2)}. Sales tax (10.25%) $${money.tax.toFixed(2)}. Total $${money.total.toFixed(2)}. ${mileage.message} Balance $${money.balance.toFixed(2)} is billed separately. ${CARD_SAVE_TEXT}`,
               },
             },
           },
         ],
+        ...depositCheckoutSaveCard(),
         success_url: `${origin}/booking/confirmed/`,
         cancel_url: `${origin}/service-page/${service.slug}/?booking=cancelled#book`,
       });

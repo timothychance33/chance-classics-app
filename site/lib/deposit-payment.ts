@@ -87,6 +87,10 @@ export function confirmedDepositUpdate(input: {
   sessionId?: string | null;
   notes?: string | null;
   includeSessionId?: boolean;
+  stripeCustomerId?: string | null;
+  stripePaymentMethodId?: string | null;
+  existingCustomerId?: string | null;
+  existingPaymentMethodId?: string | null;
 }) {
   const total = input.existingTotal != null ? input.existingTotal : input.totalUsd;
   const paid = input.existingPaid != null && input.existingPaid > 0
@@ -102,6 +106,10 @@ export function confirmedDepositUpdate(input: {
   if (paid != null) patch.amount_paid_usd = paid;
   if (input.includeSessionId && input.sessionId && !input.existingSessionId) {
     patch.stripe_deposit_session_id = input.sessionId;
+  }
+  if (input.stripeCustomerId && !input.existingCustomerId) patch.stripe_customer_id = input.stripeCustomerId;
+  if (input.stripePaymentMethodId && !input.existingPaymentMethodId) {
+    patch.stripe_payment_method_id = input.stripePaymentMethodId;
   }
   return patch;
 }
