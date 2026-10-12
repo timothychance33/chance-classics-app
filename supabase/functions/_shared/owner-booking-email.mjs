@@ -138,3 +138,149 @@ export function shouldEmailOwnerAboutBooking(row) {
   if (!status || status === "hold" || status === "cancelled") return false;
   return true;
 }
+
+function uniqueIds(values) {
+  const out = [];
+  for (const value of values) {
+    const id = oneLine(value);
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
+
+/** Checkout and off-session payments. The same charge recorded twice shares one of these ids. */
+export function paymentNoticeIds(input) {
+  const source = input || {};
+  return uniqueIds([source.eventId, source.paymentIntentId, source.sessionId, source.chargeId]);
+}
+
+/** A failed attempt must not consume the payment-intent id a later success would use. */
+export function failedChargeNoticeIds(paymentIntentId) {
+  const id = oneLine(paymentIntentId);
+  return id ? [`failed:${id}`] : [];
+}
+
+/** One id per refund. A second refund on the same charge still sends. */
+export function refundNoticeIds(input) {
+  const source = input || {};
+  const refundId = oneLine(source.refundId);
+  const eventId = oneLine(source.eventId);
+  if (refundId) return uniqueIds([refundId, eventId ? `${eventId}:${refundId}` : ""]);
+  const chargeId = oneLine(source.chargeId);
+  if (chargeId && source.amountRefundedCents != null && source.amountRefundedCents !== "") {
+    return uniqueIds([`refund:${chargeId}:${source.amountRefundedCents}`, eventId]);
+  }
+  return uniqueIds([eventId]);
+}
+
+export function formatMoney(value) {
+  if (value == null || value === "") return "";
+  const n = Number(String(value).replace(/[$,]/g, ""));
+  if (!Number.isFinite(n)) return "";
+  const sign = n < 0 ? "-" : "";
+  return `${sign}$${Math.abs(Math.round(n * 100) / 100).toFixed(2)}`;
+}
+
+export function ownerMoneyReasonText(money) {
+  const reason = oneLine(money?.reason).toLowerCase();
+  const chargeReason = oneLine(money?.chargeReason).toLowerCase();
+  const which = chargeReason ? ` (${chargeReason})` : "";
+  if (reason === "failed") return `Charge failed${which}`;
+  if (reason === "refund") return `Refund${which}`;
+  if (reason === "deposit") return "Deposit";
+  if (reason === "balance") return "Balance";
+  if (reason === "overage") return "Overage";
+  if (reason === "damage") return "Damage";
+  return oneLine(money?.reason) || "Payment";
+}
+
+function detailRows(booking) {
+  const rows = ownerBookingCreatedRows(booking);
+  const status = oneLine(booking?.status);
+  if (status) rows.push(["Status", status]);
+  const paid = formatMoney(booking?.amount_paid ?? booking?.amount_paid_usd);
+  if (paid) rows.push(["Amount paid", paid]);
+  const balance = formatMoney(booking?.balance ?? booking?.balance_due);
+  if (balance) rows.push(["Balance", balance]);
+  return rows;
+}
+
+function tableRows(rows) {
+  return rows
+    .map(([label, value]) =>
+      `<tr><td style="padding:4px 12px 4px 0;color:#6b6052;font-size:13px;vertical-align:top">${esc(label)}</td><td style="padding:4px 0;font-weight:600">${esc(value)}</td></tr>`,
+    )
+    .join("");
+}
+
+function appLink(appUrl) {
+  const link = oneLine(appUrl);
+  return link
+    ? `<p><a href="${esc(link)}" style="background:#6e1d1a;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;display:inline-block">Open the app</a></p>`
+    : "";
+}
+
+function changeIsCancelled(changes) {
+  return (Array.isArray(changes) ? changes : []).some((change) => /cancel|delet/i.test(oneLine(change?.to)));
+}
+
+export function ownerBookingChangedSubject(booking, changes) {
+  const head = changeIsCancelled(changes) ? "Chance Classics booking cancelled" : "Chance Classics booking changed";
+  const tail = [oneLine(booking?.customer_name), oneLine(booking?.event_date)].filter(Boolean).join(" / ");
+  return tail ? `${head} — ${tail}` : head;
+}
+
+export function ownerBookingChangedHtml(booking, changes, appUrl) {
+  const cancelled = changeIsCancelled(changes);
+  const changeRows = (Array.isArray(changes) ? changes : [])
+    .map((change) => {
+      const label = oneLine(change?.label);
+      const from = oneLine(change?.from) || "—";
+      const to = oneLine(change?.to) || "—";
+      if (!label) return "";
+      return `<tr><td style="padding:4px 12px 4px 0;color:#6b6052;font-size:13px;vertical-align:top">${esc(label)}</td><td style="padding:4px 0;font-size:14px"><s style="color:#9aa7b4">${esc(from)}</s> → <b>${esc(to)}</b></td></tr>`;
+    })
+    .join("");
+  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#21130f">
+    <h2 style="color:#6e1d1a">${cancelled ? "Booking cancelled" : "Booking changed"}</h2>
+    <p>${cancelled ? "A Chance Classics booking was cancelled." : "A Chance Classics booking was edited."}</p>
+    <table style="border-collapse:collapse;margin:14px 0">${changeRows}</table>
+    <table style="border-collapse:collapse;margin:14px 0">${tableRows(detailRows(booking))}</table>
+    ${appLink(appUrl)}
+  </div>`;
+}
+
+export function ownerBookingMoneySubject(booking, money) {
+  const tail = [ownerMoneyReasonText(money), oneLine(booking?.customer_name), oneLine(booking?.event_date)].filter(Boolean).join(" / ");
+  return tail ? `Chance Classics payment — ${tail}` : "Chance Classics payment";
+}
+
+export function ownerBookingMoneyRows(money) {
+  const paid = formatMoney(money?.amountPaid ?? money?.amount_paid);
+  const balance = formatMoney(money?.balance);
+  return [
+    ["Amount", formatMoney(money?.amount) || "—"],
+    ["Reason", ownerMoneyReasonText(money)],
+    ["Amount paid", paid || "—"],
+    ["Balance", balance || "—"],
+  ];
+}
+
+export function ownerBookingMoneyHtml(booking, money, appUrl) {
+  const reason = oneLine(money?.reason).toLowerCase();
+  const intro = reason === "failed"
+    ? "A saved-card charge did not go through. Amount paid and balance did not change."
+    : reason === "refund"
+      ? "A refund was recorded on this booking. Amount paid and balance below are the new totals."
+      : "A payment was recorded on this booking. Amount paid and balance below are the new totals.";
+  const detail = oneLine(money?.detail);
+  const detailHtml = detail ? `<p style="color:#6b6052">${esc(detail)}</p>` : "";
+  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#21130f">
+    <h2 style="color:#6e1d1a">${esc(ownerMoneyReasonText(money))}</h2>
+    <p>${intro}</p>
+    ${detailHtml}
+    <table style="border-collapse:collapse;margin:14px 0">${tableRows(ownerBookingMoneyRows(money))}</table>
+    <table style="border-collapse:collapse;margin:14px 0">${tableRows(detailRows(booking))}</table>
+    ${appLink(appUrl)}
+  </div>`;
+}

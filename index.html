@@ -495,6 +495,8 @@ const SUPABASE_KEY_INLINE = 'sb_publishable_G1LkmrTPhy0rKAJpV-rwjw_Ulo1bKOj';
 const CREW_LOGIN_FN_URL = SUPABASE_URL + '/functions/v1/create-crew-login';
 const NOTIFY_FN_URL = SUPABASE_URL + '/functions/v1/send-notification';
 const MILEAGE_FN_URL = SUPABASE_URL + '/functions/v1/quote-mileage';
+// Saved-card charges stay on the website, where the Stripe secret lives.
+const CHARGE_API_URL = 'https://www.chanceclassics.com/api/bookings/charge/';
 
 // Resolve the key: inline value wins; otherwise use a saved on-device value.
 function resolveKey(){
@@ -790,6 +792,95 @@ async function notifyOwnerNewBooking(booking){
     if(!r.ok){ console.error('owner booking notify failed', r.status); return false; }
     return true;
   }catch(e){ console.error('owner booking notify failed', e); return false; }
+}
+function ownerMoneyText(value){
+  if(value==null||value==='') return '—';
+  const n=Number(value);
+  if(!Number.isFinite(n)) return '—';
+  return '$'+n.toFixed(2);
+}
+function ownerBookingPayload(booking){
+  const car=carById(booking&&booking.car_id);
+  const price=storedCustomerAmount(booking);
+  const total=booking&&booking.total_usd!=null&&booking.total_usd!==''?Number(booking.total_usd):(price!=null?price:null);
+  const paid=booking&&booking.amount_paid_usd!=null&&booking.amount_paid_usd!==''?Number(booking.amount_paid_usd):null;
+  let balance=null;
+  if(booking&&booking.balance_due_usd!=null&&booking.balance_due_usd!=='') balance=Number(booking.balance_due_usd);
+  else if(total!=null&&paid!=null) balance=Math.round((total-paid)*100)/100;
+  return {
+    id:booking.id,
+    customer_name:booking.customer_name||'',
+    customer_phone:booking.customer_phone||'',
+    customer_email:booking.customer_email||'',
+    car_name:car?car.name:'',
+    event_date:booking.event_date?fmtEventDate(booking.event_date):'',
+    start_time:booking.start_time?fmtTime(normTime(booking.start_time)):'',
+    end_time:booking.end_time?fmtTime(normTime(booking.end_time)):'',
+    pickup_location:booking.pickup_location||'',
+    return_location:booking.return_location||'',
+    event_location:'',
+    price:price!=null?price.toFixed(2):(total!=null?Number(total).toFixed(2):''),
+    planner:plannerFromNotes(booking.notes),
+    notes:booking.notes||'',
+    day_of_contact_name:booking.day_of_contact_name||'',
+    day_of_contact_phone:booking.day_of_contact_phone||'',
+    day_of_contact_role:booking.day_of_contact_role||'',
+    total_usd:total!=null?total:'',
+    status:booking.status||'',
+    payment_status:booking.payment_status||'',
+    amount_paid:paid,
+    balance
+  };
+}
+function ownerAmountsMatch(a,b){
+  const na=a==null||a===''?null:Math.round(Number(a)*100);
+  const nb=b==null||b===''?null:Math.round(Number(b)*100);
+  if(!Number.isFinite(na)&&!Number.isFinite(nb)) return true;
+  return na===nb;
+}
+function ownerBookingChanges(previous,next){
+  if(!previous||!next) return [];
+  const changes=[];
+  const fields=[
+    ['event_date','Date',function(v){return fmtEventDate(v)||'—';}],
+    ['start_time','Start',function(v){return v?fmtTime(normTime(v)):'—';}],
+    ['end_time','End',function(v){return v?fmtTime(normTime(v)):'—';}],
+    ['car_id','Car',function(v){const c=carById(v);return c?c.name:'—';}],
+    ['status','Status',function(v){return v||'—';}],
+    ['payment_status','Payment',function(v){return v||'—';}]
+  ];
+  for(const field of fields){
+    const key=field[0], label=field[1], fmt=field[2];
+    let same;
+    if(key==='start_time'||key==='end_time') same=normTime(previous[key])===normTime(next[key]);
+    else if(key==='event_date') same=String(previous[key]||'').slice(0,10)===String(next[key]||'').slice(0,10);
+    else same=String(previous[key]||'')===String(next[key]||'');
+    if(!same) changes.push({label:label, from:fmt(previous[key]), to:fmt(next[key])});
+  }
+  const prevAmt=storedCustomerAmount(previous);
+  const nextAmt=storedCustomerAmount(next);
+  if(!ownerAmountsMatch(prevAmt,nextAmt)){
+    changes.push({label:'Customer amount', from:ownerMoneyText(prevAmt), to:ownerMoneyText(nextAmt)});
+  }
+  if(!ownerAmountsMatch(previous.total_usd, next.total_usd)){
+    changes.push({label:'Total', from:ownerMoneyText(previous.total_usd), to:ownerMoneyText(next.total_usd)});
+  }
+  if(!ownerAmountsMatch(previous.amount_paid_usd, next.amount_paid_usd)){
+    changes.push({label:'Amount paid', from:ownerMoneyText(previous.amount_paid_usd), to:ownerMoneyText(next.amount_paid_usd)});
+  }
+  return changes;
+}
+async function notifyOwnerBookingChanged(booking, changes){
+  try{
+    if(!booking||!booking.id||!changes||!changes.length) return true;
+    const r=await postNotification({
+      type:'booking_changed',
+      booking:ownerBookingPayload(booking),
+      changes:changes
+    });
+    if(!r.ok){ console.error('owner booking change notify failed', r.status); return false; }
+    return true;
+  }catch(e){ console.error('owner booking change notify failed', e); return false; }
 }
 // Email the driver who currently has the offer (by offer_rank)
 async function notifyOfferTo(booking){
@@ -1545,12 +1636,18 @@ async function saveOwnerCustomerAmount(bid, inputId, after){
   const hadStored=storedCustomerAmount(local)!=null;
   const notes=setWixPriceInNotes(local.notes, amount);
   const prev=local.notes;
-  local.notes=notes;
+    local.notes=notes;
   if(typeof SB!=='undefined' && SB){
     const {error}=await SB.from('bookings').update({notes}).eq('id',local.id);
     if(error){ local.notes=prev; toast(error.message); return; }
   }
-  toast(hadStored?'Customer amount updated':'Customer amount saved');
+  let amountMailed=true;
+  if(String(local.status||'').toLowerCase()!=='hold'){
+    amountMailed=await notifyOwnerBookingChanged(local, ownerBookingChanges({...local, notes:prev}, local));
+  }
+  toast(amountMailed===false
+    ? 'Customer amount saved, but the email to you failed'
+    : (hadStored?'Customer amount updated':'Customer amount saved'));
   renderEarnings();
   if(after==='drill' && earnDrill) openEarnWindow(earnDrill.kind, earnDrill.carId);
   else if(after==='detail') bookingDetail(local.id);
@@ -3204,6 +3301,14 @@ async function saveBooking(id){
     let ownerMailed=true;
     if(id){
       const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
+      if(existing){
+        const next={...existing, ...rec, id:id};
+        const prevStatus=String(existing.status||'').toLowerCase();
+        const nextStatus=String(next.status||'').toLowerCase();
+        if(!(prevStatus==='hold' && nextStatus==='hold')){
+          ownerMailed=await notifyOwnerBookingChanged(next, ownerBookingChanges(existing, next));
+        }
+      }
     }else{
       const {data,error}=await SB.from('bookings').insert(rec).select().single();if(error)throw error;
       savedId=data&&data.id;
@@ -3227,8 +3332,16 @@ async function delBooking(id){
   const existing=DATA.bookings.find(x=>x.id===id);
   const {error}=await SB.from('bookings').delete().eq('id',id);
   if(error){toast(error.message);return}
+  let ownerMailed=true;
+  if(existing && String(existing.status||'').toLowerCase()!=='hold'){
+    const changes=ownerBookingChanges(existing, {...existing, status:'cancelled'});
+    const statusChange=changes.find(function(change){return change.label==='Status';});
+    if(statusChange) statusChange.to='deleted';
+    else changes.unshift({label:'Status', from:existing.status||'—', to:'deleted'});
+    ownerMailed=await notifyOwnerBookingChanged({...existing, status:'cancelled'}, changes);
+  }
   notifyDriversAfterBookingWrite({previous:existing, deleted:true});
-  closeModal();toast('Deleted');await loadAll();
+  closeModal();toast(ownerMailed===false?'Deleted, but the email to you failed':'Deleted');await loadAll();
 }
 
 // PREP list for a single booking (admin/mechanic)
@@ -3276,6 +3389,95 @@ function waterfallStatusHtml(b){
   return `<div class="wfbox"><div class="wfhd">Offer pipeline (T${b.pay_tier})</div>${rows}${reofferBtn}</div>`;
 }
 
+function bookingBalanceDue(b){
+  if(!b) return null;
+  if(b.balance_due_usd!=null && b.balance_due_usd!==''){
+    const n=Number(b.balance_due_usd);
+    if(Number.isFinite(n)) return Math.round(n*100)/100;
+  }
+  if(b.total_usd!=null && b.total_usd!==''){
+    const total=Number(b.total_usd);
+    const paid=Number(b.amount_paid_usd||0);
+    if(Number.isFinite(total)) return Math.round((total-paid)*100)/100;
+  }
+  const wix=wixPriceDetailsFromNotes(b.notes);
+  if(wix && wix.due!=null) return wix.due;
+  if(wix && wix.amount!=null) return Math.round((wix.amount-Number(b.amount_paid_usd||0))*100)/100;
+  return null;
+}
+function chargeSavedCardHtml(b){
+  if(!isOwnerView()||!b) return '';
+  const sid=bookingIdKey(b.id);
+  const due=bookingBalanceDue(b);
+  const prefill=due!=null && due>0 ? due.toFixed(2) : '';
+  const saved=!!b.stripe_payment_method_id;
+  return `<div class="wfbox">
+    <div class="wfhd">Charge saved card</div>
+    <div class="meta" style="margin-bottom:8px">${saved
+      ? 'The Monday reminder emails a pay link. Charge the saved card here for the balance instead, or for an overage or damage.'
+      : 'No card was saved on this booking. The Monday reminder can still email a pay link when a balance is due.'}</div>
+    <div class="row two">
+      <div><label>Amount</label><input id="chargeAmt-${sid}" inputmode="decimal" placeholder="0.00" value="${esc(prefill)}" ${saved?'':'disabled'}></div>
+      <div><label>Reason</label>
+        <select id="chargeReason-${sid}" ${saved?'':'disabled'}>
+          <option value="balance" selected>Balance</option>
+          <option value="overage">Overage</option>
+          <option value="damage">Damage</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:10px"><button class="act tinybtn" type="button" ${saved?'':'disabled'} onclick="chargeSavedCard('${esc(String(b.id))}')">Charge saved card</button></div>
+    <div id="chargeMsg-${sid}" class="meta" style="margin-top:8px"></div>
+  </div>`;
+}
+const chargeBusy=new Set();
+async function chargeSavedCard(bid){
+  if(!isOwnerView()){ toast('Owner only'); return; }
+  if(chargeBusy.has(bid)) return;
+  const b=findBooking(bid);
+  if(!b){ toast('Booking not found'); return; }
+  const sid=bookingIdKey(bid);
+  const msg=document.getElementById('chargeMsg-'+sid);
+  const amount=parseMoneyInput(document.getElementById('chargeAmt-'+sid)&&document.getElementById('chargeAmt-'+sid).value);
+  const reason=(document.getElementById('chargeReason-'+sid)&&document.getElementById('chargeReason-'+sid).value)||'balance';
+  if(msg) msg.textContent='';
+  if(amount==null || amount<=0){ if(msg) msg.textContent='Enter an amount.'; return; }
+  chargeBusy.add(bid);
+  if(msg) msg.textContent='Charging…';
+  try{
+    const r=await fetch(CHARGE_API_URL,{
+      method:'POST',
+      headers:await sessionBearerHeaders(),
+      body:JSON.stringify({
+        bookingId:b.id,
+        amount,
+        reason,
+        clientRequestId:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())
+      })
+    });
+    const data=await r.json().catch(()=>({}));
+    if(data.code==='authentication_required'){
+      const href=String(data.payUrl||'');
+      const link=/^https:\/\//i.test(href)?`<p style="margin:8px 0 0"><a href="${esc(href)}" target="_blank" rel="noopener">Open the pay link</a></p>`:'';
+      if(msg) msg.innerHTML=esc(data.error||'The bank needs the customer to approve this charge.')+link;
+      return;
+    }
+    if(!r.ok || !data.ok){
+      if(msg) msg.textContent=data.error||'The charge did not go through.';
+      return;
+    }
+    if(data.ownerEmailFailed && msg) msg.textContent=data.ownerEmailError||'Charged, but the email to you did not send.';
+    toast(data.ownerEmailFailed
+      ? 'Charged, but the email to you did not send'
+      : (data.already?'That charge was already recorded':'Card charged'));
+    await loadAll();
+    bookingDetail(bid);
+  }catch(e){
+    if(msg) msg.textContent=e.message||'The charge did not go through.';
+  }finally{
+    chargeBusy.delete(bid);
+  }
+}
 function bookingDetail(bid){
   const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
   const car=carById(b.car_id), drv=staffById(b.driver_id);
@@ -3293,6 +3495,7 @@ function bookingDetail(bid){
     ${!isOwnerView()&&pay!=null?`<div class="paypill" style="margin-bottom:14px">You earn $${pay}</div>`:''}
     ${showOwnerCustomerAmount()?ownerCustomerAmountEditorHtml(b,'detail'):''}
     ${isOwnerView()?row('Payment', b.payment_status==='paid'?'Paid in full':b.payment_status==='deposit'?'Deposit':'Unpaid'):''}
+    ${isOwnerView()?chargeSavedCardHtml(b):''}
     ${row('Customer', b.customer_name)}
     ${row('Event', b.event_type)}
     ${row('Date', b.event_date)}

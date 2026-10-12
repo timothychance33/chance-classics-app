@@ -110,6 +110,7 @@ export function ownerQuoteRequestRows(quote) {
     const text = filled(value);
     if (text) rows.push([label, text]);
   };
+  add("Request id", q.id);
   add("Customer", q.customer_name);
   add("Email", q.customer_email);
   add("Phone", q.customer_phone);
@@ -122,6 +123,7 @@ export function ownerQuoteRequestRows(quote) {
     add("Event date and time", q.event_date_raw);
   }
   add("Location", q.event_location);
+  add("Drop-off", q.dropoff_location || q.dropoff);
   add("Details", q.details);
   if (filled(q.planner)) add("Event planner", q.planner);
   return rows;

@@ -45,7 +45,22 @@ for (const [slug, agreement] of cars) {
   assert.equal(hours.length, 1, `${slug} has one day-of hours clause`);
   assert.match(hours[0].text, /additional hours on the day of the CLIENT/);
   assert.match(hours[0].text, /an applicable rental fee of \$100 per hour for each additional consecutive hour/);
+  assert.match(hours[0].text, /card used to pay the deposit is saved on file/);
+  assert.match(hours[0].text, /remaining rental balance, extra hours, mileage overages, and damage/);
+  assert.doesNotMatch(hours[0].text, /remaining balance for the additional hours/);
   assert.doesNotMatch(hours[0].text, /\$200 per hour/);
+}
+
+assert.doesNotMatch(JSON.stringify(agreements), /automatically be charged to the CLIENT/);
+for (const [slug, agreement] of cars) {
+  const blocks = agreement.blocks.filter((block) => block.type === 'p');
+  for (const label of ['(e)', '(f)']) {
+    const block = blocks.find((item) => item.text.startsWith(label));
+    assert.ok(block, `${slug} has clause ${label}`);
+    assert.match(block.text, /charged to the card on file/);
+  }
+  const q = blocks.find((item) => item.text.startsWith('(q)'));
+  assert.match(q.text, /may also charge the card on file for that balance/);
 }
 
 console.log('rental-terms alcohol tests passed');

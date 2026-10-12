@@ -7,9 +7,17 @@ import {
   bookingPlannerText,
   bookingPriceText,
   bookingWhen,
+  failedChargeNoticeIds,
+  ownerBookingChangedHtml,
+  ownerBookingChangedSubject,
   ownerBookingCreatedHtml,
   ownerBookingCreatedRows,
   ownerBookingCreatedSubject,
+  ownerBookingMoneyHtml,
+  ownerBookingMoneyRows,
+  ownerBookingMoneySubject,
+  paymentNoticeIds,
+  refundNoticeIds,
   shouldEmailOwnerAboutBooking,
 } from '../supabase/functions/_shared/owner-booking-email.mjs';
 
@@ -135,5 +143,85 @@ assert.ok(insertAt > updateAt && notifyAt > insertAt, 'owner email runs only aft
 assert.doesNotMatch(bookingsRoute, /booking_created|emailOwnerAboutBooking|notifyOwnerNewBooking/);
 
 assert.match(html, /FOLLOWUP_FLAG_COLS=\['reviewed_at','photos_received_at'\]/);
+
+assert.equal(
+  ownerBookingChangedSubject(booking, [{ label: 'Date', from: '2026-10-23', to: '2026-10-24' }]),
+  'Chance Classics booking changed — Ada <script> Lovelace / 2026-10-23',
+);
+assert.equal(
+  ownerBookingChangedSubject(booking, [{ label: 'Status', from: 'confirmed', to: 'deleted' }]),
+  'Chance Classics booking cancelled — Ada <script> Lovelace / 2026-10-23',
+);
+const changedMail = ownerBookingChangedHtml(booking, [
+  { label: 'Date', from: 'Fri Oct 23', to: 'Sat Oct 24' },
+  { label: 'Car', from: 'Brenda', to: 'Elsa <b>' },
+], 'https://app.chanceclassics.com');
+assert.match(changedMail, /Booking changed/);
+assert.match(changedMail, /Fri Oct 23/);
+assert.match(changedMail, /Sat Oct 24/);
+assert.match(changedMail, /Elsa &lt;b&gt;/);
+assert.match(changedMail, /b4060b02-5f08-4cc8-90b6-a35152324b2c/);
+assert.doesNotMatch(changedMail, /Elsa <b>/);
+
+const money = { amount: 250, reason: 'deposit', amountPaid: 250, balance: 301.25 };
+assert.deepEqual(ownerBookingMoneyRows(money).map(([label, value]) => [label, value]), [
+  ['Amount', '$250.00'],
+  ['Reason', 'Deposit'],
+  ['Amount paid', '$250.00'],
+  ['Balance', '$301.25'],
+]);
+assert.equal(ownerBookingMoneyRows({ amount: 40, reason: 'failed', chargeReason: 'damage', amountPaid: 250, balance: 0 })[1][1], 'Charge failed (damage)');
+assert.equal(ownerBookingMoneyRows({ amount: 40, reason: 'refund', chargeReason: 'overage', amountPaid: 210, balance: 341.25 })[1][1], 'Refund (overage)');
+assert.equal(
+  ownerBookingMoneySubject(booking, money),
+  'Chance Classics payment — Deposit / Ada <script> Lovelace / 2026-10-23',
+);
+const moneyMail = ownerBookingMoneyHtml(booking, { ...money, detail: 'pi_123 <x>' }, 'https://app.chanceclassics.com');
+assert.match(moneyMail, /\$250\.00/);
+assert.match(moneyMail, /\$301\.25/);
+assert.match(moneyMail, /Deposit/);
+assert.match(moneyMail, /Amount paid/);
+assert.match(moneyMail, /Balance/);
+assert.match(moneyMail, /pi_123 &lt;x&gt;/);
+assert.match(moneyMail, /new totals/);
+const failedMail = ownerBookingMoneyHtml(booking, { amount: 12, reason: 'failed', chargeReason: 'balance', amountPaid: 250, balance: 301.25 }, '');
+assert.match(failedMail, /did not go through/);
+assert.match(failedMail, /Charge failed \(balance\)/);
+
+assert.deepEqual(paymentNoticeIds({ eventId: 'evt_1', paymentIntentId: 'pi_1', sessionId: 'cs_1' }), ['evt_1', 'pi_1', 'cs_1']);
+assert.deepEqual(paymentNoticeIds({ eventId: 'evt_1', paymentIntentId: 'evt_1' }), ['evt_1']);
+assert.deepEqual(failedChargeNoticeIds('pi_1'), ['failed:pi_1']);
+assert.deepEqual(refundNoticeIds({ eventId: 'evt_2', refundId: 're_1' }), ['re_1', 'evt_2:re_1']);
+assert.deepEqual(refundNoticeIds({ eventId: 'evt_2', refundId: 're_2' }), ['re_2', 'evt_2:re_2']);
+assert.notDeepEqual(refundNoticeIds({ eventId: 'evt_2', refundId: 're_1' }), refundNoticeIds({ eventId: 'evt_2', refundId: 're_2' }));
+
+assert.match(notify, /type === "booking_changed"/);
+assert.match(notify, /type === "booking_money"/);
+assert.match(notify, /booking_changed requires booking id/);
+assert.match(notify, /booking_money requires booking id/);
+const changedTypeAt = notify.indexOf('type === "booking_changed"');
+const moneyTypeAt = notify.indexOf('type === "booking_money"');
+const unknownAt = notify.indexOf('unknown type');
+for (const branch of [notify.slice(changedTypeAt, moneyTypeAt), notify.slice(moneyTypeAt, unknownAt)]) {
+  assert.match(branch, /sendEmail\(OWNER_EMAIL, subject, html\)/);
+  assert.doesNotMatch(branch, /customer_email/);
+  assert.doesNotMatch(branch, /body\.to/);
+}
+assert.match(helper, /emailOwnerAboutMoney/);
+assert.match(helper, /owner_money_notices/);
+assert.match(helper, /type: "booking_money"/);
+assert.match(webhook, /emailOwnerAboutMoney/);
+assert.match(webhook, /charge\.refunded/);
+assert.ok(webhook.indexOf('confirmPaidQuote') < webhook.indexOf('emailOwnerAboutBooking'));
+assert.ok(webhook.lastIndexOf('updateBooking') < webhook.lastIndexOf('emailOwnerAboutBooking'));
+
+assert.match(html, /function notifyOwnerBookingChanged/);
+assert.match(html, /type:'booking_changed'/);
+const changedAt = saveFn.indexOf('notifyOwnerBookingChanged');
+assert.ok(changedAt > updateAt && changedAt < insertAt, 'change email runs on a garage edit');
+const deleteFn = html.slice(html.indexOf('async function delBooking'), html.indexOf('function driverPayStatusHtml'));
+assert.match(deleteFn, /notifyOwnerBookingChanged/);
+assert.match(deleteFn, /to:'deleted'/);
+assert.match(html.slice(html.indexOf('async function saveOwnerCustomerAmount'), html.indexOf('async function saveEarnBookingAmount')), /notifyOwnerBookingChanged/);
 
 console.log('owner-booking-notify tests passed');

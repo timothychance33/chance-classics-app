@@ -4,6 +4,10 @@
 //   1) 12-hour warning + 48h auto-advance on unanswered offers
 //   2) Weekly driver digest: Monday morning America/Chicago
 //   3) Quote auto-reminder before expiry
+//   4) Balance reminder: Monday before the event (America/Chicago).
+//      Wed–Sun: Monday of that week. Mon or Tue: the previous Monday.
+//      The email says the balance is due the day before the event.
+//      Skips a $0 balance and any booking already stamped balance_reminder_sent_at.
 //
 // Weekly digest also accepts a Vercel cron POST { weekly_only: true }.
 // Idempotent per driver + week via rental.driver_weekly_digest_sends.
@@ -11,10 +15,13 @@
 // Deploy: supabase functions deploy scheduled-tasks
 //   Settings -> Verify JWT OFF (same as today).
 //   Reuses: RESEND_API_KEY, FROM_EMAIL, OWNER_EMAIL, APP_URL
+//   Balance pay links also need STRIPE_SECRET_KEY (same secret as the website).
+//   Optional SITE_URL (defaults to https://www.chanceclassics.com).
 //   Plus the automatic SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY.
 // ============================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { balanceReminderMonday, reminderEventWindow } from "../_shared/saved-card.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -22,6 +29,8 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "chanceclassics@2ndchancespeedshop.com";
 const OWNER_EMAIL = Deno.env.get("OWNER_EMAIL") ?? "chanceclassics@gmail.com";
 const APP_URL = Deno.env.get("APP_URL") ?? "https://app.chanceclassics.com";
+const SITE_URL = Deno.env.get("SITE_URL") ?? "https://www.chanceclassics.com";
+const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const CHICAGO_TZ = "America/Chicago";
 
 const ADVANCE_HOURS = 48;
@@ -174,6 +183,58 @@ async function sendEmail(to: string, subject: string, html: string) {
 }
 
 function fmtDate(d: string | null | undefined) { return d ?? "TBD"; }
+
+async function balancePayLink(input: {
+  bookingId: string;
+  email: string;
+  customerId: string;
+  amount: number;
+  eventDate: string;
+}) {
+  const params = new URLSearchParams();
+  params.set("mode", "payment");
+  params.set("success_url", `${SITE_URL}/booking/confirmed/?paid=balance`);
+  params.set("cancel_url", `${SITE_URL}/payment-request-page/`);
+  params.set("client_reference_id", input.bookingId);
+  params.set("metadata[booking_id]", input.bookingId);
+  params.set("metadata[purpose]", "charge");
+  params.set("metadata[reason]", "balance");
+  params.set("payment_intent_data[metadata][booking_id]", input.bookingId);
+  params.set("payment_intent_data[metadata][purpose]", "charge");
+  params.set("payment_intent_data[metadata][reason]", "balance");
+  params.set("line_items[0][quantity]", "1");
+  params.set("line_items[0][price_data][currency]", "usd");
+  params.set("line_items[0][price_data][unit_amount]", String(Math.round(input.amount * 100)));
+  params.set("line_items[0][price_data][product_data][name]", "Chance Classics rental balance");
+  params.set("line_items[0][price_data][product_data][description]",
+    `Balance for ${input.eventDate}. The booking total includes 10.25% sales tax. The balance is due the day before the event.`);
+  if (input.customerId.startsWith("cus_")) params.set("customer", input.customerId);
+  else params.set("customer_email", input.email);
+
+  const send = async (body: URLSearchParams) => {
+    const r = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    const text = await r.text();
+    let parsed: { url?: string; error?: { message?: string } } = {};
+    try { parsed = JSON.parse(text); } catch { parsed = { error: { message: text.slice(0, 300) } }; }
+    if (!r.ok || !parsed.url) throw new Error(parsed.error?.message || "Stripe did not return a pay link.");
+    return parsed.url;
+  };
+  try {
+    return await send(params);
+  } catch (error) {
+    if (!params.get("customer")) throw error;
+    params.delete("customer");
+    params.set("customer_email", input.email);
+    return send(params);
+  }
+}
 
 function dayOfContactEmailHtml(b: Booking) {
   const name = String(b.day_of_contact_name || "").trim();
@@ -463,6 +524,100 @@ Deno.serve(async (req) => {
       );
       await sb.from("quote_requests").update({ reminder_sent_at: now.toISOString() }).eq("id", q.id);
       summary.quote_reminders = Number(summary.quote_reminders) + 1;
+    }
+  }
+
+  // ================= 4) BALANCE REMINDER (Monday before the event, Chicago) =================
+  // Hourly pg_cron sends these after 7am. The Monday driver-digest call can send too.
+  // balance_reminder_sent_at stops a second email.
+  summary.balance_reminders = { sent: 0, skipped: 0, errors: [] as string[] };
+  {
+    const chicagoNow = chicagoParts(now);
+    const balanceSummary = summary.balance_reminders as { sent: number; skipped: number; errors: string[]; reason?: string };
+    if (chicagoNow.weekday !== "Monday") {
+      balanceSummary.reason = `not Monday in ${CHICAGO_TZ} (it is ${chicagoNow.weekday})`;
+    } else if (chicagoNow.hour < 7) {
+      balanceSummary.reason = `before 7am in ${CHICAGO_TZ} (hour ${chicagoNow.hour})`;
+    } else if (!STRIPE_SECRET_KEY) {
+      balanceSummary.reason = "STRIPE_SECRET_KEY is not set on scheduled-tasks";
+      balanceSummary.errors.push(balanceSummary.reason);
+    } else if (!RESEND_API_KEY) {
+      balanceSummary.reason = "RESEND_API_KEY is not set";
+      balanceSummary.errors.push(balanceSummary.reason);
+    } else {
+      const eventWindow = reminderEventWindow(chicagoNow.date);
+      const due = await sb.from("bookings")
+        .select("id,customer_name,customer_email,event_date,status,total_usd,amount_paid_usd,balance_due_usd,balance_reminder_sent_at,stripe_customer_id,car_id")
+        .is("balance_reminder_sent_at", null)
+        .not("customer_email", "is", null)
+        .gte("event_date", eventWindow.from)
+        .lte("event_date", eventWindow.to)
+        .neq("status", "cancelled")
+        .neq("status", "hold");
+      if (due.error) {
+        const missing = /balance_reminder_sent_at|stripe_customer_id/i.test(due.error.message || "");
+        balanceSummary.errors.push(missing
+          ? "Apply the saved-card migration before balance reminders can send."
+          : `balance reminder query failed: ${due.error.message}`);
+      } else {
+        for (const b of due.data ?? []) {
+          const email = String(b.customer_email || "").trim();
+          const eventDate = String(b.event_date || "").slice(0, 10);
+          if (!email || balanceReminderMonday(eventDate) !== chicagoNow.date) {
+            balanceSummary.skipped += 1;
+            continue;
+          }
+          const balance = b.balance_due_usd != null && b.balance_due_usd !== ""
+            ? Math.round(Number(b.balance_due_usd) * 100) / 100
+            : (b.total_usd == null
+              ? null
+              : Math.round((Number(b.total_usd) - Number(b.amount_paid_usd || 0)) * 100) / 100);
+          if (balance == null || !Number.isFinite(balance) || balance <= 0) {
+            balanceSummary.skipped += 1;
+            continue;
+          }
+          if (balance < 0.5) {
+            balanceSummary.skipped += 1;
+            continue;
+          }
+          if (dryRun) {
+            balanceSummary.sent += 1;
+            continue;
+          }
+          const claimed = await sb.from("bookings")
+            .update({ balance_reminder_sent_at: now.toISOString() })
+            .eq("id", b.id)
+            .is("balance_reminder_sent_at", null)
+            .select("id");
+          if (claimed.error || !claimed.data?.length) {
+            balanceSummary.skipped += 1;
+            continue;
+          }
+          try {
+            const payUrl = await balancePayLink({
+              bookingId: String(b.id),
+              email,
+              customerId: b.stripe_customer_id ? String(b.stripe_customer_id) : "",
+              amount: balance,
+              eventDate,
+            });
+            const cn = await carName(b.car_id);
+            const who = esc(b.customer_name || "there");
+            await sendEmail(email, `Balance due the day before your event — ${fmtEventDate(eventDate)}`, `
+            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#21130f">
+              <h2 style="color:#6e1d1a">Your rental balance</h2>
+              <p>Hi ${who}, the balance for your Chance Classics rental${cn ? ` (${esc(cn)})` : ""} on ${esc(fmtEventDate(eventDate))} is <b>$${balance.toFixed(2)}</b>.</p>
+              <p>The booking total includes 10.25% sales tax. The balance is due the day before the event.</p>
+              <p><a href="${esc(payUrl)}" style="background:#6e1d1a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Pay the balance</a></p>
+              <p style="color:#6b6052;font-size:13px">Questions? Reply to this email or call (318) 344-5001.</p>
+            </div>`);
+            balanceSummary.sent += 1;
+          } catch (e) {
+            await sb.from("bookings").update({ balance_reminder_sent_at: null }).eq("id", b.id);
+            balanceSummary.errors.push(`${email}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+      }
     }
   }
 

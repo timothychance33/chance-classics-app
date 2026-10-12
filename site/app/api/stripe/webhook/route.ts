@@ -1,13 +1,32 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { applySucceededCharge } from "@/lib/booking-charge";
 import { validateDayOfContact } from "@/lib/booking-rules";
 import { confirmedDepositUpdate, depositDollarsFromSession, totalDollarsFromCheckout } from "@/lib/deposit-payment";
 import { confirmPaidQuote } from "@/lib/quote-booking";
-import { emailOwnerAboutBooking, quoteLinkedBookingId } from "@/lib/owner-booking-notify";
+import { emailOwnerAboutBooking, emailOwnerAboutMoney, paymentNoticeIds, quoteLinkedBookingId } from "@/lib/owner-booking-notify";
 import { rentalDb } from "@/lib/rental-db";
+import { isChargeReason, savedCardFromSession } from "@/lib/saved-card";
 import { updateBooking } from "@/lib/site-booking";
+import { handleChargeRefunded, handleOffSessionIntent, handleRefundEvent, moneyEmailResponse } from "@/lib/stripe-booking-events";
 
 export const runtime = "nodejs";
+
+async function storeSavedCard(
+  db: NonNullable<ReturnType<typeof rentalDb>>,
+  bookingId: string,
+  savedCard: { customerId: string | null; paymentMethodId: string | null },
+) {
+  if (!savedCard.customerId && !savedCard.paymentMethodId) return "";
+  const patch: Record<string, unknown> = {};
+  if (savedCard.customerId) patch.stripe_customer_id = savedCard.customerId;
+  if (savedCard.paymentMethodId) patch.stripe_payment_method_id = savedCard.paymentMethodId;
+  const updated = await db.from("bookings").update(patch).eq("id", bookingId);
+  if (updated.error && /stripe_customer_id|stripe_payment_method_id/i.test(updated.error.message || "")) {
+    return "Apply the saved-card migration so the card can be stored on the booking.";
+  }
+  return updated.error?.message || "";
+}
 
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_SECRET_KEY;
@@ -27,6 +46,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid Stripe signature." }, { status: 400 });
   }
 
+  const db = rentalDb();
+  if (!db) return NextResponse.json({ error: "Calendar isn’t connected." }, { status: 503 });
+
+  if (event.type === "charge.refunded") return handleChargeRefunded(stripe, db, event);
+  if (event.type === "refund.created" || event.type === "refund.updated") {
+    return handleRefundEvent(stripe, db, event);
+  }
+  if (event.type === "payment_intent.succeeded" || event.type === "payment_intent.payment_failed") {
+    return handleOffSessionIntent(db, event);
+  }
   if (event.type !== "checkout.session.completed") {
     return NextResponse.json({ received: true });
   }
@@ -34,8 +63,54 @@ export async function POST(request: Request) {
   if (session.payment_status !== "paid") {
     return NextResponse.json({ received: true, pending: true });
   }
-  const db = rentalDb();
-  if (!db) return NextResponse.json({ error: "Calendar isn’t connected." }, { status: 503 });
+
+  if (session.metadata?.purpose === "charge") {
+    const bookingId = session.metadata.booking_id || session.client_reference_id;
+    if (!bookingId) return NextResponse.json({ error: "Missing booking." }, { status: 400 });
+    if (session.amount_total == null) return NextResponse.json({ error: "Missing payment amount." }, { status: 400 });
+    const amount = Math.round(session.amount_total) / 100;
+    const reason = isChargeReason(session.metadata.reason) ? session.metadata.reason : "balance";
+    const intent = session.payment_intent;
+    const paymentIntentId = typeof intent === "string" ? intent : intent?.id || null;
+    try {
+      const applied = await applySucceededCharge(db, {
+        bookingId,
+        amountUsd: amount,
+        reason,
+        checkoutSessionId: session.id,
+        paymentIntentId,
+        source: "checkout",
+      });
+      if (!applied.ok) return NextResponse.json({ error: applied.error }, { status: applied.status });
+      const chargedMail = await emailOwnerAboutMoney(db, bookingId, {
+        amount,
+        reason,
+        noticeIds: paymentNoticeIds({
+          eventId: event.id,
+          paymentIntentId,
+          sessionId: session.id,
+        }),
+        ...("paid" in applied ? { amountPaid: applied.paid, balance: applied.balance } : {}),
+      });
+      const chargedMailError = moneyEmailResponse(chargedMail);
+      if (chargedMailError) return chargedMailError;
+      return NextResponse.json({ received: true, charged: true, already: applied.already === true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The payment could not be recorded.";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  let savedCard: { customerId: string | null; paymentMethodId: string | null } = {
+    customerId: null,
+    paymentMethodId: null,
+  };
+  let cardError = "";
+  try {
+    savedCard = await savedCardFromSession(stripe, session);
+  } catch (error) {
+    cardError = error instanceof Error ? error.message : "The saved card could not be read.";
+  }
 
   const quoteId = session.metadata?.quote_id;
   if (quoteId && !session.metadata?.booking_id) {
@@ -48,7 +123,7 @@ export async function POST(request: Request) {
       const confirmed = await confirmPaidQuote(db, quoteId, {
         stripeSecret: secret,
         vercelEnv: process.env.VERCEL_ENV,
-      }, dayOf.ok ? dayOf.value : null, session.id);
+      }, dayOf.ok ? dayOf.value : null, session.id, savedCard);
       if (!confirmed.ok && "error" in confirmed && confirmed.status >= 400) {
         return NextResponse.json({ error: confirmed.error }, { status: confirmed.status });
       }
@@ -62,6 +137,27 @@ export async function POST(request: Request) {
         if (!mailed.ok) {
           return NextResponse.json({ error: "The booking was saved, but the owner email did not send." }, { status: 500 });
         }
+        const quoteIntent = session.payment_intent;
+        const quoteMail = await emailOwnerAboutMoney(db, createdId, {
+          amount: depositDollarsFromSession(session),
+          reason: "deposit",
+          noticeIds: paymentNoticeIds({
+            eventId: event.id,
+            paymentIntentId: typeof quoteIntent === "string" ? quoteIntent : quoteIntent?.id || "",
+            sessionId: session.id,
+          }),
+        });
+        const quoteMailError = moneyEmailResponse(quoteMail);
+        if (quoteMailError) return quoteMailError;
+      }
+      if (cardError) {
+        return NextResponse.json({ error: `The booking was saved, but the card was not stored. ${cardError}` }, { status: 500 });
+      }
+      if (createdId) {
+        const cardStored = await storeSavedCard(db, createdId, savedCard);
+        if (cardStored) {
+          return NextResponse.json({ error: `The booking was saved, but the card was not stored. ${cardStored}` }, { status: 500 });
+        }
       }
       return NextResponse.json({ received: true, ...confirmed });
     } catch (error) {
@@ -73,9 +169,17 @@ export async function POST(request: Request) {
   const bookingId = session.metadata?.booking_id || session.client_reference_id;
   if (!bookingId) return NextResponse.json({ error: "Missing booking." }, { status: 400 });
 
-  const columns = "id,status,notes,car_id,payment_status,total_usd,amount_paid_usd,mileage_fee_usd,stripe_deposit_session_id";
-  let existing = await db.from("bookings").select(columns).eq("id", bookingId).maybeSingle();
   let includeSessionId = true;
+  let includeCard = true;
+  let existing = await db.from("bookings").select(
+    "id,status,notes,car_id,payment_status,total_usd,amount_paid_usd,mileage_fee_usd,stripe_deposit_session_id,stripe_customer_id,stripe_payment_method_id",
+  ).eq("id", bookingId).maybeSingle();
+  if (existing.error && /stripe_customer_id|stripe_payment_method_id/i.test(existing.error.message || "")) {
+    includeCard = false;
+    existing = await db.from("bookings").select(
+      "id,status,notes,car_id,payment_status,total_usd,amount_paid_usd,mileage_fee_usd,stripe_deposit_session_id",
+    ).eq("id", bookingId).maybeSingle();
+  }
   if (existing.error && /stripe_deposit_session_id/i.test(existing.error.message || "")) {
     includeSessionId = false;
     existing = await db.from("bookings").select(
@@ -104,12 +208,41 @@ export async function POST(request: Request) {
     sessionId: session.id,
     notes: row.notes,
     includeSessionId,
+    ...(includeCard ? {
+      stripeCustomerId: savedCard.customerId,
+      stripePaymentMethodId: savedCard.paymentMethodId,
+      existingCustomerId: row.stripe_customer_id,
+      existingPaymentMethodId: row.stripe_payment_method_id,
+    } : {}),
   });
   const updated = await updateBooking(db, bookingId, patch);
   if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 500 });
   const mailed = await emailOwnerAboutBooking(db, String(bookingId));
   if (!mailed.ok) {
     return NextResponse.json({ error: "The booking was saved, but the owner email did not send." }, { status: 500 });
+  }
+  const depositIntent = session.payment_intent;
+  const depositMail = await emailOwnerAboutMoney(db, String(bookingId), {
+    amount: depositDollarsFromSession(session),
+    reason: "deposit",
+    noticeIds: paymentNoticeIds({
+      eventId: event.id,
+      paymentIntentId: typeof depositIntent === "string" ? depositIntent : depositIntent?.id || "",
+      sessionId: session.id,
+    }),
+    amountPaid: patch.amount_paid_usd == null ? null : Number(patch.amount_paid_usd),
+    balance: patch.total_usd == null || patch.amount_paid_usd == null
+      ? null
+      : Math.round((Number(patch.total_usd) - Number(patch.amount_paid_usd)) * 100) / 100,
+  });
+  const depositMailError = moneyEmailResponse(depositMail);
+  if (depositMailError) return depositMailError;
+  if (cardError) {
+    return NextResponse.json({ error: `The booking was saved, but the card was not stored. ${cardError}` }, { status: 500 });
+  }
+  const cardStored = await storeSavedCard(db, String(bookingId), savedCard);
+  if (cardStored) {
+    return NextResponse.json({ error: `The booking was saved, but the card was not stored. ${cardStored}` }, { status: 500 });
   }
 
   const carId = updated.data.car_id;

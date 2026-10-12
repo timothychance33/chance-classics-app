@@ -1,6 +1,12 @@
 import type { rentalDb } from "@/lib/rental-db";
 import { ownerBookingCreatedRows, shouldEmailOwnerAboutBooking } from "./owner-booking-email.mjs";
 
+export {
+  failedChargeNoticeIds,
+  paymentNoticeIds,
+  refundNoticeIds,
+} from "./owner-booking-email.mjs";
+
 type Db = NonNullable<ReturnType<typeof rentalDb>>;
 
 const BOOKING_COLUMNS =
@@ -57,7 +63,7 @@ function notifyHeaders() {
   return headers;
 }
 
-export async function postOwnerBookingEmail(booking: Record<string, unknown>) {
+async function postOwnerNotice(body: Record<string, unknown>) {
   const url = notifyUrl();
   const headers = notifyHeaders();
   if (!url || (!headers["x-notify-secret"] && !headers.Authorization)) {
@@ -66,13 +72,156 @@ export async function postOwnerBookingEmail(booking: Record<string, unknown>) {
   const response = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify({ type: "booking_created", booking }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     return { ok: false as const, error: text || `Notify failed (${response.status}).` };
   }
   return { ok: true as const };
+}
+
+export async function postOwnerBookingEmail(booking: Record<string, unknown>) {
+  return postOwnerNotice({ type: "booking_created", booking });
+}
+
+/** Email Tim the full site quote request. The customer is not a recipient. */
+export async function emailOwnerAboutQuote(quote: Record<string, unknown>) {
+  return postOwnerNotice({ type: "quote_request", quote });
+}
+
+function missingNotices(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  return error.code === "42P01"
+    || error.code === "PGRST205"
+    || /owner_money_notices/i.test(error.message || "");
+}
+
+function roundDollars(value: unknown) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 100) / 100;
+}
+
+async function claimMoneyNotices(db: Db, ids: string[], fields: { bookingId: string; kind: string; amount: number }) {
+  const inserted = await db.from("owner_money_notices").insert(ids.map((noticeId) => ({
+    notice_id: noticeId,
+    booking_id: fields.bookingId,
+    kind: fields.kind,
+    amount_usd: fields.amount,
+  })));
+  if (!inserted.error) return { ok: true as const, claimed: true };
+  if (inserted.error.code === "23505") return { ok: true as const, claimed: false };
+  if (missingNotices(inserted.error)) {
+    return {
+      ok: false as const,
+      missingTable: true as const,
+      error: "Apply the owner_money_notices migration before these owner emails can be sent once.",
+    };
+  }
+  return { ok: false as const, missingTable: false as const, error: inserted.error.message };
+}
+
+async function deliverMoneyEmail(db: Db, bookingId: string, input: {
+  amount: number;
+  reason: string;
+  chargeReason?: string;
+  detail?: string;
+  amountPaid?: number | null;
+  balance?: number | null;
+}) {
+  const loaded = await selectBooking(db, bookingId);
+  const row = loaded.row;
+  if (!row) return { ok: false as const, error: "Booking not found." };
+  const figures = await db.from("bookings").select("total_usd,amount_paid_usd").eq("id", bookingId).maybeSingle();
+  const paid = input.amountPaid != null
+    ? roundDollars(input.amountPaid)
+    : figures.error
+      ? null
+      : roundDollars(figures.data?.amount_paid_usd);
+  const total = figures.error ? roundDollars(row.total_usd) : roundDollars(figures.data?.total_usd);
+  const balance = input.balance != null
+    ? roundDollars(input.balance)
+    : total != null && paid != null
+      ? roundDollars(total - paid)
+      : null;
+  const [name, planner] = await Promise.all([
+    carName(db, row.car_id),
+    plannerForBooking(db, bookingId),
+  ]);
+  const booking = {
+    ...row,
+    car_name: name,
+    planner: planner || undefined,
+    price: row.total_usd,
+    amount_paid: paid,
+    balance,
+  };
+  return postOwnerNotice({
+    type: "booking_money",
+    booking,
+    money: {
+      amount: input.amount,
+      reason: input.reason,
+      chargeReason: input.chargeReason || "",
+      detail: input.detail || "",
+      amountPaid: paid,
+      balance,
+    },
+  });
+}
+
+/**
+ * Email Tim once per Stripe event, payment, or refund.
+ * The notice row is removed when send-notification rejects the mail, so a retry can send it.
+ * Checkout webhooks should not send when the notice table is missing: Stripe will retry.
+ * The garage charge route can send once without the table so Tim still hears about that charge.
+ */
+export async function emailOwnerAboutMoney(
+  db: Db,
+  bookingId: string,
+  input: {
+    amount: number;
+    reason: string;
+    chargeReason?: string;
+    detail?: string;
+    noticeIds: string[];
+    amountPaid?: number | null;
+    balance?: number | null;
+  },
+  options?: { sendIfUntracked?: boolean },
+) {
+  const ids = [...new Set(input.noticeIds.map((id) => String(id || "").trim()).filter(Boolean))];
+  if (!ids.length) return { ok: false as const, retry: false, error: "Missing Stripe id for the owner email." };
+  const claim = await claimMoneyNotices(db, ids, {
+    bookingId,
+    kind: input.reason,
+    amount: input.amount,
+  });
+  if (!claim.ok) {
+    if (claim.missingTable && options?.sendIfUntracked) {
+      const sent = await deliverMoneyEmail(db, bookingId, input);
+      if (!sent.ok) return { ok: false as const, retry: false, error: sent.error };
+      return { ok: true as const, skipped: false, untracked: true };
+    }
+    return { ok: false as const, retry: true, missingTable: claim.missingTable === true, error: claim.error };
+  }
+  if (!claim.claimed) return { ok: true as const, skipped: true };
+  let sent: { ok: true } | { ok: false; error: string };
+  try {
+    sent = await deliverMoneyEmail(db, bookingId, input);
+  } catch (error) {
+    sent = { ok: false, error: error instanceof Error ? error.message : "The owner email did not send." };
+  }
+  if (!sent.ok) {
+    const removed = await db.from("owner_money_notices").delete().in("notice_id", ids);
+    if (removed.error) console.error("owner money notice release failed:", removed.error.message);
+    return { ok: false as const, retry: !removed.error, error: sent.error };
+  }
+  const stamped = await db.from("owner_money_notices").update({ sent_at: new Date().toISOString() }).in("notice_id", ids);
+  if (stamped.error) console.error("owner money notice stamp failed:", stamped.error.message);
+  return { ok: true as const, skipped: false };
 }
 
 /**

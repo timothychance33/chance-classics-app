@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { DayOfContactFields } from "@/components/DayOfContactFields";
-import { DEPOSIT_USD, QUOTE_LINK_EXPIRED, RELIABILITY_TEXT, WAIVER_TEXT } from "@/lib/booking-rules";
+import { CARD_SAVE_TEXT, DEPOSIT_USD, QUOTE_LINK_EXPIRED, RELIABILITY_TEXT, WAIVER_TEXT } from "@/lib/booking-rules";
 
 type Line = { label: string; amount: number };
 type QuoteView = {
@@ -127,6 +127,7 @@ export function QuoteCheckout({ token }: { token: string }) {
         <p className="price">
           Total {money(quote.total)}. Deposit due now {money(quote.deposit)}. Balance {money(quote.balance)} is billed separately.
         </p>
+        <p>{CARD_SAVE_TEXT}</p>
       </div>
       {quote.note && <p>{quote.note}</p>}
       {availability && <p className="form-error" role="alert">{availability}</p>}

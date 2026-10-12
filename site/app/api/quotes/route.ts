@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { withSecondCarNote } from "@/data/packages";
 import { MILEAGE_ACK_ERROR, quoteRequestRecord } from "@/lib/booking-rules";
+import { emailOwnerAboutQuote } from "@/lib/owner-booking-notify";
 import { rentalDb } from "@/lib/rental-db";
 
 function matchCar(service: string | null, cars: { id?: string; name?: string }[] | null) {
@@ -69,6 +70,21 @@ export async function POST(request: Request) {
   }
   if (inserted.error || !inserted.data) {
     return NextResponse.json({ error: "The quote request could not be saved. Call or text (318) 344-5001." }, { status: 500 });
+  }
+  const mailed = await emailOwnerAboutQuote({
+    id: inserted.data.id,
+    ...record,
+    car_name: hit?.name ? String(hit.name) : "",
+    dropoff_location: String(raw.dropoff || "").trim(),
+  });
+  if (!mailed.ok) {
+    console.error("quote request owner email failed:", mailed.error);
+    return NextResponse.json({
+      ok: false,
+      saved: true,
+      id: inserted.data.id,
+      error: "The quote request was saved, but the owner email did not send.",
+    }, { status: 500 });
   }
   return NextResponse.json({ ok: true, id: inserted.data.id });
 }

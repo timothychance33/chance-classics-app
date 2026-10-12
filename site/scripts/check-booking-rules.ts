@@ -17,6 +17,7 @@ import {
   quoteTotal,
   salesTax,
   DEPOSIT_USD,
+  CARD_SAVE_TEXT,
   MILE_THRESHOLD,
   SHOP_ADDRESS,
   rangesOverlap,
@@ -28,6 +29,7 @@ import {
   depositDollarsFromSession,
   totalDollarsFromCheckout,
 } from "../lib/deposit-payment.ts";
+import { balanceReminderMonday, chargeAmounts, depositCheckoutSaveCard, refundAmounts } from "../lib/saved-card.ts";
 
 function assert(cond: boolean, message: string) {
   if (!cond) throw new Error(message);
@@ -146,6 +148,56 @@ const kept = confirmedDepositUpdate({
   includeSessionId: true,
 });
 assert(kept.status === "prepping" && kept.payment_status === "paid" && kept.amount_paid_usd === 500, "a later payment is not reset to the deposit");
+const withCard = confirmedDepositUpdate({
+  status: "hold",
+  paymentStatus: "unpaid",
+  existingTotal: 551.25,
+  existingPaid: null,
+  totalUsd: 551.25,
+  depositUsd: 250,
+  sessionId: "cs_card",
+  notes: "Booking total: $551.25",
+  includeSessionId: true,
+  stripeCustomerId: "cus_123",
+  stripePaymentMethodId: "pm_123",
+});
+assert(withCard.stripe_customer_id === "cus_123" && withCard.stripe_payment_method_id === "pm_123", "deposit checkout stores the saved card");
+const cardKept = confirmedDepositUpdate({
+  status: "confirmed",
+  paymentStatus: "deposit",
+  existingTotal: 551.25,
+  existingPaid: 250,
+  totalUsd: 551.25,
+  depositUsd: 250,
+  notes: "Deposit paid.",
+  stripeCustomerId: "cus_new",
+  stripePaymentMethodId: "pm_new",
+  existingCustomerId: "cus_123",
+  existingPaymentMethodId: "pm_123",
+});
+assert(!("stripe_customer_id" in cardKept) && !("stripe_payment_method_id" in cardKept), "a later notice does not replace the saved card");
+const balancePay = chargeAmounts({ total: 551.25, paid: 250, amount: 301.25, reason: "balance", source: "owner" });
+assert(!("error" in balancePay) && balancePay.total === 551.25 && balancePay.paid === 551.25, "a balance charge clears the balance");
+const tooMuch = chargeAmounts({ total: 551.25, paid: 250, amount: 400, reason: "balance", source: "owner" });
+assert("error" in tooMuch, "the garage cannot charge more than the balance");
+const overage = chargeAmounts({ total: 551.25, paid: 250, amount: 100, reason: "overage", source: "owner" });
+assert(!("error" in overage) && overage.total === 651.25 && overage.paid === 350, "overage raises the total and the amount paid");
+assert(balanceReminderMonday("2026-10-14") === "2026-10-12", "Wednesday uses Monday of that week");
+assert(balanceReminderMonday("2026-10-18") === "2026-10-12", "Sunday uses Monday of that week");
+assert(balanceReminderMonday("2026-10-12") === "2026-10-05", "Monday uses the previous Monday");
+assert(balanceReminderMonday("2026-10-13") === "2026-10-05", "Tuesday uses the previous Monday");
+assert(balanceReminderMonday("2026-10-19") === "2026-10-12", "next Monday uses this Monday");
+const saveCard = depositCheckoutSaveCard();
+assert(saveCard.customer_creation === "always" && saveCard.payment_intent_data.setup_future_usage === "off_session", "deposit checkout saves the card");
+const taggedCard = depositCheckoutSaveCard({ booking_id: "abc", purpose: "deposit", reason: "deposit" });
+assert(taggedCard.payment_intent_data.metadata?.booking_id === "abc" && taggedCard.payment_intent_data.metadata?.reason === "deposit", "deposit payment intent carries the booking");
+const depositRefund = refundAmounts({ total: 551.25, paid: 250, amount: 100, reason: "deposit" });
+assert(!("error" in depositRefund) && depositRefund.total === 551.25 && depositRefund.paid === 150, "a deposit refund lowers amount paid only");
+const balanceRefund = refundAmounts({ total: 551.25, paid: 551.25, amount: 301.25, reason: "balance" });
+assert(!("error" in balanceRefund) && balanceRefund.total === 551.25 && balanceRefund.paid === 250, "a balance refund lowers amount paid only");
+const overageRefund = refundAmounts({ total: 651.25, paid: 350, amount: 100, reason: "overage" });
+assert(!("error" in overageRefund) && overageRefund.total === 551.25 && overageRefund.paid === 250, "an overage refund lowers the total and the amount paid");
+assert(saveCard.custom_text.submit.message === CARD_SAVE_TEXT, "checkout consent names balance, overages, and damage");
 assert(depositDollarsFromSession({ amount_total: null, metadata: null }) === DEPOSIT_USD, "missing checkout amount still uses the deposit");
 const lines = quoteCheckoutLines({
   car_name: "Patsy",

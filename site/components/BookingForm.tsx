@@ -8,6 +8,7 @@ import { DayOfContactFields } from "@/components/DayOfContactFields";
 import { SecondCarField } from "@/components/SecondCarField";
 import {
   BASE_HOURS,
+  CARD_SAVE_TEXT,
   DAY_START_MIN,
   DEPOSIT_USD,
   earliestBookableDate,
@@ -369,6 +370,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           <br />
           Deposit due now {usd(money.deposit)}. Balance {usd(money.balance)} is billed separately.
         </p>
+        <p>{CARD_SAVE_TEXT}</p>
       </div>
       {message && <p className="form-error" role="alert">{message}</p>}
       <p className="book-actions">

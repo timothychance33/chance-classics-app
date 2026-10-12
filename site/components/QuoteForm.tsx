@@ -56,6 +56,10 @@ export function QuoteForm() {
         }),
       });
       const saved = await response.json();
+      if (saved.saved) {
+        router.push("/registrationthanks/");
+        return;
+      }
       if (!response.ok || !saved.ok) {
         if (saved.error === MILEAGE_ACK_ERROR) {
           setMileageError(true);

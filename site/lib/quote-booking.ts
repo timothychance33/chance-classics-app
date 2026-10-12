@@ -13,7 +13,7 @@ import {
 } from "@/lib/booking-rules";
 import type { rentalDb } from "@/lib/rental-db";
 import { notesAfterDeposit } from "@/lib/deposit-payment";
-import { busyRanges, insertBooking, releaseStaleHolds } from "@/lib/site-booking";
+import { busyRanges, insertBooking, releaseStaleHolds, updateBooking } from "@/lib/site-booking";
 
 type Db = NonNullable<ReturnType<typeof rentalDb>>;
 
@@ -138,18 +138,34 @@ export function quoteIsOpen(quote: QuoteRow | null, now = new Date()) {
   return quoteLinkOpen(quote, now);
 }
 
+async function attachSavedCard(
+  db: Db,
+  bookingId: string,
+  savedCard: { customerId?: string | null; paymentMethodId?: string | null } | null,
+) {
+  if (!savedCard?.customerId && !savedCard?.paymentMethodId) return;
+  const patch: Record<string, unknown> = {};
+  if (savedCard.customerId) patch.stripe_customer_id = savedCard.customerId;
+  if (savedCard.paymentMethodId) patch.stripe_payment_method_id = savedCard.paymentMethodId;
+  await updateBooking(db, bookingId, patch);
+}
+
 export async function confirmPaidQuote(
   db: Db,
   quoteId: string,
   env: { stripeSecret?: string; vercelEnv?: string },
   dayOf: DayOfContact | null = null,
   stripeSessionId: string | null = null,
+  savedCard: { customerId?: string | null; paymentMethodId?: string | null } | null = null,
 ) {
   const loaded = await db.from("quote_requests").select("*").eq("id", quoteId).maybeSingle();
   if (loaded.error) throw new Error(loaded.error.message);
   const quote = loaded.data as QuoteRow | null;
   if (!quote) return { ok: false as const, status: 404, error: "Quote not found." };
-  if (quote.booking_id) return { ok: true as const, status: 200, already: true };
+  if (quote.booking_id) {
+    await attachSavedCard(db, String(quote.booking_id), savedCard);
+    return { ok: true as const, status: 200, already: true, bookingId: String(quote.booking_id) };
+  }
 
   const open = quoteIsOpen(quote);
   if (!open.ok) return { ok: false as const, status: 200, expired: true };
@@ -194,6 +210,8 @@ export async function confirmPaidQuote(
     total_usd: money.total,
     amount_paid_usd: money.deposit,
     ...(stripeSessionId ? { stripe_deposit_session_id: stripeSessionId } : {}),
+    ...(savedCard?.customerId ? { stripe_customer_id: savedCard.customerId } : {}),
+    ...(savedCard?.paymentMethodId ? { stripe_payment_method_id: savedCard.paymentMethodId } : {}),
     source,
     notes: notesAfterDeposit(notes, money.total, money.deposit),
     mileage_miles: quote.miles,

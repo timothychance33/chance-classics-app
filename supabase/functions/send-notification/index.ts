@@ -23,7 +23,15 @@ import {
 } from "./shared.ts";
 import { handleQuoteAlternatives, handleQuoteDeclined } from "./quotes.ts";
 import { allowNotify, roleTokens, secretMatches } from "./access.mjs";
-import { ownerBookingCreatedHtml, ownerBookingCreatedSubject } from "../_shared/owner-booking-email.mjs";
+import {
+  ownerBookingChangedHtml,
+  ownerBookingChangedSubject,
+  ownerBookingCreatedHtml,
+  ownerBookingCreatedSubject,
+  ownerBookingMoneyHtml,
+  ownerBookingMoneySubject,
+} from "../_shared/owner-booking-email.mjs";
+import { ownerQuoteRequestHtml, ownerQuoteRequestSubject } from "../_shared/owner-quote-email.mjs";
 
 function bearerToken(req: Request): string {
   const header = req.headers.get("Authorization") || "";
@@ -276,6 +284,22 @@ Deno.serve(async (req) => {
       if (!b.id) throw new Error("booking_created requires booking id");
       const subject = ownerBookingCreatedSubject(b);
       const html = ownerBookingCreatedHtml(b, APP_URL);
+      result = await sendEmail(OWNER_EMAIL, subject, html);
+    } else if (type === "booking_changed") {
+      if (!b.id) throw new Error("booking_changed requires booking id");
+      const subject = ownerBookingChangedSubject(b, body.changes);
+      const html = ownerBookingChangedHtml(b, body.changes, APP_URL);
+      result = await sendEmail(OWNER_EMAIL, subject, html);
+    } else if (type === "booking_money") {
+      if (!b.id) throw new Error("booking_money requires booking id");
+      const subject = ownerBookingMoneySubject(b, body.money);
+      const html = ownerBookingMoneyHtml(b, body.money, APP_URL);
+      result = await sendEmail(OWNER_EMAIL, subject, html);
+    } else if (type === "quote_request") {
+      const q = body.quote ?? {};
+      if (!q.customer_name && !q.service_name) throw new Error("quote_request requires a quote");
+      const subject = ownerQuoteRequestSubject(q);
+      const html = ownerQuoteRequestHtml(q, APP_URL);
       result = await sendEmail(OWNER_EMAIL, subject, html);
     } else {
       throw new Error("unknown type");
