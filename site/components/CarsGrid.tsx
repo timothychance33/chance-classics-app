@@ -14,7 +14,7 @@ export function CarsGrid() {
     <div className="car-grid">
       {ordered.map((car) => {
         const service = serviceByPortfolio(car.slug);
-        const galleryHref = `${car.href.endsWith("/") ? car.href : `${car.href}/`}`;
+        const galleryHref = car.href.endsWith("/") ? car.href : `${car.href}/`;
         const meetHref = service ? `/service-page/${service.slug}/` : galleryHref;
         const bookHref = service ? `/service-page/${service.slug}/#book` : meetHref;
         const subtitle = galleries[car.slug]?.subtitle;
@@ -27,6 +27,7 @@ export function CarsGrid() {
             image={car.image}
             bookHref={bookHref}
             meetHref={meetHref}
+            galleryHref={galleryHref}
           />
         );
       })}

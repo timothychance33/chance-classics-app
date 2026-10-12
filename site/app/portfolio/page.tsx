@@ -3,7 +3,7 @@ import { pageMeta } from "@/lib/content";
 
 export const metadata = pageMeta({
   title: "Cars | Chance Classics, Classic Car Rental",
-  description: "Here are the cars we currently have available. Tap a car to see details and book.",
+  description: "Here are some photographs of the cars we currently have available. Click an image below for more pictures.",
   path: "/portfolio",
 });
 
@@ -12,7 +12,7 @@ export default function PortfolioPage() {
     <article className="wrap page">
       <h1 className="center">Cars</h1>
       <p className="lede center">
-        Here are the cars we currently have available. Tap a car to see details and book.
+        Here are some photographs of the cars we currently have available. Click an image below for more pictures.
       </p>
       <CarsGrid />
     </article>

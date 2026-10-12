@@ -7,6 +7,7 @@ export function CarTile({
   image,
   bookHref,
   meetHref,
+  galleryHref,
 }: {
   name: string;
   model?: string;
@@ -14,10 +15,12 @@ export function CarTile({
   image: { src: string; alt?: string };
   bookHref: string;
   meetHref: string;
+  /** Picture gallery for this car. The photo opens this; Book and Meet stay separate. */
+  galleryHref: string;
 }) {
   return (
     <article className="tile">
-      <Link href={meetHref}>
+      <Link href={galleryHref} aria-label={`More pictures of ${name}`}>
         <img
           src={image.src}
           alt={model ? `Photo of ${name}, ${model}` : `Photo of ${name}`}
