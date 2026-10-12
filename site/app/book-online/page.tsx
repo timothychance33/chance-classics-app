@@ -12,6 +12,11 @@ export default function BookOnlinePage() {
   return (
     <article className="wrap page">
       <h1 className="center">Book Online</h1>
+      <p className="center">
+        Starting prices are before sales tax. Sales tax is 10.25% of the rental subtotal.
+        A $500 subtotal is $51.25 tax and $551.25 total. The $250 deposit goes toward that total.
+        The booking form lists the tax, the deposit, and the balance.
+      </p>
       <ul className="book-list">
         {services.map((service) => {
           const facts = factsForCar(service.car);
@@ -28,6 +33,7 @@ export default function BookOnlinePage() {
                 <h2>{service.car}</h2>
                 <p className="book-row-model">{identity}</p>
                 <p className="book-row-price">Starting at ${service.price}</p>
+                <p className="book-row-price">plus 10.25% sales tax</p>
               </div>
               <p className="book-row-actions">
                 <Link className="btn" href={`/service-page/${service.slug}/#book`}>Book</Link>

@@ -6,6 +6,17 @@ export const CANCEL_HOURS = 72;
 export const BASE_HOURS = 2;
 export const EXTRA_HOUR_USD = 100;
 export const DEPOSIT_USD = 250;
+export const SALES_TAX_RATE = 0.1025;
+
+export function roundMoney(amount: number) {
+  return Math.round((Number(amount) + Number.EPSILON) * 100) / 100;
+}
+
+/** Sales tax on the rental subtotal, rounded to cents. */
+export function salesTax(subtotal: number) {
+  const cents = Math.round(Math.max(0, Number(subtotal) || 0) * 100);
+  return Math.round(cents * SALES_TAX_RATE) / 100;
+}
 export const HOLD_MINUTES = 30;
 export const MILE_RADIUS = 30;
 export const EXTRA_MILE_USD = 3;
@@ -48,10 +59,10 @@ export function mileageCharge(pickupMiles: number): MileageCharge {
   return { miles, fee };
 }
 
-/** Shop hours are not listed in the capture. Slots are every 30 minutes, 8:00 AM–8:00 PM Central, and must finish the same day. */
+/** Shop hours are not listed in the capture. Slots are every 15 minutes (:00, :15, :30, :45), 8:00 AM–8:00 PM Central, and must finish the same day. */
 export const DAY_START_MIN = 8 * 60;
 export const LAST_START_MIN = 20 * 60;
-export const SLOT_STEP_MIN = 30;
+export const SLOT_STEP_MIN = 15;
 
 export const WAIVER_TEXT =
   "I HAVE READ THE CHANCE CLASSICS, LLC CONTRACT and CONDITIONS AGREEMENT AND ACCEPT IT";
@@ -167,15 +178,19 @@ export function quoteTotal(basePrice: number, hours: number, mileageFee = 0) {
   const extraHours = Math.max(0, hours - BASE_HOURS);
   const listing = basePrice + extraHours * EXTRA_HOUR_USD;
   const fee = Math.max(0, mileageFee);
-  const total = listing + fee;
+  const subtotal = roundMoney(listing + fee);
+  const tax = salesTax(subtotal);
+  const total = roundMoney(subtotal + tax);
   return {
     hours,
     extraHours,
     listing,
     mileageFee: fee,
+    subtotal,
+    tax,
     total,
     deposit: DEPOSIT_USD,
-    balance: total - DEPOSIT_USD,
+    balance: roundMoney(total - DEPOSIT_USD),
   };
 }
 
@@ -304,7 +319,7 @@ export function quoteCheckoutLines(quote: {
       if (label) lines.push({ label, amount });
     }
   }
-  if (Number(quote.tax)) add("Tax", Number(quote.tax));
+  if (Number(quote.tax)) add("Sales tax (10.25%)", Number(quote.tax));
   return lines;
 }
 

@@ -66,18 +66,43 @@ export async function openTimesForCar(db: Db, carId: string, date: string, hours
   return openStartTimes(hours, busy, date);
 }
 
-/** Mileage and day-of columns are additive. Drop a missing one and retry so a booking still saves. */
+function optionalBookingColumn(name: string) {
+  return /^(mileage_|day_of_contact_)/.test(name)
+    || name === "stripe_deposit_session_id"
+    || name === "total_usd"
+    || name === "amount_paid_usd";
+}
+
+function columnNamedInError(message: string) {
+  return message.match(/'([a-z0-9_]+)' column/i)?.[1] || message.match(/column "([a-z0-9_]+)"/i)?.[1] || "";
+}
+
+/** Mileage, money, and deposit-session columns are additive. Drop a missing one and retry so a booking still saves. */
 export async function insertBooking(db: Db, row: Record<string, unknown>) {
   let payload = { ...row };
   let inserted = await db.from("bookings").insert(payload).select("id").single();
-  for (let attempt = 0; attempt < 6 && inserted.error; attempt += 1) {
-    const message = inserted.error.message || "";
-    const named = message.match(/'([a-z0-9_]+)' column/i)?.[1] || message.match(/column "([a-z0-9_]+)"/i)?.[1];
-    if (!named || !/^(mileage_|day_of_contact_)/.test(named) || !(named in payload)) break;
+  for (let attempt = 0; attempt < 8 && inserted.error; attempt += 1) {
+    const named = columnNamedInError(inserted.error.message || "");
+    if (!named || !optionalBookingColumn(named) || !(named in payload)) break;
     const next = { ...payload };
     delete next[named];
     payload = next;
     inserted = await db.from("bookings").insert(payload).select("id").single();
   }
   return inserted;
+}
+
+/** Same additive retry as insertBooking, for the deposit webhook update. */
+export async function updateBooking(db: Db, id: string, row: Record<string, unknown>) {
+  let payload = { ...row };
+  let updated = await db.from("bookings").update(payload).eq("id", id).select("id,car_id,status").single();
+  for (let attempt = 0; attempt < 8 && updated.error; attempt += 1) {
+    const named = columnNamedInError(updated.error.message || "");
+    if (!named || !optionalBookingColumn(named) || !(named in payload)) break;
+    const next = { ...payload };
+    delete next[named];
+    payload = next;
+    updated = await db.from("bookings").update(payload).eq("id", id).select("id,car_id,status").single();
+  }
+  return updated;
 }

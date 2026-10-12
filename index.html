@@ -1578,7 +1578,7 @@ function renderEarnings(){
 }
 
 // ---------- QUOTES ----------
-const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.10, HOTEL_FEE=200;
+const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.1025, HOTEL_FEE=200;
 const FOLLOWUP_DAYS=3, QUOTE_VALID_DAYS=7;
 // Prep, travel, and trailer time kept clear before AND after each booking of the same car.
 // Change this one number to adjust the gap. The database exclusion constraint does not include it.
@@ -1680,8 +1680,8 @@ function calcQuote(carId, hours, miles, hotelFee){
   const travel=mi>FREE_MILES?mi*PER_MILE:0;
   const hotel=(Number(hotelFee)||0)>0?HOTEL_FEE:0;
   const subtotal=base+overage+travel+hotel;
-  const tax=subtotal*TAX_RATE;
-  const total=subtotal+tax;
+  const tax=Math.round(Math.round(subtotal*100)*TAX_RATE)/100;
+  const total=Math.round((subtotal+tax)*100)/100;
   return {base,extraH,overage,mi,travel,hotel,subtotal,tax,total};
 }
 
@@ -2281,7 +2281,7 @@ function quoteRecalc(){
     ${c.hotel>0?`<div class="qline"><span>Overnight hotel accommodation</span><span>${m(c.hotel)}</span></div>`:`<div class="qline muted"><span>Overnight hotel (not included)</span><span>$0.00</span></div>`}
     ${customLines}
     <div class="qline"><span>Subtotal</span><span>${m(c.subtotal)}</span></div>
-    <div class="qline"><span>Tax (${(TAX_RATE*100).toFixed(0)}%)</span><span>${m(c.tax)}</span></div>
+    <div class="qline"><span>Sales tax (10.25%)</span><span>${m(c.tax)}</span></div>
     <div class="qline qtotal"><span>Total</span><span>${m(c.total)}</span></div>`;
 }
 
@@ -2422,8 +2422,8 @@ function quoteMoneyParts(){
   const custom=(window._quoteLines||[]).filter(l=>l&&String(l.label||'').trim()).map(l=>({label:String(l.label).trim(),amount:Number(l.amount)||0}));
   const customSum=custom.reduce((sum,line)=>sum+line.amount,0);
   const subtotal=base+auto.overage+travel+(hotelOn?HOTEL_FEE:0)+customSum;
-  const tax=subtotal*TAX_RATE;
-  const total=subtotal+tax;
+  const tax=Math.round(Math.round(subtotal*100)*TAX_RATE)/100;
+  const total=Math.round((subtotal+tax)*100)/100;
   return {base,extraH:auto.extraH,overage:auto.overage,mi:auto.mi,travel,hotel:hotelOn?HOTEL_FEE:0,subtotal,tax,total,custom};
 }
 function renderQuoteLines(){
@@ -3107,7 +3107,7 @@ function bookingModal(id){
     <small class="hint">Setting a tier offers this job to drivers, starting with priority #1.</small>
     ${isOwnerView()?`<div><label>Customer amount</label>
       <input id="f_amount" inputmode="decimal" placeholder="$0.00" value="${storedCustomerAmount(b)!=null?esc(storedCustomerAmount(b).toFixed(2)):''}">
-      <small class="hint">What the customer paid / listed booking amount. Earnings uses this Price line. Staff never see it.</small>
+      <small class="hint">Customer total including 10.25% sales tax. Earnings uses this Price line. Staff never see it.</small>
     </div>`:''}
     <div><label>Notes</label><textarea id="f_notes">${esc(notesWithoutPrice(b.notes))}</textarea></div>
     <label class="toggle"><input type="checkbox" id="f_trailer" ${b.needs_trailer?'checked':''}><span class="toggleslide"></span><span>🚛 Car needs to be trailered</span></label>

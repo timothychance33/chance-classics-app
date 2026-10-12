@@ -618,6 +618,31 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   padding: 0;
 }
 .mileage-examples li { margin: 0; padding: 4px 0; }
+.area-map { margin: 8px 0 28px; }
+.area-map-frame {
+  position: relative;
+  height: min(68vw, 460px);
+  min-height: 280px;
+  background: var(--line);
+}
+.area-map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.area-map-canvas[hidden] { display: none; }
+.area-map-status {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 24px;
+  color: var(--ink-soft);
+}
+.area-map figcaption {
+  margin-top: 8px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.45;
+}
 
 /* Blog */
 .posts {
@@ -763,6 +788,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
 .occasion-cars img { width: 120px; height: 90px; object-fit: cover; }
 
 .book-form, .car-facts { max-width: 720px; margin: 36px 0; }
+.book-form { scroll-margin-top: 16px; }
+.book-form:focus { outline: 2px solid var(--btn); outline-offset: 4px; }
 .book-form label, .book-grid label { display: block; margin: 12px 0; }
 .book-form input:not([type="checkbox"]):not([type="radio"]),
 .book-form select,
@@ -809,6 +836,31 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   height: 20px;
 }
 .book-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.time-picker-field {
+  border: 0;
+  margin: 12px 0;
+  padding: 0;
+  min-width: 0;
+}
+.time-picker-field legend {
+  font-weight: 600;
+  font-size: 14px;
+  padding: 0;
+  margin-bottom: 6px;
+}
+.time-picker {
+  display: grid;
+  grid-template-columns: 1.15fr 0.9fr 0.95fr;
+  gap: 8px;
+}
+.time-picker label { margin: 0; min-width: 0; }
+.time-picker label span {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.time-picker select { padding-inline: 8px; }
 .day-of {
   border: 1px solid #222;
   background: #f2f2f2;
