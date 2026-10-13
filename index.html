@@ -723,11 +723,34 @@ function fmtTime(t){if(!t)return'';const[h,m]=t.split(':');let hh=+h;const ap=hh
 
 // ---------- marketplace helpers ----------
 // Session token only. Notify and crew-login secrets stay on the server.
+// This is the Supabase Auth access token (a JWT) from the signed-in garage
+// session. There is no separate device-session token.
 async function sessionBearerHeaders(){
   const {data:{session}}=await SB.auth.getSession();
   const token=session&&session.access_token;
   if(!token) throw new Error('Sign in again to continue');
   return {'Content-Type':'application/json','Authorization':'Bearer '+token};
+}
+function sessionTokenNote(hadToken){
+  return hadToken?'Session token: present.':'Session token: missing.';
+}
+function networkErrorDetail(error, hadToken){
+  const name=(error&&error.name)||'Error';
+  const message=error&&error.message?String(error.message):'';
+  const named=message&&message!==name?name+' '+message:name;
+  return 'Network error: '+named+'. '+sessionTokenNote(hadToken);
+}
+function httpErrorDetail(status, errorText, hadToken){
+  const text=String(errorText||'').replace(/\s+/g,' ').trim().slice(0,240);
+  return 'HTTP '+status+(text?': '+text:'')+'. '+sessionTokenNote(hadToken);
+}
+async function readChargeBody(response, hadToken){
+  const raw=await response.text();
+  let data={};
+  try{ if(raw) data=JSON.parse(raw); }catch(e){ data={}; }
+  if(!data||typeof data!=='object'||Array.isArray(data)) data={};
+  const errorText=data.error?String(data.error):raw;
+  return {data, detail:httpErrorDetail(response.status, errorText, hadToken)};
 }
 async function postNotification(payload){
   return fetch(NOTIFY_FN_URL,{
@@ -3485,10 +3508,13 @@ async function chargeSavedCard(bid){
   if(amount==null || amount<=0){ if(msg) msg.textContent='Enter an amount.'; return; }
   chargeBusy.add(bid);
   if(msg) msg.textContent='Charging…';
+  let hadToken=false;
   try{
+    const headers=await sessionBearerHeaders();
+    hadToken=true;
     const r=await fetch(CHARGE_API_URL,{
       method:'POST',
-      headers:await sessionBearerHeaders(),
+      headers,
       body:JSON.stringify({
         bookingId:b.id,
         amount,
@@ -3496,7 +3522,7 @@ async function chargeSavedCard(bid){
         clientRequestId:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())
       })
     });
-    const data=await r.json().catch(()=>({}));
+    const {data, detail}=await readChargeBody(r, hadToken);
     if(data.mode==='pay_link'){
       showPayLinkResult(msg, data);
       return;
@@ -3508,7 +3534,7 @@ async function chargeSavedCard(bid){
       return;
     }
     if(!r.ok || !data.ok){
-      if(msg) msg.textContent=data.error||'The charge did not go through.';
+      if(msg) msg.textContent=detail;
       return;
     }
     if(data.ownerEmailFailed && msg) msg.textContent=data.ownerEmailError||'Charged, but the email to you did not send.';
@@ -3518,7 +3544,7 @@ async function chargeSavedCard(bid){
     await loadAll();
     bookingDetail(bid);
   }catch(e){
-    if(msg) msg.textContent=e.message||'The charge did not go through.';
+    if(msg) msg.textContent=networkErrorDetail(e, hadToken);
   }finally{
     chargeBusy.delete(bid);
   }
@@ -3539,10 +3565,13 @@ async function sendBalancePayLink(bid){
   if(!confirm('Send a pay link for $'+amount.toFixed(2)+' to '+email+'?')) return;
   chargeBusy.add(bid);
   if(msg) msg.textContent='Sending pay link…';
+  let hadToken=false;
   try{
+    const headers=await sessionBearerHeaders();
+    hadToken=true;
     const r=await fetch(CHARGE_API_URL,{
       method:'POST',
-      headers:await sessionBearerHeaders(),
+      headers,
       body:JSON.stringify({
         bookingId:b.id,
         amount,
@@ -3551,14 +3580,14 @@ async function sendBalancePayLink(bid){
         clientRequestId:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())
       })
     });
-    const data=await r.json().catch(()=>({}));
+    const {data, detail}=await readChargeBody(r, hadToken);
     if(data.payUrl || data.mode==='pay_link'){
       showPayLinkResult(msg, data);
       return;
     }
-    if(msg) msg.textContent=data.error||'The pay link did not send.';
+    if(msg) msg.textContent=detail;
   }catch(e){
-    if(msg) msg.textContent=e.message||'The pay link did not send.';
+    if(msg) msg.textContent=networkErrorDetail(e, hadToken);
   }finally{
     chargeBusy.delete(bid);
   }
@@ -3880,7 +3909,8 @@ else init();
 // PWA service worker registration
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js').catch(e=>console.log('SW skipped:',e.message));
+    const register=()=>navigator.serviceWorker.register('sw.js',{updateViaCache:'none'});
+    register().catch(()=>navigator.serviceWorker.register('sw.js')).catch(e=>console.log('SW skipped:',e.message));
   });
 }
 </script>
