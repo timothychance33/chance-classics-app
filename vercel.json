@@ -4,5 +4,19 @@
       "path": "/api/cron/weekly-driver-digest",
       "schedule": "0 13 * * 1"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/bookings/",
+      "destination": "https://chanceclassics.com/api/bookings/"
+    },
+    {
+      "source": "/api/bookings/:path+/",
+      "destination": "https://chanceclassics.com/api/bookings/:path+/"
+    },
+    {
+      "source": "/api/bookings/:path+",
+      "destination": "https://chanceclassics.com/api/bookings/:path+/"
+    }
   ]
 }

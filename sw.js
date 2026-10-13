@@ -20,10 +20,10 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const req = e.request;
-  // Only the same-origin app shell. A cross-origin POST (the charge API on
-  // chanceclassics.com) must be left to the browser. Intercepting it, then
-  // answering a failed re-fetch with index.html, made Send pay link show
-  // "The pay link did not send." on iPhone while curl still saw JSON.
+  // Only the same-origin app shell. Charge and pay-link POSTs are same-origin
+  // (/api/bookings/charge/, proxied by vercel.json) and must stay out of this
+  // handler. Intercepting a POST, then answering a failed re-fetch with
+  // index.html, made Send pay link show "The pay link did not send." on iPhone.
   if (req.method !== 'GET') return;
   let url;
   try { url = new URL(req.url); } catch { return; }

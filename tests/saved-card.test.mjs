@@ -74,7 +74,18 @@ assert.doesNotMatch(scheduled, /service_role/);
 
 const garage = read('index.html');
 assert.match(garage, /Charge saved card/);
-assert.match(garage, /api\/bookings\/charge/);
+assert.match(garage, /const CHARGE_API_URL = '\/api\/bookings\/charge\/'/);
+assert.doesNotMatch(garage, /CHARGE_API_URL = 'https:\/\//);
+const garageVercel = JSON.parse(read('vercel.json'));
+assert.equal(garageVercel.trailingSlash, undefined);
+const bookingRewrites = garageVercel.rewrites.filter((rule) => String(rule.source).startsWith('/api/bookings'));
+assert.deepEqual(bookingRewrites.map((rule) => [rule.source, rule.destination]), [
+  ['/api/bookings/', 'https://chanceclassics.com/api/bookings/'],
+  ['/api/bookings/:path+/', 'https://chanceclassics.com/api/bookings/:path+/'],
+  ['/api/bookings/:path+', 'https://chanceclassics.com/api/bookings/:path+/'],
+]);
+assert.match(read('site/next.config.ts'), /trailingSlash:\s*true/);
+assert.doesNotMatch(read('site/next.config.ts'), /skipTrailingSlashRedirect/);
 assert.match(garage, /authentication_required/);
 assert.match(garage, /value="balance"/);
 assert.match(garage, /value="overage"/);
@@ -165,6 +176,11 @@ const auth = read('site/lib/charge-auth.ts');
 assert.match(auth, /The session token is not a Supabase access token/);
 assert.match(auth, /console\.error\("authorizeCharge failed"/);
 assert.match(auth, /isAccessJwt/);
+assert.match(auth, /Access-Control-Max-Age", "86400"/);
+assert.match(auth, /Access-Control-Allow-Origin/);
+assert.match(charge, /export async function OPTIONS/);
+assert.match(charge, /headers: chargeCors\(request\)/);
+assert.match(garage, /'Authorization':'Bearer '\+token/);
 
 const chargeWebhookAt = webhook.indexOf('purpose === "charge"');
 const chargeWebhook = webhook.slice(chargeWebhookAt, webhook.indexOf('let savedCard'));

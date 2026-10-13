@@ -495,8 +495,12 @@ const SUPABASE_KEY_INLINE = 'sb_publishable_G1LkmrTPhy0rKAJpV-rwjw_Ulo1bKOj';
 const CREW_LOGIN_FN_URL = SUPABASE_URL + '/functions/v1/create-crew-login';
 const NOTIFY_FN_URL = SUPABASE_URL + '/functions/v1/send-notification';
 const MILEAGE_FN_URL = SUPABASE_URL + '/functions/v1/quote-mileage';
-// Saved-card charges stay on the website, where the Stripe secret lives.
-const CHARGE_API_URL = 'https://chanceclassics.com/api/bookings/charge/';
+// Same-origin on the garage host. Root vercel.json proxies this to
+// https://chanceclassics.com/api/bookings/charge/ . The trailing slash matches
+// site next.config trailingSlash, so neither project 308s the POST.
+// Authorization is a normal request header on that proxy; the service worker
+// does not intercept non-GET, so the bearer token is not dropped.
+const CHARGE_API_URL = '/api/bookings/charge/';
 
 // Resolve the key: inline value wins; otherwise use a saved on-device value.
 function resolveKey(){
