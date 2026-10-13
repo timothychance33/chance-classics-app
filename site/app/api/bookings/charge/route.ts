@@ -30,6 +30,14 @@ function stripeMessage(error: unknown) {
   return message.slice(0, 300);
 }
 
+function failureText(error: unknown) {
+  if (error instanceof Error) {
+    const message = error.message ? `${error.name}: ${error.message}` : error.name;
+    return message.slice(0, 300);
+  }
+  return "The charge request failed.";
+}
+
 async function tellOwnerAboutCharge(
   db: NonNullable<ReturnType<typeof rentalDb>>,
   bookingId: string,
@@ -44,9 +52,14 @@ async function tellOwnerAboutCharge(
   },
 ) {
   if (!input.noticeIds.length) return "";
-  const mailed = await emailOwnerAboutMoney(db, bookingId, input, { sendIfUntracked: true });
-  if (!mailed.ok) return mailed.error || "The email to you did not send.";
-  return "";
+  try {
+    const mailed = await emailOwnerAboutMoney(db, bookingId, input, { sendIfUntracked: true });
+    if (!mailed.ok) return mailed.error || "The email to you did not send.";
+    return "";
+  } catch (error) {
+    console.error("bookings/charge owner email failed", error);
+    return failureText(error);
+  }
 }
 
 async function payLink(stripe: Stripe, input: {
@@ -253,13 +266,26 @@ async function sendBalancePayLink(
 }
 
 export async function OPTIONS(request: Request) {
-  return new NextResponse(null, { status: 204, headers: chargeCors(request) });
+  try {
+    return new NextResponse(null, { status: 204, headers: chargeCors(request) });
+  } catch (error) {
+    console.error("bookings/charge OPTIONS failed", error);
+    return json(request, { error: failureText(error) }, 500);
+  }
 }
 
 export async function POST(request: Request) {
-  if (!(await authorizeCharge(request))) {
-    return json(request, { error: "Sign in as the owner to charge a card or send a pay link." }, 401);
+  try {
+    return await handleChargePost(request);
+  } catch (error) {
+    console.error("bookings/charge POST failed", error);
+    return json(request, { error: failureText(error) }, 500);
   }
+}
+
+async function handleChargePost(request: Request) {
+  const auth = await authorizeCharge(request);
+  if (!auth.ok) return json(request, { error: auth.error }, auth.status);
   const secret = process.env.STRIPE_SECRET_KEY;
   if (!secret) return json(request, { error: "Payments aren’t connected yet." }, 503);
   const db = rentalDb();

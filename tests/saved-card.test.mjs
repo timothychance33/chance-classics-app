@@ -139,6 +139,32 @@ assert.match(sendFn, /sessionBearerHeaders\(\)/);
 assert.match(sendFn, /mode:'pay_link'/);
 assert.match(sendFn, /confirm\(/);
 assert.match(sendFn, /customer_email/);
+assert.match(sendFn, /readChargeBody/);
+assert.match(sendFn, /networkErrorDetail/);
+const chargeAt = garage.indexOf('async function chargeSavedCard');
+const chargeFn = garage.slice(chargeAt, sendAt);
+assert.match(chargeFn, /readChargeBody/);
+assert.match(chargeFn, /networkErrorDetail/);
+assert.match(garage, /Network error: /);
+assert.match(garage, /Session token: present/);
+assert.match(garage, /Session token: missing/);
+assert.match(garage, /'HTTP '\+status/);
+
+const sw = read('sw.js');
+const methodAt = sw.indexOf("req.method !== 'GET'");
+const originAt = sw.indexOf('url.origin !== self.location.origin');
+const respondAt = sw.indexOf('e.respondWith');
+assert.ok(methodAt > 0 && methodAt < respondAt, 'service worker skips non-GET before respondWith');
+assert.ok(originAt > 0 && originAt < respondAt, 'service worker skips cross-origin before respondWith');
+assert.match(garage, /updateViaCache:'none'/);
+
+assert.match(charge, /console\.error\("bookings\/charge POST failed"/);
+assert.match(charge, /return json\(request, \{ error: failureText\(error\) \}, 500\)/);
+assert.match(charge, /if \(!auth\.ok\) return json\(request, \{ error: auth\.error \}, auth\.status\)/);
+const auth = read('site/lib/charge-auth.ts');
+assert.match(auth, /The session token is not a Supabase access token/);
+assert.match(auth, /console\.error\("authorizeCharge failed"/);
+assert.match(auth, /isAccessJwt/);
 
 const chargeWebhookAt = webhook.indexOf('purpose === "charge"');
 const chargeWebhook = webhook.slice(chargeWebhookAt, webhook.indexOf('let savedCard'));
