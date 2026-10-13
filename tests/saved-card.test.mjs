@@ -192,4 +192,41 @@ assert.match(read('site/lib/booking-charge.ts'), /amount_paid_usd: next\.paid/);
 assert.match(read('site/lib/booking-charge.ts'), /OPEN_CHARGE = \["pending"/);
 assert.match(read('site/lib/stripe-booking-events.ts'), /source !== "off_session"/);
 
+const { createRequire } = await import('node:module');
+const { chicagoPayLinkTime, payLinkSentNote, isNewPayLinkRow } = createRequire(import.meta.url)('../pay-link-note.js');
+assert.equal(chicagoPayLinkTime('2026-10-13T15:51:00.000Z'), 'Oct 13, 10:51 AM');
+assert.equal(chicagoPayLinkTime('2026-01-13T16:51:00.000Z'), 'Jan 13, 10:51 AM');
+assert.equal(payLinkSentNote({
+  email: 'blh8426@gmail.com',
+  sentAt: '2026-10-13T15:51:00.000Z',
+  amount: '296.25',
+  status: 'pending',
+}), 'Pay link sent Oct 13, 10:51 AM to blh8426@gmail.com ($296.25)');
+assert.equal(payLinkSentNote({
+  email: 'blh8426@gmail.com',
+  sentAt: '2026-10-13T15:51:00.000Z',
+  amount: 296.25,
+  status: 'succeeded',
+}), 'Pay link sent Oct 13, 10:51 AM to blh8426@gmail.com ($296.25) · Paid');
+assert.equal(payLinkSentNote({ sentAt: '' }), '');
+assert.equal(isNewPayLinkRow({ known: true, id: '' }, { id: 'new', created_at: '2026-10-13T15:51:00.000Z' }, Date.parse('2026-10-13T15:51:00.000Z')), true);
+assert.equal(isNewPayLinkRow({ known: true, id: 'same' }, { id: 'same', created_at: '2026-10-13T15:51:00.000Z' }, Date.parse('2026-10-13T15:52:00.000Z')), false);
+assert.equal(isNewPayLinkRow({ known: false, id: '' }, { id: 'old', created_at: '2026-10-13T15:00:00.000Z' }, Date.parse('2026-10-13T15:51:00.000Z')), false);
+assert.equal(isNewPayLinkRow({ known: false, id: '' }, { id: 'new', created_at: '2026-10-13T15:51:05.000Z' }, Date.parse('2026-10-13T15:51:00.000Z')), true);
+
+assert.match(garage, /pay-link-note\.js/);
+assert.match(garage, /id="payLinkNote-/);
+assert.match(garage, /balance_reminder_sent_at/);
+assert.match(garage, /from\('booking_charges'\)/);
+assert.match(garage, /\.not\('pay_url','is',null\)/);
+assert.match(garage, /loadPayLinkNote\(b\.id\)/);
+assert.match(sendFn, /fetchLatestPayLink/);
+assert.match(sendFn, /isNewPayLinkRow/);
+assert.match(sendFn, /await loadPayLinkNote\(bid\)/);
+const adminRead = read('supabase/migrations/20261013160000_booking_charges_admin_read.sql');
+assert.match(adminRead, /grant select on table rental\.booking_charges to authenticated/);
+assert.match(adminRead, /booking_charges_admin_read/);
+assert.match(adminRead, /using \(rental\.is_admin\(\)\)/);
+assert.doesNotMatch(adminRead, /to anon/);
+
 console.log('saved-card tests passed');

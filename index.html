@@ -482,6 +482,7 @@ img,svg{max-width:100%}
 
 <div id="toast"></div>
 
+<script src="pay-link-note.js"></script>
 <script>
 // ---------- config ----------
 // Supabase connection. The anon/publishable key is safe in a browser app
@@ -3467,8 +3468,61 @@ function chargeSavedCardHtml(b){
       <button class="${saved?'act':'ghost'} tinybtn" type="button" ${saved?'':'disabled'} title="${esc(chargeTitle)}" onclick="chargeSavedCard('${esc(String(b.id))}')">Charge saved card</button>
       ${saved?'':`<button class="act tinybtn" type="button" ${email?'':'disabled'} title="${esc(payTitle)}" onclick="sendBalancePayLink('${esc(String(b.id))}')">Send pay link</button>`}
     </div>
+    <div id="payLinkNote-${sid}" class="meta" style="margin-top:8px">${esc(payLinkNoteText(b))}</div>
     <div id="chargeMsg-${sid}" class="meta" style="margin-top:8px"></div>
   </div>`;
+}
+const payLinks={};
+function payLinkNoteText(b, charge){
+  if(!b) return '';
+  const row=charge===undefined?payLinks[b.id]:charge;
+  if(row&&row.created_at){
+    const reminderLater=b.balance_reminder_sent_at && Date.parse(b.balance_reminder_sent_at)>Date.parse(row.created_at);
+    return payLinkSentNote({
+      email:b.customer_email,
+      sentAt:reminderLater?b.balance_reminder_sent_at:row.created_at,
+      amount:row.amount_usd,
+      status:row.status
+    });
+  }
+  if(b.balance_reminder_sent_at){
+    const due=bookingBalanceDue(b);
+    const paid=b.payment_status==='paid'||due===0;
+    return payLinkSentNote({
+      email:b.customer_email,
+      sentAt:b.balance_reminder_sent_at,
+      amount:paid?null:due,
+      status:paid?'succeeded':''
+    });
+  }
+  return '';
+}
+async function fetchLatestPayLink(bid){
+  if(!SB||!bid) return {error:'no client'};
+  const {data,error}=await SB.from('booking_charges')
+    .select('id,created_at,amount_usd,status,pay_url')
+    .eq('booking_id',bid)
+    .not('pay_url','is',null)
+    .order('created_at',{ascending:false})
+    .limit(1);
+  if(error) return {error};
+  return {row:(data&&data[0])||null};
+}
+function paintPayLinkNote(bid, text){
+  const el=document.getElementById('payLinkNote-'+bookingIdKey(bid));
+  if(el) el.textContent=text||'';
+}
+async function loadPayLinkNote(bid){
+  const b=findBooking(bid);
+  if(!b||!isOwnerView()) return null;
+  const loaded=await fetchLatestPayLink(b.id);
+  if(loaded.error){
+    paintPayLinkNote(bid, payLinkNoteText(b, payLinks[b.id]));
+    return null;
+  }
+  payLinks[b.id]=loaded.row;
+  paintPayLinkNote(bid, payLinkNoteText(b, loaded.row));
+  return loaded.row;
 }
 function payLinkResultHtml(href){
   const safe=/^https:\/\//i.test(href)?href:'';
@@ -3529,6 +3583,7 @@ async function chargeSavedCard(bid){
     const {data, detail}=await readChargeBody(r, hadToken);
     if(data.mode==='pay_link'){
       showPayLinkResult(msg, data);
+      await loadPayLinkNote(bid);
       return;
     }
     if(data.code==='authentication_required'){
@@ -3570,6 +3625,16 @@ async function sendBalancePayLink(bid){
   chargeBusy.add(bid);
   if(msg) msg.textContent='Sending pay link…';
   let hadToken=false;
+  let priorId='';
+  let priorKnown=false;
+  const startedAt=Date.now();
+  try{
+    const prior=await fetchLatestPayLink(b.id);
+    if(!prior.error){
+      priorKnown=true;
+      priorId=prior.row&&prior.row.id?String(prior.row.id):'';
+    }
+  }catch(e){ /* a failed lookup still sends; the catch below only trusts a newer row */ }
   try{
     const headers=await sessionBearerHeaders();
     hadToken=true;
@@ -3587,10 +3652,23 @@ async function sendBalancePayLink(bid){
     const {data, detail}=await readChargeBody(r, hadToken);
     if(data.payUrl || data.mode==='pay_link'){
       showPayLinkResult(msg, data);
+      await loadPayLinkNote(bid);
       return;
     }
     if(msg) msg.textContent=detail;
   }catch(e){
+    let row=null;
+    try{
+      const after=await fetchLatestPayLink(b.id);
+      row=after&&!after.error?after.row:null;
+    }catch(err){ row=null; }
+    if(row&&isNewPayLinkRow({known:priorKnown,id:priorId}, row, startedAt)){
+      payLinks[b.id]=row;
+      const text=payLinkNoteText(b, row);
+      paintPayLinkNote(bid, text);
+      if(msg) msg.textContent=text;
+      return;
+    }
     if(msg) msg.textContent=networkErrorDetail(e, hadToken);
   }finally{
     chargeBusy.delete(bid);
@@ -3631,6 +3709,7 @@ function bookingDetail(bid){
     ${isOwnerView()?driverPayStatusHtml(b):''}
     ${claimBtns}
   `);
+  if(isOwnerView()) loadPayLinkNote(b.id);
 }
 
 function openPrep(bid){
