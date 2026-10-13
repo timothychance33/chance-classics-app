@@ -85,6 +85,31 @@ export async function postOwnerBookingEmail(booking: Record<string, unknown>) {
   return postOwnerNotice({ type: "booking_created", booking });
 }
 
+/** Email the customer the same balance pay-link note the Monday reminder sends. */
+export async function emailCustomerBalancePay(input: {
+  to: string;
+  customerName: string;
+  eventDate: string;
+  carName: string;
+  amount: number;
+  payUrl: string;
+}) {
+  const to = String(input.to || "").trim();
+  if (!to) return { ok: false as const, error: "This booking has no customer email." };
+  if (!/^https:\/\//i.test(String(input.payUrl || ""))) {
+    return { ok: false as const, error: "The pay link is missing." };
+  }
+  return postOwnerNotice({
+    type: "balance_pay",
+    to,
+    customer_name: input.customerName,
+    event_date: input.eventDate,
+    car_name: input.carName,
+    amount: input.amount,
+    pay_url: input.payUrl,
+  });
+}
+
 /** Email Tim the full site quote request. The customer is not a recipient. */
 export async function emailOwnerAboutQuote(quote: Record<string, unknown>) {
   return postOwnerNotice({ type: "quote_request", quote });

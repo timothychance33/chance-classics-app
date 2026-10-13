@@ -3410,25 +3410,66 @@ function chargeSavedCardHtml(b){
   const sid=bookingIdKey(b.id);
   const due=bookingBalanceDue(b);
   const prefill=due!=null && due>0 ? due.toFixed(2) : '';
-  const saved=!!b.stripe_payment_method_id;
+  const saved=!!(b.stripe_customer_id && b.stripe_payment_method_id);
+  const email=String(b.customer_email||'').trim();
+  const note=saved
+    ? 'The Monday reminder emails a pay link. Charge the saved card here for the balance instead, or for an overage or damage.'
+    : (email
+      ? 'No card was saved on this booking, so Charge saved card stays off. Amount and reason stay on. Send pay link emails '+email+' a secure checkout page.'
+      : 'No card was saved on this booking, so Charge saved card stays off. Send pay link stays off until this booking has a customer email.');
+  const chargeTitle=saved
+    ? 'Charge the card saved at checkout'
+    : 'No card was saved on this booking, so Charge saved card stays off. Use Send pay link.';
+  const payTitle=email
+    ? 'Email a pay link to this customer'
+    : 'Add a customer email on the booking before sending a pay link.';
   return `<div class="wfbox">
-    <div class="wfhd">Charge saved card</div>
-    <div class="meta" style="margin-bottom:8px">${saved
-      ? 'The Monday reminder emails a pay link. Charge the saved card here for the balance instead, or for an overage or damage.'
-      : 'No card was saved on this booking. The Monday reminder can still email a pay link when a balance is due.'}</div>
+    <div class="wfhd">${saved?'Charge saved card':'Send pay link'}</div>
+    <div class="meta" style="margin-bottom:8px">${esc(note)}</div>
     <div class="row two">
-      <div><label>Amount</label><input id="chargeAmt-${sid}" inputmode="decimal" placeholder="0.00" value="${esc(prefill)}" ${saved?'':'disabled'}></div>
+      <div><label>Amount</label><input id="chargeAmt-${sid}" inputmode="decimal" placeholder="0.00" value="${esc(prefill)}"></div>
       <div><label>Reason</label>
-        <select id="chargeReason-${sid}" ${saved?'':'disabled'}>
+        <select id="chargeReason-${sid}">
           <option value="balance" selected>Balance</option>
           <option value="overage">Overage</option>
           <option value="damage">Damage</option>
         </select>
       </div>
     </div>
-    <div style="margin-top:10px"><button class="act tinybtn" type="button" ${saved?'':'disabled'} onclick="chargeSavedCard('${esc(String(b.id))}')">Charge saved card</button></div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="${saved?'act':'ghost'} tinybtn" type="button" ${saved?'':'disabled'} title="${esc(chargeTitle)}" onclick="chargeSavedCard('${esc(String(b.id))}')">Charge saved card</button>
+      ${saved?'':`<button class="act tinybtn" type="button" ${email?'':'disabled'} title="${esc(payTitle)}" onclick="sendBalancePayLink('${esc(String(b.id))}')">Send pay link</button>`}
+    </div>
     <div id="chargeMsg-${sid}" class="meta" style="margin-top:8px"></div>
   </div>`;
+}
+function payLinkResultHtml(href){
+  const safe=/^https:\/\//i.test(href)?href:'';
+  if(!safe) return '';
+  return `<p style="margin:8px 0 0"><a href="${esc(safe)}" target="_blank" rel="noopener">Open the pay link</a></p>
+    <p style="margin:8px 0 0;word-break:break-all">${esc(safe)}</p>
+    <button class="ghost tinybtn" type="button" data-url="${esc(safe)}" onclick="copyPayLink(this)">Copy</button>`;
+}
+function showPayLinkResult(msg, data){
+  const href=String(data&&data.payUrl||'');
+  const note=data&&data.emailedTo
+    ? 'Emailed '+data.emailedTo+'.'
+    : ((data&&data.error)||'The pay link was created, but the email did not send.');
+  const extra=data&&data.ownerEmailFailed
+    ? ' '+(data.ownerEmailError||'The email to you did not send.')
+    : '';
+  if(msg) msg.innerHTML=esc(note+extra)+payLinkResultHtml(href);
+  toast(data&&data.emailedTo?'Pay link emailed':'Pay link ready to copy');
+}
+function copyPayLink(btn){
+  const url=btn&&btn.getAttribute('data-url')||'';
+  if(!url){ toast('No pay link to copy'); return; }
+  const done=()=>toast('Pay link copied');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(done).catch(()=>window.prompt('Copy this pay link:', url));
+    return;
+  }
+  window.prompt('Copy this pay link:', url);
 }
 const chargeBusy=new Set();
 async function chargeSavedCard(bid){
@@ -3456,6 +3497,10 @@ async function chargeSavedCard(bid){
       })
     });
     const data=await r.json().catch(()=>({}));
+    if(data.mode==='pay_link'){
+      showPayLinkResult(msg, data);
+      return;
+    }
     if(data.code==='authentication_required'){
       const href=String(data.payUrl||'');
       const link=/^https:\/\//i.test(href)?`<p style="margin:8px 0 0"><a href="${esc(href)}" target="_blank" rel="noopener">Open the pay link</a></p>`:'';
@@ -3474,6 +3519,46 @@ async function chargeSavedCard(bid){
     bookingDetail(bid);
   }catch(e){
     if(msg) msg.textContent=e.message||'The charge did not go through.';
+  }finally{
+    chargeBusy.delete(bid);
+  }
+}
+async function sendBalancePayLink(bid){
+  if(!isOwnerView()){ toast('Owner only'); return; }
+  if(chargeBusy.has(bid)) return;
+  const b=findBooking(bid);
+  if(!b){ toast('Booking not found'); return; }
+  const sid=bookingIdKey(bid);
+  const msg=document.getElementById('chargeMsg-'+sid);
+  const email=String(b.customer_email||'').trim();
+  const amount=parseMoneyInput(document.getElementById('chargeAmt-'+sid)&&document.getElementById('chargeAmt-'+sid).value);
+  const reason=(document.getElementById('chargeReason-'+sid)&&document.getElementById('chargeReason-'+sid).value)||'balance';
+  if(msg) msg.textContent='';
+  if(!email){ if(msg) msg.textContent='Add a customer email on this booking before a pay link can be sent.'; return; }
+  if(amount==null || amount<=0){ if(msg) msg.textContent='Enter an amount.'; return; }
+  if(!confirm('Send a pay link for $'+amount.toFixed(2)+' to '+email+'?')) return;
+  chargeBusy.add(bid);
+  if(msg) msg.textContent='Sending pay link…';
+  try{
+    const r=await fetch(CHARGE_API_URL,{
+      method:'POST',
+      headers:await sessionBearerHeaders(),
+      body:JSON.stringify({
+        bookingId:b.id,
+        amount,
+        reason,
+        mode:'pay_link',
+        clientRequestId:(window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())
+      })
+    });
+    const data=await r.json().catch(()=>({}));
+    if(data.payUrl || data.mode==='pay_link'){
+      showPayLinkResult(msg, data);
+      return;
+    }
+    if(msg) msg.textContent=data.error||'The pay link did not send.';
+  }catch(e){
+    if(msg) msg.textContent=e.message||'The pay link did not send.';
   }finally{
     chargeBusy.delete(bid);
   }
