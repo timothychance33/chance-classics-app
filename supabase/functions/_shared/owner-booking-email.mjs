@@ -191,6 +191,7 @@ export function ownerMoneyReasonText(money) {
   if (reason === "balance") return "Balance";
   if (reason === "overage") return "Overage";
   if (reason === "damage") return "Damage";
+  if (reason === "pay_link") return `Pay link${which}`;
   return oneLine(money?.reason) || "Payment";
 }
 
@@ -272,7 +273,9 @@ export function ownerBookingMoneyHtml(booking, money, appUrl) {
     ? "A saved-card charge did not go through. Amount paid and balance did not change."
     : reason === "refund"
       ? "A refund was recorded on this booking. Amount paid and balance below are the new totals."
-      : "A payment was recorded on this booking. Amount paid and balance below are the new totals.";
+      : reason === "pay_link"
+        ? "A pay link was emailed to the customer. Amount paid and balance do not change until they pay."
+        : "A payment was recorded on this booking. Amount paid and balance below are the new totals.";
   const detail = oneLine(money?.detail);
   const detailHtml = detail ? `<p style="color:#6b6052">${esc(detail)}</p>` : "";
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#21130f">

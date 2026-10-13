@@ -187,6 +187,11 @@ assert.match(moneyMail, /new totals/);
 const failedMail = ownerBookingMoneyHtml(booking, { amount: 12, reason: 'failed', chargeReason: 'balance', amountPaid: 250, balance: 301.25 }, '');
 assert.match(failedMail, /did not go through/);
 assert.match(failedMail, /Charge failed \(balance\)/);
+const payLinkMail = ownerBookingMoneyHtml(booking, { amount: 301.25, reason: 'pay_link', chargeReason: 'balance', amountPaid: 250, balance: 301.25, detail: 'https://checkout.stripe.com/c/pay/cs_test' }, '');
+assert.match(payLinkMail, /Pay link \(balance\)/);
+assert.match(payLinkMail, /do not change until they pay/);
+assert.match(payLinkMail, /https:\/\/checkout\.stripe\.com\/c\/pay\/cs_test/);
+assert.doesNotMatch(payLinkMail, /new totals/);
 
 assert.deepEqual(paymentNoticeIds({ eventId: 'evt_1', paymentIntentId: 'pi_1', sessionId: 'cs_1' }), ['evt_1', 'pi_1', 'cs_1']);
 assert.deepEqual(paymentNoticeIds({ eventId: 'evt_1', paymentIntentId: 'evt_1' }), ['evt_1']);

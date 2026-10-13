@@ -22,6 +22,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { balanceReminderMonday, reminderEventWindow } from "../_shared/saved-card.mjs";
+import { balancePayHtml, balancePaySubject } from "../_shared/balance-pay-email.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -528,6 +529,7 @@ Deno.serve(async (req) => {
   }
 
   // ================= 4) BALANCE REMINDER (Monday before the event, Chicago) =================
+  // Customer copy is balancePayHtml, the same note a garage pay link emails.
   // Hourly pg_cron sends these after 7am. The Monday driver-digest call can send too.
   // balance_reminder_sent_at stops a second email.
   summary.balance_reminders = { sent: 0, skipped: 0, errors: [] as string[] };
@@ -602,15 +604,17 @@ Deno.serve(async (req) => {
               eventDate,
             });
             const cn = await carName(b.car_id);
-            const who = esc(b.customer_name || "there");
-            await sendEmail(email, `Balance due the day before your event — ${fmtEventDate(eventDate)}`, `
-            <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#21130f">
-              <h2 style="color:#6e1d1a">Your rental balance</h2>
-              <p>Hi ${who}, the balance for your Chance Classics rental${cn ? ` (${esc(cn)})` : ""} on ${esc(fmtEventDate(eventDate))} is <b>$${balance.toFixed(2)}</b>.</p>
-              <p>The booking total includes 10.25% sales tax. The balance is due the day before the event.</p>
-              <p><a href="${esc(payUrl)}" style="background:#6e1d1a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Pay the balance</a></p>
-              <p style="color:#6b6052;font-size:13px">Questions? Reply to this email or call (318) 344-5001.</p>
-            </div>`);
+            await sendEmail(
+              email,
+              balancePaySubject(eventDate),
+              balancePayHtml({
+                firstName: b.customer_name,
+                eventDate,
+                car: cn,
+                amount: balance,
+                payUrl,
+              }),
+            );
             balanceSummary.sent += 1;
           } catch (e) {
             await sb.from("bookings").update({ balance_reminder_sent_at: null }).eq("id", b.id);
