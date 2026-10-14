@@ -56,6 +56,17 @@ export async function POST(request: Request) {
   if (event.type === "payment_intent.succeeded" || event.type === "payment_intent.payment_failed") {
     return handleOffSessionIntent(db, event);
   }
+  if (event.type === "checkout.session.expired") {
+    const expired = event.data.object as Stripe.Checkout.Session;
+    if (expired.metadata?.purpose === "charge") {
+      const marked = await db.from("booking_charges").update({
+        status: "failed",
+        error_message: "expired: Stripe checkout session expired before payment.",
+      }).eq("stripe_checkout_session_id", expired.id).eq("status", "pending");
+      if (marked.error) return NextResponse.json({ error: marked.error.message }, { status: 500 });
+    }
+    return NextResponse.json({ received: true, expired: true });
+  }
   if (event.type !== "checkout.session.completed") {
     return NextResponse.json({ received: true });
   }

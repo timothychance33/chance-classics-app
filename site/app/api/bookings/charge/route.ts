@@ -117,6 +117,23 @@ async function payLink(stripe: Stripe, input: {
   }
 }
 
+/** A saved pay link is only reused while its Stripe checkout is still open (Checkout links die after 24h). */
+async function payLinkStillOpen(
+  stripe: Stripe,
+  row: { pay_url?: unknown; stripe_checkout_session_id?: unknown; created_at?: unknown },
+) {
+  const id = String(row.stripe_checkout_session_id || "");
+  if (!row.pay_url || !id.startsWith("cs_")) return false;
+  try {
+    const session = await stripe.checkout.sessions.retrieve(id);
+    if (session.status !== "open") return false;
+    return !session.expires_at || session.expires_at * 1000 > Date.now() + 10 * 60 * 1000;
+  } catch {
+    const created = Date.parse(String(row.created_at || ""));
+    return Number.isFinite(created) && Date.now() - created < 23 * 60 * 60 * 1000;
+  }
+}
+
 function sameMoney(left: unknown, right: number) {
   const n = Number(left);
   if (!Number.isFinite(n)) return false;
@@ -187,7 +204,7 @@ async function sendBalancePayLink(
   if ("error" in checked) return json(request, { error: checked.error }, 409);
 
   const pending = await db.from("booking_charges")
-    .select("id,pay_url,stripe_checkout_session_id,amount_usd")
+    .select("id,pay_url,stripe_checkout_session_id,amount_usd,created_at")
     .eq("booking_id", input.bookingId)
     .eq("reason", input.reason)
     .eq("status", "pending")
@@ -200,7 +217,14 @@ async function sendBalancePayLink(
         : pending.error.message,
     }, missing ? 503 : 500);
   }
-  const match = (pending.data || []).find((item) => sameMoney(item.amount_usd, amountUsd));
+  let match = (pending.data || []).find((item) => sameMoney(item.amount_usd, amountUsd));
+  if (match && !(await payLinkStillOpen(stripe, match))) {
+    await db.from("booking_charges").update({
+      status: "failed",
+      error_message: "expired: Stripe checkout was no longer open; a new pay link was made.",
+    }).eq("id", match.id).eq("status", "pending");
+    match = undefined;
+  }
   let payUrl = match?.pay_url ? String(match.pay_url) : "";
   let sessionId = match?.stripe_checkout_session_id ? String(match.stripe_checkout_session_id) : "";
 
@@ -222,13 +246,7 @@ async function sendBalancePayLink(
     payUrl = session.url || "";
     sessionId = session.id;
     if (!payUrl) return json(request, { error: "Stripe did not return a pay link." }, 502);
-    const saved = match?.id
-      ? await db.from("booking_charges").update({
-        stripe_checkout_session_id: session.id,
-        pay_url: payUrl,
-        error_message: null,
-      }).eq("id", match.id)
-      : await db.from("booking_charges").insert({
+    const saved = await db.from("booking_charges").insert({
         booking_id: input.bookingId,
         amount_usd: amountUsd,
         reason: input.reason,
@@ -236,6 +254,9 @@ async function sendBalancePayLink(
         stripe_checkout_session_id: session.id,
         pay_url: payUrl,
       });
+    if (!saved.error && input.reason === "balance") {
+      await db.from("bookings").update({ stripe_balance_session_id: session.id }).eq("id", input.bookingId);
+    }
     if (saved.error) {
       return json(request, {
         ok: false,
