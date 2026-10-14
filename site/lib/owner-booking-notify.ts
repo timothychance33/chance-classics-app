@@ -63,6 +63,14 @@ function notifyHeaders() {
   return headers;
 }
 
+export function resendMessageIdFromNotify(payload: unknown) {
+  if (!payload || typeof payload !== "object") return "";
+  const result = (payload as { result?: unknown }).result;
+  if (!result || typeof result !== "object" || !("id" in result)) return "";
+  const id = (result as { id?: unknown }).id;
+  return typeof id === "string" ? id.trim() : "";
+}
+
 async function postOwnerNotice(body: Record<string, unknown>) {
   const url = notifyUrl();
   const headers = notifyHeaders();
@@ -78,7 +86,8 @@ async function postOwnerNotice(body: Record<string, unknown>) {
     const text = await response.text().catch(() => "");
     return { ok: false as const, error: text || `Notify failed (${response.status}).` };
   }
-  return { ok: true as const };
+  const payload = await response.json().catch(() => null);
+  return { ok: true as const, resendMessageId: resendMessageIdFromNotify(payload) };
 }
 
 export async function postOwnerBookingEmail(booking: Record<string, unknown>) {
@@ -93,6 +102,11 @@ export async function emailCustomerBalancePay(input: {
   carName: string;
   amount: number;
   payUrl: string;
+  eventType?: string;
+  startTime?: string;
+  endTime?: string;
+  pickupLocation?: string;
+  returnLocation?: string;
 }) {
   const to = String(input.to || "").trim();
   if (!to) return { ok: false as const, error: "This booking has no customer email." };
@@ -107,6 +121,11 @@ export async function emailCustomerBalancePay(input: {
     car_name: input.carName,
     amount: input.amount,
     pay_url: input.payUrl,
+    event_type: input.eventType || "",
+    start_time: input.startTime || "",
+    end_time: input.endTime || "",
+    pickup_location: input.pickupLocation || "",
+    return_location: input.returnLocation || "",
   });
 }
 

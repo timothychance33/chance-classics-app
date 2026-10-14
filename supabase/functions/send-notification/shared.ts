@@ -1,8 +1,11 @@
 // Shared helpers for send-notification
+import { CUSTOMER_REPLY_TO, DEFAULT_FROM_EMAIL, htmlToPlainText } from "../_shared/email-plain.mjs";
+
 export const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 export const NOTIFY_SECRET = Deno.env.get("NOTIFY_SECRET") ?? "";
 export const OWNER_EMAIL = Deno.env.get("OWNER_EMAIL") ?? "chanceclassics@gmail.com";
-export const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "noreply@chanceclassics.com";
+export const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? DEFAULT_FROM_EMAIL;
+export const REPLY_TO = CUSTOMER_REPLY_TO;
 export const APP_URL = Deno.env.get("APP_URL") ?? "https://app.chanceclassics.com";
 
 export const cors = {
@@ -20,14 +23,22 @@ export function esc(s: unknown) {
   }[c] as string));
 }
 
-export async function sendEmail(to: string, subject: string, html: string) {
+export async function sendEmail(to: string, subject: string, html: string, text?: string) {
+  const plain = String(text || "").trim() || htmlToPlainText(html) || subject;
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${RESEND_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ from: `Chance Classics <${FROM_EMAIL}>`, to, subject, html }),
+    body: JSON.stringify({
+      from: `Chance Classics <${FROM_EMAIL}>`,
+      to,
+      reply_to: REPLY_TO,
+      subject,
+      html,
+      text: plain,
+    }),
   });
   if (!r.ok) {
     const t = await r.text();

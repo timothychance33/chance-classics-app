@@ -8,7 +8,9 @@ import {
   balanceFirstName,
   balancePayHtml,
   balancePaySubject,
+  balancePayText,
 } from '../supabase/functions/_shared/balance-pay-email.mjs';
+import { htmlToPlainText } from '../supabase/functions/_shared/email-plain.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -94,32 +96,77 @@ assert.match(garage, /value="damage"/);
 assert.equal(balanceEventDate('2026-10-17'), 'Sat Oct 17');
 assert.equal(balanceFirstName('Ada Lovelace'), 'Ada');
 assert.equal(balanceFirstName(''), 'there');
-assert.equal(balancePaySubject('2026-10-17'), 'Getting ready for your event on Sat Oct 17, balance due');
-const payMail = balancePayHtml({
+assert.equal(balancePaySubject('2026-10-17'), 'Your Sat Oct 17 Chance Classics booking: final details');
+assert.equal(balancePaySubject(''), 'Your Chance Classics booking: final details');
+const payInput = {
   firstName: 'Ada <b> Lovelace',
   eventDate: '2026-10-17',
+  eventType: 'Wedding',
+  startTime: '14:00',
+  endTime: '18:00',
   car: 'Brenda & Co',
+  pickup: 'Chapel',
+  dropoff: 'Hall',
   amount: 301.25,
   payUrl: 'https://checkout.stripe.com/c/pay/cs_test_123',
-});
+};
+const payMail = balancePayHtml(payInput);
 assert.match(payMail, /Hi Ada,/);
 assert.match(payMail, /We're so excited to be a part of your event on Sat Oct 17!/);
 assert.match(payMail, /Brenda &amp; Co is getting polished up and ready to roll\./);
 assert.match(payMail, /Your remaining balance is \$301\.25 \(the booking total includes 10\.25% sales tax\), due the day before your event\. You can pay securely with the button below\./);
 assert.match(payMail, />Pay the balance</);
 assert.match(payMail, /href="https:\/\/checkout\.stripe\.com\/c\/pay\/cs_test_123"/);
+const buttonAt = payMail.indexOf('>Pay the balance<');
+const detailsAt = payMail.indexOf('>Date<');
+const writtenLinkAt = payMail.lastIndexOf('https://checkout.stripe.com/c/pay/cs_test_123');
+assert.ok(buttonAt > 0 && buttonAt < detailsAt && detailsAt < writtenLinkAt, 'booking details and the full pay link sit below the button');
+assert.match(payMail, />Time</);
+assert.match(payMail, /2:00PM – 6:00PM/);
+assert.match(payMail, />Event</);
+assert.match(payMail, />Wedding</);
+assert.match(payMail, />Car</);
+assert.match(payMail, />Pickup</);
+assert.match(payMail, />Chapel</);
+assert.match(payMail, />Drop-off</);
+assert.match(payMail, />Hall</);
+assert.match(payMail, />Balance</);
 assert.match(payMail, /If you have any questions at all, just reply to this email or give us a call at \(318\) 344-5001\./);
 assert.match(payMail, /See you soon!<br>Tim Chance<br>Chance Classics/);
 assert.doesNotMatch(payMail, /Ada <b>/);
 assert.match(balancePayHtml({ firstName: 'Ada', eventDate: '2026-10-17', amount: 10, payUrl: 'https://checkout.stripe.com/x' }), /Your car is getting polished up and ready to roll\./);
+const payText = balancePayText(payInput);
+assert.match(payText, /Hi Ada,/);
+assert.match(payText, /We're so excited to be a part of your event on Sat Oct 17!/);
+assert.match(payText, /Brenda & Co is getting polished up and ready to roll\./);
+assert.match(payText, /Date: Sat Oct 17/);
+assert.match(payText, /Time: 2:00PM – 6:00PM/);
+assert.match(payText, /Balance: \$301\.25/);
+assert.match(payText, /https:\/\/checkout\.stripe\.com\/c\/pay\/cs_test_123/);
+assert.doesNotMatch(payText, /<a |<p>/);
+assert.equal(
+  htmlToPlainText('<p>Hi <b>Ada</b>,</p><p><a href="https://pay.example/abc">Pay</a></p>'),
+  'Hi Ada,\n\nPay\nhttps://pay.example/abc',
+);
 
 assert.match(scheduled, /balancePaySubject/);
 assert.match(scheduled, /balancePayHtml/);
+assert.match(scheduled, /balancePayText/);
+assert.match(scheduled, /reply_to: CUSTOMER_REPLY_TO/);
+assert.match(scheduled, /text: plain/);
+assert.match(scheduled, /FROM_EMAIL = Deno\.env\.get\("FROM_EMAIL"\) \?\? DEFAULT_FROM_EMAIL/);
 assert.doesNotMatch(scheduled, /Balance due the day before your event/);
 
 const notify = read('supabase/functions/send-notification/index.ts');
 assert.match(notify, /type === "balance_pay"/);
 assert.match(notify, /balancePayHtml/);
+assert.match(notify, /balancePayText\(payMail\)/);
+const sharedMail = read('supabase/functions/send-notification/shared.ts');
+assert.match(sharedMail, /FROM_EMAIL = Deno\.env\.get\("FROM_EMAIL"\) \?\? DEFAULT_FROM_EMAIL/);
+assert.match(sharedMail, /reply_to: REPLY_TO/);
+assert.match(sharedMail, /text: plain/);
+assert.match(read('supabase/functions/_shared/email-plain.mjs'), /bookings@chanceclassics\.com/);
+assert.match(read('supabase/functions/_shared/email-plain.mjs'), /chanceclassics@gmail\.com/);
 const payTypeAt = notify.indexOf('type === "balance_pay"');
 const ownerCreatedAt = notify.indexOf('type === "booking_created"');
 assert.ok(payTypeAt > 0 && payTypeAt < ownerCreatedAt, 'customer pay-link mail is its own send-notification type');
@@ -127,6 +174,9 @@ assert.ok(payTypeAt > 0 && payTypeAt < ownerCreatedAt, 'customer pay-link mail i
 assert.match(charge, /mode === "pay_link"/);
 assert.match(charge, /customer_email/);
 assert.match(charge, /emailCustomerBalancePay/);
+assert.match(charge, /resend_message_id: resendMessageId/);
+assert.match(charge, /resendMessageId: mailed\.resendMessageId/);
+assert.match(charge, /if \(mailed\.ok\)/);
 assert.match(charge, /status: "pending"/);
 assert.match(charge, /stripe_checkout_session_id/);
 assert.match(charge, /pay_url: payUrl/);
@@ -137,6 +187,11 @@ assert.match(charge, /purpose: "charge"/);
 assert.doesNotMatch(charge, /No card was saved on this booking\./);
 
 assert.match(read('site/lib/owner-booking-notify.ts'), /type: "balance_pay"/);
+assert.match(read('site/lib/owner-booking-notify.ts'), /resendMessageId: resendMessageIdFromNotify\(payload\)/);
+const messageIdMigration = read('supabase/migrations/20261014170000_booking_charges_resend_message_id.sql');
+assert.match(messageIdMigration, /alter table rental\.booking_charges/);
+assert.match(messageIdMigration, /add column if not exists resend_message_id text/);
+assert.match(messageIdMigration, /It is not applied by this pull request/);
 
 assert.match(garage, /Send pay link/);
 assert.match(garage, /mode:'pay_link'/);

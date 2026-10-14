@@ -29,8 +29,8 @@ export function balanceFirstName(name) {
 export function balancePaySubject(eventDate) {
   const date = balanceEventDate(eventDate);
   return date
-    ? `Getting ready for your event on ${date}, balance due`
-    : "Getting ready for your event, balance due";
+    ? `Your ${date} Chance Classics booking: final details`
+    : "Your Chance Classics booking: final details";
 }
 
 function money(amount) {
@@ -44,23 +44,101 @@ function safePayUrl(value) {
   return /^https:\/\//i.test(url) ? url : "";
 }
 
-export function balancePayHtml(input) {
-  const who = esc(balanceFirstName(input?.firstName ?? input?.customerName));
-  const date = esc(balanceEventDate(input?.eventDate) || "your event");
-  const car = String(input?.car ?? input?.carName ?? "").trim();
+function clock(value) {
+  const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return "";
+  let hour = Number(match[1]);
+  if (hour > 23) return "";
+  const suffix = hour >= 12 ? "PM" : "AM";
+  hour = hour % 12 || 12;
+  return `${hour}:${match[2]}${suffix}`;
+}
+
+function timeLabel(input) {
+  const start = clock(input?.startTime ?? input?.start_time);
+  const end = clock(input?.endTime ?? input?.end_time);
+  if (start && end) return `${start} – ${end}`;
+  return start || end;
+}
+
+function detailPairs(input) {
+  const pairs = [
+    ["Date", balanceEventDate(input?.eventDate) || ""],
+    ["Time", timeLabel(input)],
+    ["Event", String(input?.eventType ?? input?.event_type ?? "").trim()],
+    ["Car", String(input?.car ?? input?.carName ?? input?.car_name ?? "").trim()],
+    ["Pickup", String(input?.pickup ?? input?.pickupLocation ?? input?.pickup_location ?? "").trim()],
+    ["Drop-off", String(input?.dropoff ?? input?.returnLocation ?? input?.return_location ?? "").trim()],
+    ["Balance", money(input?.amount)],
+  ];
+  return pairs.filter(([, value]) => value);
+}
+
+function warmCopy(input) {
+  const who = balanceFirstName(input?.firstName ?? input?.customerName);
+  const date = balanceEventDate(input?.eventDate) || "your event";
+  const car = String(input?.car ?? input?.carName ?? input?.car_name ?? "").trim();
   const carSentence = car
-    ? `${esc(car)} is getting polished up and ready to roll.`
+    ? `${car} is getting polished up and ready to roll.`
     : "Your car is getting polished up and ready to roll.";
+  return {
+    who,
+    greeting: `We're so excited to be a part of your event on ${date}! ${carSentence}`,
+    balance: `Your remaining balance is ${money(input?.amount)} (the booking total includes 10.25% sales tax), due the day before your event. You can pay securely with the button below.`,
+  };
+}
+
+export function balancePayHtml(input) {
+  const copy = warmCopy(input);
   const href = safePayUrl(input?.payUrl ?? input?.pay_url);
   const button = href
     ? `<p><a href="${esc(href)}" style="background:#6e1d1a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">Pay the balance</a></p>`
     : "";
+  const details = detailPairs(input)
+    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;color:#6b6052;font-size:13px;vertical-align:top">${esc(label)}</td><td style="padding:4px 0;font-weight:600">${esc(value)}</td></tr>`)
+    .join("");
+  const detailsTable = details
+    ? `<table style="border-collapse:collapse;margin:14px 0">${details}</table>`
+    : "";
+  const writtenLink = href
+    ? `<p style="font-size:14px;word-break:break-all;margin:0 0 16px">${esc(href)}</p>`
+    : "";
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#21130f">
-    <p>Hi ${who},</p>
-    <p>We're so excited to be a part of your event on ${date}! ${carSentence}</p>
-    <p>Your remaining balance is ${esc(money(input?.amount))} (the booking total includes 10.25% sales tax), due the day before your event. You can pay securely with the button below.</p>
+    <p>Hi ${esc(copy.who)},</p>
+    <p>${esc(copy.greeting)}</p>
+    <p>${esc(copy.balance)}</p>
     ${button}
+    ${detailsTable}
+    ${writtenLink}
     <p>If you have any questions at all, just reply to this email or give us a call at (318) 344-5001.</p>
     <p>See you soon!<br>Tim Chance<br>Chance Classics</p>
   </div>`;
+}
+
+export function balancePayText(input) {
+  const copy = warmCopy(input);
+  const href = safePayUrl(input?.payUrl ?? input?.pay_url);
+  const lines = [
+    `Hi ${copy.who},`,
+    "",
+    copy.greeting,
+    "",
+    copy.balance,
+  ];
+  if (href) lines.push("", "Pay the balance");
+  const details = detailPairs(input);
+  if (details.length) {
+    lines.push("");
+    for (const [label, value] of details) lines.push(`${label}: ${value}`);
+  }
+  if (href) lines.push("", href);
+  lines.push(
+    "",
+    "If you have any questions at all, just reply to this email or give us a call at (318) 344-5001.",
+    "",
+    "See you soon!",
+    "Tim Chance",
+    "Chance Classics",
+  );
+  return lines.join("\n");
 }

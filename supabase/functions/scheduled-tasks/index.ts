@@ -22,12 +22,13 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { balanceReminderMonday, reminderEventWindow } from "../_shared/saved-card.mjs";
-import { balancePayHtml, balancePaySubject } from "../_shared/balance-pay-email.mjs";
+import { CUSTOMER_REPLY_TO, DEFAULT_FROM_EMAIL, htmlToPlainText } from "../_shared/email-plain.mjs";
+import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/balance-pay-email.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "chanceclassics@2ndchancespeedshop.com";
+const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? DEFAULT_FROM_EMAIL;
 const OWNER_EMAIL = Deno.env.get("OWNER_EMAIL") ?? "chanceclassics@gmail.com";
 const APP_URL = Deno.env.get("APP_URL") ?? "https://app.chanceclassics.com";
 const SITE_URL = Deno.env.get("SITE_URL") ?? "https://www.chanceclassics.com";
@@ -170,11 +171,19 @@ function esc(s: unknown) {
   }[c] as string));
 }
 
-async function sendEmail(to: string, subject: string, html: string) {
+async function sendEmail(to: string, subject: string, html: string, text?: string) {
+  const plain = String(text || "").trim() || htmlToPlainText(html) || subject;
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: `Chance Classics <${FROM_EMAIL}>`, to, subject, html }),
+    body: JSON.stringify({
+      from: `Chance Classics <${FROM_EMAIL}>`,
+      to,
+      reply_to: CUSTOMER_REPLY_TO,
+      subject,
+      html,
+      text: plain,
+    }),
   });
   if (!r.ok) {
     const t = await r.text();
@@ -549,7 +558,7 @@ Deno.serve(async (req) => {
     } else {
       const eventWindow = reminderEventWindow(chicagoNow.date);
       const due = await sb.from("bookings")
-        .select("id,customer_name,customer_email,event_date,status,total_usd,amount_paid_usd,balance_due_usd,balance_reminder_sent_at,stripe_customer_id,car_id")
+        .select("id,customer_name,customer_email,event_date,event_type,start_time,end_time,pickup_location,return_location,status,total_usd,amount_paid_usd,balance_due_usd,balance_reminder_sent_at,stripe_customer_id,car_id")
         .is("balance_reminder_sent_at", null)
         .not("customer_email", "is", null)
         .gte("event_date", eventWindow.from)
@@ -604,16 +613,23 @@ Deno.serve(async (req) => {
               eventDate,
             });
             const cn = await carName(b.car_id);
+            const payMail = {
+              firstName: b.customer_name,
+              eventDate,
+              car: cn,
+              amount: balance,
+              payUrl,
+              eventType: b.event_type,
+              startTime: b.start_time,
+              endTime: b.end_time,
+              pickup: b.pickup_location,
+              dropoff: b.return_location,
+            };
             await sendEmail(
               email,
               balancePaySubject(eventDate),
-              balancePayHtml({
-                firstName: b.customer_name,
-                eventDate,
-                car: cn,
-                amount: balance,
-                payUrl,
-              }),
+              balancePayHtml(payMail),
+              balancePayText(payMail),
             );
             balanceSummary.sent += 1;
           } catch (e) {
