@@ -128,6 +128,23 @@ function chargesTableMissing(error: { code?: string; message?: string } | null) 
   return error.code === "42P01" || error.code === "PGRST205" || /booking_charges/i.test(error.message || "");
 }
 
+async function storePayLinkMessageId(
+  db: NonNullable<ReturnType<typeof rentalDb>>,
+  input: { sessionId: string; chargeId: string; resendMessageId: string },
+) {
+  const resendMessageId = String(input.resendMessageId || "").trim();
+  if (!resendMessageId) return "";
+  const update = db.from("booking_charges").update({ resend_message_id: resendMessageId });
+  const saved = input.sessionId
+    ? await update.eq("stripe_checkout_session_id", input.sessionId)
+    : input.chargeId
+      ? await update.eq("id", input.chargeId)
+      : null;
+  if (!saved?.error) return "";
+  if (/resend_message_id/i.test(saved.error.message || "")) return "";
+  return saved.error.message;
+}
+
 async function customerCarName(db: NonNullable<ReturnType<typeof rentalDb>>, carId: unknown) {
   if (!carId) return "";
   const car = await db.from("cars").select("name").eq("id", String(carId)).maybeSingle();
@@ -143,6 +160,11 @@ async function sendBalancePayLink(
     customer_name?: string | null;
     customer_email?: string | null;
     event_date?: string | null;
+    event_type?: string | null;
+    start_time?: string | null;
+    end_time?: string | null;
+    pickup_location?: string | null;
+    return_location?: string | null;
     car_id?: string | null;
     total_usd?: unknown;
     amount_paid_usd?: unknown;
@@ -233,7 +255,25 @@ async function sendBalancePayLink(
     carName,
     amount: amountUsd,
     payUrl,
+    eventType: String(row.event_type || ""),
+    startTime: String(row.start_time || ""),
+    endTime: String(row.end_time || ""),
+    pickupLocation: String(row.pickup_location || ""),
+    returnLocation: String(row.return_location || ""),
   });
+  let messageIdError = "";
+  if (mailed.ok) {
+    try {
+      messageIdError = await storePayLinkMessageId(db, {
+        sessionId,
+        chargeId: match?.id ? String(match.id) : "",
+        resendMessageId: mailed.resendMessageId,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The Resend id was not saved.";
+      if (!/resend_message_id/i.test(message)) messageIdError = message;
+    }
+  }
   let stampError = "";
   if (mailed.ok && input.reason === "balance") {
     const stamped = await db.from("bookings").update({
@@ -262,6 +302,7 @@ async function sendBalancePayLink(
     ...(mailed.ok ? {} : { error: mailed.error || "The pay link email did not send." }),
     ...(ownerEmailError ? { ownerEmailFailed: true, ownerEmailError } : {}),
     ...(stampError ? { reminderStampError: stampError } : {}),
+    ...(messageIdError ? { resendMessageIdError: messageIdError } : {}),
   }, mailed.ok ? 200 : 502);
 }
 
@@ -306,7 +347,7 @@ async function handleChargePost(request: Request) {
   if (!Number.isFinite(amount)) return json(request, { error: "Enter an amount." }, 400);
 
   const loaded = await db.from("bookings").select(
-    "id,status,customer_name,customer_email,event_date,car_id,total_usd,amount_paid_usd,notes,payment_status,stripe_customer_id,stripe_payment_method_id",
+    "id,status,customer_name,customer_email,event_date,event_type,start_time,end_time,pickup_location,return_location,car_id,total_usd,amount_paid_usd,notes,payment_status,stripe_customer_id,stripe_payment_method_id",
   ).eq("id", bookingId).maybeSingle();
   if (loaded.error && /stripe_customer_id|stripe_payment_method_id/i.test(loaded.error.message || "")) {
     return json(request, { error: "Apply the saved-card migration before charging a card." }, 503);

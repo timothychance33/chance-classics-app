@@ -32,7 +32,7 @@ import {
   ownerBookingMoneySubject,
 } from "../_shared/owner-booking-email.mjs";
 import { ownerQuoteRequestHtml, ownerQuoteRequestSubject } from "../_shared/owner-quote-email.mjs";
-import { balancePayHtml, balancePaySubject } from "../_shared/balance-pay-email.mjs";
+import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/balance-pay-email.mjs";
 
 function bearerToken(req: Request): string {
   const header = req.headers.get("Authorization") || "";
@@ -284,15 +284,20 @@ Deno.serve(async (req) => {
     } else if (type === "balance_pay") {
       const to = body.to;
       if (!to) throw new Error("balance_pay requires to");
-      const subject = balancePaySubject(body.event_date);
-      const html = balancePayHtml({
+      const payMail = {
         firstName: body.customer_name,
         eventDate: body.event_date,
         car: body.car_name,
         amount: body.amount,
         payUrl: body.pay_url,
-      });
-      result = await sendEmail(to, subject, html);
+        eventType: body.event_type,
+        startTime: body.start_time,
+        endTime: body.end_time,
+        pickup: body.pickup_location,
+        dropoff: body.return_location,
+      };
+      const subject = balancePaySubject(body.event_date);
+      result = await sendEmail(to, subject, balancePayHtml(payMail), balancePayText(payMail));
     } else if (type === "booking_created") {
       if (!b.id) throw new Error("booking_created requires booking id");
       const subject = ownerBookingCreatedSubject(b);
