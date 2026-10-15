@@ -81,6 +81,13 @@ export const occasions: {
         h: 1600,
         file: "cars-elsa_gallery_21.jpg",
       },
+      {
+        src: "/images/cars-elsa_gallery_22.webp",
+        alt: "Newlyweds sharing a kiss in Elsa, our 1954 Packard Caribbean, on a downtown street at night",
+        w: 1004,
+        h: 1567,
+        file: "cars-elsa_gallery_22.png",
+      },
     ],
     text: "Every rental includes a professional chauffeur. You don’t drive the car yourself. Drivers know wedding timelines and photo stops. Photo-only bookings are available, not just transportation. Weddings make up the majority of bookings, typically for the ceremony exit or reception getaway.",
   },
