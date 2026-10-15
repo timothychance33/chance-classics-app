@@ -60,6 +60,8 @@ export const occasions: {
   cardPosition?: string;
   /** object-position for the occasion page hero when a portrait photo is shown as a square. */
   heroPosition?: string;
+  /** Extra event photos shown under the intro. The hero image stays separate. */
+  pictures?: Img[];
   text: string;
 }[] = [
   {
@@ -71,6 +73,15 @@ export const occasions: {
     cardPosition: "center 70%",
     /** Square hero trims the trees above and keeps the couple through the license plate. */
     heroPosition: "center 85%",
+    pictures: [
+      {
+        src: "/images/cars-elsa_gallery_21.webp",
+        alt: "Newlyweds waving from Elsa, our 1954 Packard Caribbean, during a sparkler send-off",
+        w: 1067,
+        h: 1600,
+        file: "cars-elsa_gallery_21.jpg",
+      },
+    ],
     text: "Every rental includes a professional chauffeur. You don’t drive the car yourself. Drivers know wedding timelines and photo stops. Photo-only bookings are available, not just transportation. Weddings make up the majority of bookings, typically for the ceremony exit or reception getaway.",
   },
   {
