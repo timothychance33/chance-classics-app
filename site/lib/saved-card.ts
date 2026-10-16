@@ -11,10 +11,14 @@ export function isChargeReason(value: unknown): value is ChargeReason {
   return CHARGE_REASONS.includes(value as ChargeReason);
 }
 
-/** Fields that save the deposit card for later off-session charges. */
+/**
+ * Fields that save the deposit card for later off-session charges.
+ * Checkout rejects payment_method_types; methods come from the Dashboard.
+ * These sessions are payment mode, so currency stays on the line item.
+ * A setup-mode session would pass currency instead of payment_method_types.
+ */
 export function depositCheckoutSaveCard(metadata?: Record<string, string>): {
   customer_creation: "always";
-  payment_method_types: ["card"];
   payment_intent_data: {
     setup_future_usage: "off_session";
     metadata?: Record<string, string>;
@@ -28,7 +32,6 @@ export function depositCheckoutSaveCard(metadata?: Record<string, string>): {
   if (metadata && Object.keys(metadata).length) payment_intent_data.metadata = metadata;
   return {
     customer_creation: "always",
-    payment_method_types: ["card"],
     payment_intent_data,
     custom_text: { submit: { message: CARD_SAVE_TEXT } },
   };

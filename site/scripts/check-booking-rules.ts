@@ -189,6 +189,7 @@ assert(balanceReminderMonday("2026-10-13") === "2026-10-05", "Tuesday uses the p
 assert(balanceReminderMonday("2026-10-19") === "2026-10-12", "next Monday uses this Monday");
 const saveCard = depositCheckoutSaveCard();
 assert(saveCard.customer_creation === "always" && saveCard.payment_intent_data.setup_future_usage === "off_session", "deposit checkout saves the card");
+assert(!("payment_method_types" in saveCard), "deposit checkout uses Dashboard payment methods");
 const taggedCard = depositCheckoutSaveCard({ booking_id: "abc", purpose: "deposit", reason: "deposit" });
 assert(taggedCard.payment_intent_data.metadata?.booking_id === "abc" && taggedCard.payment_intent_data.metadata?.reason === "deposit", "deposit payment intent carries the booking");
 const depositRefund = refundAmounts({ total: 551.25, paid: 250, amount: 100, reason: "deposit" });
