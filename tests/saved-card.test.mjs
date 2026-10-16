@@ -28,6 +28,9 @@ const quoteBook = read('site/app/api/quotes/book/route.ts');
 const saveCard = read('site/lib/saved-card.ts');
 assert.match(saveCard, /customer_creation:\s*"always"/);
 assert.match(saveCard, /setup_future_usage:\s*"off_session"/);
+assert.doesNotMatch(saveCard, /payment_method_types\s*:/);
+assert.doesNotMatch(bookings, /payment_method_types\s*:/);
+assert.doesNotMatch(quoteBook, /payment_method_types\s*:/);
 assert.match(bookings, /depositCheckoutSaveCard\(\{[\s\S]*booking_id: bookingId/);
 assert.match(quoteBook, /depositCheckoutSaveCard\(\{[\s\S]*quote_id: quote\.id/);
 assert.match(read('site/components/BookingForm.tsx'), /CARD_SAVE_TEXT/);
@@ -72,6 +75,7 @@ assert.match(scheduled, /balance_reminder_sent_at/);
 assert.match(scheduled, /The balance is due the day before the event/);
 assert.match(scheduled, /10\.25% sales tax/);
 assert.match(scheduled, /metadata\[purpose\]", "charge"/);
+assert.doesNotMatch(scheduled, /payment_method_types\s*[:=]/);
 assert.doesNotMatch(scheduled, /service_role/);
 
 const garage = read('index.html');
@@ -184,6 +188,7 @@ assert.match(charge, /balance_reminder_sent_at/);
 assert.match(charge, /emailedTo/);
 assert.match(charge, /reason: "pay_link"/);
 assert.match(charge, /purpose: "charge"/);
+assert.doesNotMatch(charge, /payment_method_types\s*:/);
 assert.doesNotMatch(charge, /No card was saved on this booking\./);
 
 assert.match(read('site/lib/owner-booking-notify.ts'), /type: "balance_pay"/);
