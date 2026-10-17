@@ -35,3 +35,10 @@ verify_jwt = false
 
 [functions.scheduled-tasks]
 verify_jwt = false
+
+# Verify JWT stays OFF. claim-booking checks the caller itself:
+# a signed-in driver via the Authorization bearer token. The token's
+# email must match an active driver on the roster. There is no URL secret.
+# Owner assignment does not use this function.
+[functions.claim-booking]
+verify_jwt = false

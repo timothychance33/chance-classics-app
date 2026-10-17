@@ -24,6 +24,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { balanceReminderMonday, reminderEventWindow } from "../_shared/saved-card.mjs";
 import { CUSTOMER_REPLY_TO, DEFAULT_FROM_EMAIL, htmlToPlainText } from "../_shared/email-plain.mjs";
 import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/balance-pay-email.mjs";
+import { driverBusyWith, offerRankFor } from "../_shared/driver-availability.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -306,13 +307,14 @@ Deno.serve(async (req) => {
 
   const { data: staff } = await sb.from("staff").select("*");
   const drivers = ((staff ?? []) as Staff[]).filter((s) => (s.role || "").includes("driver") && s.active);
-  const eligible = (b: Booking) => drivers.filter((d) => !b.needs_trailer || d.pulls_trailer !== false);
-  const nextRankAfter = (current: number, passed: string[], b: Booking) => {
-    const ranks = eligible(b)
-      .filter((d) => d.priority != null && !passed.includes(d.id) && (d.priority as number) > current)
-      .map((d) => d.priority as number);
-    return ranks.length ? Math.min(...ranks) : null;
-  };
+  const { data: assignedRows, error: assignedErr } = await sb.from("bookings")
+    .select("id,driver_id,event_date,start_time,end_time,status")
+    .not("driver_id", "is", null)
+    .neq("status", "cancelled");
+  if (assignedErr) (summary.errors as string[]).push(`driver availability: ${assignedErr.message}`);
+  const assigned = (assignedRows ?? []) as Booking[];
+  const nextRankAfter = (current: number, passed: string[], b: Booking) =>
+    offerRankFor(drivers, b, assigned, passed, current);
   const driverByPriority = (rank: number) => drivers.find((d) => d.priority === rank);
   const carName = async (carId: string | null | undefined) => {
     if (!carId) return null;
@@ -321,6 +323,59 @@ Deno.serve(async (req) => {
   };
 
   if (!weeklyOnly) {
+    // ================= 0a) SKIP DRIVERS WHO ALREADY HAVE THAT WINDOW =================
+    // An offer already pointed at someone is moved as soon as they are busy.
+    // Do not wait out the 48h timer, and do not email them a reminder.
+    summary.skipped_busy = 0;
+    const { data: openOffers, error: openErr } = await sb.from("bookings")
+      .select("*")
+      .is("driver_id", null)
+      .not("offer_rank", "is", null)
+      .neq("status", "cancelled");
+    if (openErr) (summary.errors as string[]).push(`open offers: ${openErr.message}`);
+    for (const b of (openOffers ?? []) as Booking[]) {
+      const current = driverByPriority(b.offer_rank as number);
+      if (!current || !driverBusyWith(current.id, b, assigned)) continue;
+      const passed = [...(b.passed_by ?? [])];
+      if (!passed.includes(current.id)) passed.push(current.id);
+      const nxt = nextRankAfter(b.offer_rank as number, passed, b);
+      const moved = await sb.from("bookings").update({
+        passed_by: passed,
+        offer_rank: nxt,
+        offered_at: nxt != null ? now.toISOString() : null,
+        offer_warned: false,
+      }).eq("id", b.id).is("driver_id", null).eq("offer_rank", b.offer_rank).select("id");
+      if (moved.error || !moved.data?.length) {
+        if (moved.error) (summary.errors as string[]).push(`${b.id}: skip busy failed (${moved.error.message})`);
+        continue;
+      }
+      summary.skipped_busy = Number(summary.skipped_busy) + 1;
+      const cn = await carName(b.car_id);
+      const details = `${b.customer_name ?? "Booking"} — ${fmtDate(b.event_date)}${cn ? " · " + cn : ""}`;
+      if (nxt != null) {
+        const nd = driverByPriority(nxt);
+        if (nd?.email) {
+          const pay = b.pay_tier && nd.pay_rate ? b.pay_tier * Number(nd.pay_rate) : null;
+          await sendEmail(nd.email, `Rental available to claim — ${fmtDate(b.event_date)}`, `
+          <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
+            <h2 style="color:#6e1d1a">A rental is available for you</h2>
+            <p>Hi ${staffName(nd)}, a booking has moved to you. The previous driver already has a booking at that time.</p>
+            ${pay != null ? `<p style="font-size:18px;font-weight:700;color:#3c6b4f">You'd earn $${pay}</p>` : ""}
+            <p><b>${details}</b></p>
+            <p><a href="${APP_URL}" style="background:#6e1d1a;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;display:inline-block">Open the app to Claim or Pass</a></p>
+          </div>`);
+        }
+      }
+      await sendEmail(OWNER_EMAIL, `Offer skipped a busy driver — ${fmtDate(b.event_date)}`, `
+      <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
+        <h2 style="color:#6e1d1a">An offer skipped a driver who is already booked</h2>
+        <p>${staffName(current)} already has a booking at that time, so the offer did not go to them.</p>
+        <p><b>${details}</b></p>
+        <p>${nxt != null ? `Now offered to ${staffName(driverByPriority(nxt))}.` : "No free drivers left — it's back to you to assign."}</p>
+        <p><a href="${APP_URL}">Open the app</a></p>
+      </div>`);
+    }
+
     // ================= 0) 12-HOUR WARNING =================
     const warnAfter = new Date(now.getTime() - (ADVANCE_HOURS - 12) * 3600 * 1000).toISOString();
     const { data: warnList } = await sb.from("bookings")
@@ -332,7 +387,7 @@ Deno.serve(async (req) => {
 
     for (const b of (warnList ?? []) as Booking[]) {
       const d = driverByPriority(b.offer_rank as number);
-      if (d?.email) {
+      if (d?.email && !driverBusyWith(d.id, b, assigned)) {
         const cn = await carName(b.car_id);
         const pay = b.pay_tier && d.pay_rate ? b.pay_tier * Number(d.pay_rate) : null;
         const elapsedH = (now.getTime() - new Date(String(b.offered_at)).getTime()) / 3600000;
