@@ -33,6 +33,7 @@ import {
 } from "../_shared/owner-booking-email.mjs";
 import { ownerQuoteRequestHtml, ownerQuoteRequestSubject } from "../_shared/owner-quote-email.mjs";
 import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/balance-pay-email.mjs";
+import { DRIVER_BUSY_MESSAGE, driverBusyWith } from "../_shared/driver-availability.mjs";
 
 function bearerToken(req: Request): string {
   const header = req.headers.get("Authorization") || "";
@@ -84,6 +85,50 @@ async function authorize(req: Request, body: any): Promise<boolean> {
   return true;
 }
 
+// Offer and re-offer emails. When the payload includes the booking id, refuse
+// to mail a driver who already has an overlapping assigned booking. No id
+// (an older app build) still sends, because the date in that payload is formatted.
+async function offerSkippedForBusyDriver(driverEmail: string, bookingId: unknown): Promise<boolean> {
+  const id = String(bookingId ?? "").trim();
+  const email = String(driverEmail ?? "").trim().toLowerCase();
+  if (!id || !email) return false;
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!supabaseUrl || !serviceKey) return false;
+  const sb = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    db: { schema: "rental" },
+  });
+  const { data: booking, error: bookingError } = await sb.from("bookings")
+    .select("id,event_date,start_time,end_time,status,driver_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (bookingError || !booking) {
+    if (bookingError) console.error("offer busy check booking", bookingError.message);
+    return false;
+  }
+  const { data: staff, error: staffError } = await sb.from("staff").select("id,email,role,active");
+  if (staffError || !staff) {
+    if (staffError) console.error("offer busy check staff", staffError.message);
+    return false;
+  }
+  const driver = staff.find((row: { id?: string; email?: string | null; role?: string | null; active?: boolean | null }) =>
+    String(row.email ?? "").trim().toLowerCase() === email &&
+    String(row.role ?? "").split(",").map((part) => part.trim()).includes("driver") &&
+    row.active
+  );
+  if (!driver?.id) return false;
+  const { data: assigned, error: assignedError } = await sb.from("bookings")
+    .select("id,driver_id,event_date,start_time,end_time,status")
+    .eq("driver_id", driver.id)
+    .neq("status", "cancelled");
+  if (assignedError || !assigned) {
+    if (assignedError) console.error("offer busy check bookings", assignedError.message);
+    return false;
+  }
+  return !!driverBusyWith(driver.id, booking, assigned);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
@@ -107,6 +152,11 @@ Deno.serve(async (req) => {
     let result;
     if (type === "offer") {
       if (!driverEmail) throw new Error("offer requires driver_email");
+      if (await offerSkippedForBusyDriver(driverEmail, b.id)) {
+        return new Response(JSON.stringify({ ok: true, skipped: "driver_busy", error: DRIVER_BUSY_MESSAGE }), {
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
       const subject = `New rental available to claim — ${b.event_date ?? ""}`;
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">
@@ -200,6 +250,11 @@ Deno.serve(async (req) => {
       result = await handleQuoteDeclined(body);
     } else if (type === "reoffer") {
       if (!driverEmail) throw new Error("reoffer requires driver_email");
+      if (await offerSkippedForBusyDriver(driverEmail, b.id)) {
+        return new Response(JSON.stringify({ ok: true, skipped: "driver_busy", error: DRIVER_BUSY_MESSAGE }), {
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
       const subject = `🏷️ New pay rate! Rental up for grabs — ${b.event_date ?? ""}`;
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto">

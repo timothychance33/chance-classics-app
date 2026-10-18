@@ -495,6 +495,7 @@ const SUPABASE_KEY_INLINE = 'sb_publishable_G1LkmrTPhy0rKAJpV-rwjw_Ulo1bKOj';
 // Edge function that creates/links crew logins. Session token only.
 const CREW_LOGIN_FN_URL = SUPABASE_URL + '/functions/v1/create-crew-login';
 const NOTIFY_FN_URL = SUPABASE_URL + '/functions/v1/send-notification';
+const CLAIM_FN_URL = SUPABASE_URL + '/functions/v1/claim-booking';
 const MILEAGE_FN_URL = SUPABASE_URL + '/functions/v1/quote-mileage';
 // Same-origin on the garage host. Root vercel.json proxies this to
 // https://chanceclassics.com/api/bookings/charge/ . The trailing slash matches
@@ -515,6 +516,8 @@ let ROLE='driver';        // set from the logged-in user's profile
 let MYROLE='driver';      // the user's real role (ROLE may change via admin preview)
 let ME=null;              // {id, email, full_name, role}
 let DATA={cars:[],staff:[],bookings:[],prep:[],templates:[],quotes:[]};
+let releasingOffers=false;
+const DRIVER_BUSY_MESSAGE='You already have a booking at that time';
 
 const STATUSES=['new','confirmed','prepping','ready','out','completed','cancelled'];
 // How many days before an event a booking enters the "ready to release to drivers" window.
@@ -682,6 +685,17 @@ async function loadAll(){
     for(const r of [c,s,b,p,t]) if(r.error) throw r.error;
     DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data,quotes:(q&&!q.error)?q.data:[]};
     if(isAdmin()) await autoMatchQuotes();
+    let movedOffers=0;
+    if(!releasingOffers){
+      releasingOffers=true;
+      try{ movedOffers=await releaseOffersICannotTake(); }
+      finally{ releasingOffers=false; }
+    }
+    if(movedOffers){
+      const again=await SB.from('bookings').select('*').order('event_date');
+      if(!again.error && again.data) DATA.bookings=again.data;
+      toast(DRIVER_BUSY_MESSAGE);
+    }
     renderAll();
   }catch(e){const msg=e?.message||e?.error_description||e?.hint||JSON.stringify(e);toast('Load error: '+msg);console.error('Load error detail:',e)}
 }
@@ -1014,6 +1028,7 @@ function driverNotifyBookingPayload(booking, car){
     day_of_contact_name:booking.day_of_contact_name||'',
     day_of_contact_phone:booking.day_of_contact_phone||'',
     day_of_contact_role:booking.day_of_contact_role||'',
+    id:booking.id||'',
     notes:driverFacingNotes(booking.notes),
     needs_trailer:!!booking.needs_trailer,
     status:booking.status,
@@ -1133,6 +1148,7 @@ function isMyTurn(b){
   if(!me||me.priority==null||b.driver_id)return false;
   // Trailer jobs: only offered to drivers who pull trailers.
   if(b.needs_trailer && me.pulls_trailer===false) return false;
+  if(driverBusyWith(me.id, b, DATA.bookings)) return false;
   // Open-to-all re-offer: any eligible active driver can claim, first-come.
   if(b.open_to_all) return true;
   if(b.offer_rank==null)return false;
@@ -1144,6 +1160,7 @@ function isPendingAbove(b){
   const me=myStaff();
   if(!me||me.priority==null||b.offer_rank==null||b.driver_id||b.open_to_all)return false;
   if(b.needs_trailer && me.pulls_trailer===false) return false;
+  if(driverBusyWith(me.id, b, DATA.bookings)) return false;
   if((b.passed_by||[]).includes(me.id))return false;
   return me.priority>b.offer_rank;
 }
@@ -1453,34 +1470,74 @@ async function toggleDriverPaid(bid, paid){
   if(paid) await markDriverPaid(bid);
   else await unmarkDriverPaid(bid);
 }
-// Advance the waterfall to the next-ranked ELIGIBLE driver who hasn't passed; null if none left
+// Advance the waterfall to the next free driver who hasn't passed. Busy drivers are skipped.
 function nextRankAfter(currentRank, passedIds, booking){
-  const pool = booking ? eligibleDrivers(booking) : drivers();
-  const ranks=pool
-    .filter(d=>d.priority!=null && !passedIds.includes(d.id) && d.priority>currentRank)
-    .map(d=>d.priority);
-  return ranks.length?Math.min(...ranks):null;
+  return offerRankFor(booking, DATA.bookings, passedIds, currentRank);
+}
+// Move an open offer off a driver who already has that window, then email whoever is next.
+async function advanceOfferPast(booking, driverId){
+  if(!booking||booking.driver_id||booking.open_to_all||typeof SB==='undefined'||!SB) return false;
+  const passed=[...(booking.passed_by||[])];
+  if(driverId && !passed.includes(driverId)) passed.push(driverId);
+  const nxt=nextRankAfter(booking.offer_rank, passed, booking);
+  const {data, error}=await SB.from('bookings').update({
+    passed_by:passed, offer_rank:nxt, offered_at:nxt!=null?new Date().toISOString():null, offer_warned:false
+  }).eq('id', booking.id).is('driver_id', null).eq('offer_rank', booking.offer_rank).select('id');
+  if(error||!data||!data.length) return false;
+  booking.passed_by=passed;
+  booking.offer_rank=nxt;
+  if(nxt!=null) notifyOfferTo({...booking, offer_rank:nxt, passed_by:passed});
+  return true;
+}
+async function releaseOffersICannotTake(){
+  if(isAdmin()) return 0;
+  const me=myStaff();
+  if(!me) return 0;
+  const stuck=(DATA.bookings||[]).filter(b=>!b.driver_id && !b.open_to_all && b.offer_rank!=null
+    && me.priority===b.offer_rank && driverBusyWith(me.id, b, DATA.bookings));
+  let moved=0;
+  for(const b of stuck){
+    if(await advanceOfferPast(b, me.id)) moved++;
+  }
+  return moved;
 }
 
 async function claimBooking(bid){
   const me=myStaff();if(!me){toast('No crew record linked to your login');return}
   const b=DATA.bookings.find(x=>x.id===bid);
-  // Same-day conflict check: warn (but allow) if this driver already has a booking that day.
-  if(b && b.event_date){
-    const clash=DATA.bookings.find(x=>x.id!==bid && x.driver_id===me.id
-      && x.event_date===b.event_date && x.status!=='cancelled');
-    if(clash){
-      const car=carById(clash.car_id);
-      const ok=confirm(`Heads up — you already have a booking on ${b.event_date}:\n\n`
-        +`${clash.customer_name||'Booking'}${car?' · '+car.name:''}${clash.start_time?' · '+fmtTime(clash.start_time):''}\n\n`
-        +`Claim this one too?`);
-      if(!ok) return;
-    }
+  if(b && driverBusyWith(me.id, b, DATA.bookings)){
+    toast(DRIVER_BUSY_MESSAGE);
+    await advanceOfferPast(b, me.id);
+    await loadAll();
+    return;
   }
-  const {error}=await SB.from('bookings').update({driver_id:me.id, offer_rank:null, open_to_all:false, assigned_by:'claim'}).eq('id',bid);
-  if(error){toast('Could not claim: '+error.message);return}
-  if(b) notify('claimed',b,{driver_name:me.name});
-  toast('Claimed — it is yours');await loadAll();
+  try{
+    const r=await fetch(CLAIM_FN_URL,{
+      method:'POST',
+      headers:await sessionBearerHeaders(),
+      body:JSON.stringify({booking_id:bid})
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok){
+      const msg=data&&data.error?String(data.error):'Could not claim';
+      if(msg===DRIVER_BUSY_MESSAGE || /already have a booking/i.test(msg)){
+        toast(DRIVER_BUSY_MESSAGE);
+        if(b) await advanceOfferPast(b, me.id);
+      }else toast(msg);
+      await loadAll();
+      return;
+    }
+    if(b) notify('claimed', b, {driver_name:me.name});
+    const advanced=Array.isArray(data.advanced)?data.advanced:[];
+    for(const row of advanced){
+      const ob=DATA.bookings.find(x=>x.id===row.id)||{};
+      if(row.offer_rank!=null) notifyOfferTo({...ob, ...row});
+    }
+    toast('Claimed — it is yours');
+    await loadAll();
+  }catch(e){
+    toast('Could not claim: '+(e.message||e));
+  }
 }
 async function passBooking(bid){
   const me=myStaff();if(!me)return;
@@ -1509,17 +1566,16 @@ async function reofferToAll(bid){
     pay_tier:tier, open_to_all:true, offer_rank:null, passed_by:[], offered_at:new Date().toISOString(), offer_warned:false
   }).eq('id',bid);
   if(error){toast(error.message);return}
-  for(const d of eligibleDrivers(b)){
+  for(const d of offerDrivers(b)){
     if(!d.email) continue;
     const pay=d.pay_rate?tier*d.pay_rate:null;
     await notify('reoffer',{...b,pay_tier:tier},{driver_name:d.name,driver_email:d.email,pay});
   }
-  toast('Re-offered to all drivers with new rate');closeModal();await loadAll();
+  toast('Re-offered. Drivers who already have that time were skipped');closeModal();await loadAll();
 }
 async function approveRelease(bid){
   const b=DATA.bookings.find(x=>x.id===bid);
-  const ranks=eligibleDrivers(b||{}).map(d=>d.priority).filter(p=>p!=null);
-  const newRank=ranks.length?Math.min(...ranks):null;
+  const newRank=offerRankFor(b?{...b, id:bid}: {id:bid}, DATA.bookings, [], null);
   const {error}=await SB.from('bookings').update({
     driver_id:null, release_requested:false,
     offer_rank:newRank, passed_by:[], offered_at:newRank!=null?new Date().toISOString():null, offer_warned:false
@@ -1900,6 +1956,39 @@ function requestedInterval(evDate, startTime, hours){
 }
 function intervalsOverlap(a, b){
   return !!(a&&b&&a.start<b.end&&b.start<a.end);
+}
+// Same 2-hour rule as car availability. Buffer one booking, compare to the other's raw window.
+// A missing start or end overlaps only on the same calendar date. Cancelled bookings do not.
+function driverWindowsOverlap(a, b){
+  if(!a||!b) return false;
+  if(a.status==='cancelled'||b.status==='cancelled') return false;
+  const blocked=blockedInterval(a);
+  const raw=blockedInterval(b, 0);
+  if(blocked&&raw) return intervalsOverlap(blocked, raw);
+  const da=a.event_date?String(a.event_date).slice(0,10):'';
+  const db=b.event_date?String(b.event_date).slice(0,10):'';
+  return !!(da&&da===db);
+}
+function driverBusyWith(driverId, booking, bookings){
+  if(!driverId||!booking) return null;
+  const id=booking.id==null?null:String(booking.id);
+  const list=bookings||DATA.bookings||[];
+  return list.find(other=>{
+    if(!other||other.driver_id!==driverId) return false;
+    if(id!=null&&String(other.id)===id) return false;
+    return driverWindowsOverlap(booking, other);
+  })||null;
+}
+function offerDrivers(booking, bookings){
+  const list=bookings||DATA.bookings;
+  return eligibleDrivers(booking||{}).filter(d=>!driverBusyWith(d.id, booking, list));
+}
+function offerRankFor(booking, bookings, passedIds, afterRank){
+  const passed=passedIds||[];
+  const ranks=offerDrivers(booking, bookings)
+    .filter(d=>d.priority!=null && !passed.includes(d.id) && (afterRank==null || d.priority>afterRank))
+    .map(d=>d.priority);
+  return ranks.length?Math.min(...ranks):null;
 }
 function quoteSlot(hours){
   let h=hours;
@@ -2899,7 +2988,7 @@ function renderSchedule(){
   list=list.filter(b=>{
     if(mine && b.driver_id===mine) return true;
     if(b.driver_id) return iAmMechanic;
-    if(b.open_to_all) return true;   // re-offered to everyone, first-come
+    if(b.open_to_all) return !(mine && driverBusyWith(mine, b, DATA.bookings));
     if(b.offer_rank!=null) return isMyTurn(b)||isPendingAbove(b);
     return iAmMechanic && b.car_id;
   });
@@ -3273,7 +3362,7 @@ function bookingModal(id){
         <option value="5" ${b.pay_tier==5?'selected':''}>Tier 5 (top)</option>
       </select></div>
     </div>
-    <small class="hint">Setting a tier offers this job to drivers, starting with priority #1.</small>
+    <small class="hint">Setting a tier offers this job down the priority list. A driver who already has a booking in this window, including the 2-hour buffer, is skipped.</small>
     ${isOwnerView()?`<div><label>Customer amount</label>
       <input id="f_amount" inputmode="decimal" placeholder="$0.00" value="${storedCustomerAmount(b)!=null?esc(storedCustomerAmount(b).toFixed(2)):''}">
       <small class="hint">Customer total including 10.25% sales tax. Earnings uses this Price line. Staff never see it.</small>
@@ -3311,13 +3400,12 @@ async function saveBooking(id){
         +`Assign this one too?`)) return;
     }
   }
-  // If a tier is set, no driver yet, and the waterfall hasn't started, launch it at rank 1.
+  // If a tier is set, no driver yet, and the waterfall hasn't started, offer the first free driver.
   let justOffered=false;
   if(tier && !rec.driver_id){
     const startedBefore=existing && existing.offer_rank;
     if(!startedBefore){
-      const ranks=eligibleDrivers(rec).map(d=>d.priority).filter(p=>p!=null);
-      rec.offer_rank = ranks.length?Math.min(...ranks):null;
+      rec.offer_rank = offerRankFor({...rec, id:id||null}, DATA.bookings, [], null);
       rec.passed_by = [];
       if(rec.offer_rank!=null){ rec.offered_at = new Date().toISOString(); rec.offer_warned=false; }
       if(rec.offer_rank!=null) justOffered=true;
@@ -3396,25 +3484,29 @@ function waterfallStatusHtml(b){
       <div class="wfrow wf-claimed">✓ Claimed by ${d?esc(d.name):'driver'}${b.assigned_by==='owner'?' (assigned by you)':''}</div></div>`;
   }
   // Open-to-all re-offer mode
+  const ranked=eligibleDrivers(b).filter(d=>d.priority!=null).sort((a,c)=>a.priority-c.priority);
+  const passed=b.passed_by||[];
+  const pipelineRows=ranked.map(d=>{
+    const busy=driverBusyWith(d.id, b, DATA.bookings);
+    let state, cls;
+    if(busy){ state='Skipped — already booked'; cls='wf-passed'; }
+    else if(passed.includes(d.id)){ state='Passed'; cls='wf-passed'; }
+    else if(!b.open_to_all && b.offer_rank!=null && d.priority===b.offer_rank){ state='⏳ Their turn now'; cls='wf-current'; }
+    else if(!b.open_to_all && b.offer_rank!=null && d.priority>b.offer_rank){ state='Waiting'; cls='wf-waiting'; }
+    else if(b.open_to_all){ state='Can claim'; cls='wf-waiting'; }
+    else { state='—'; cls=''; }
+    return `<div class="wfrow ${cls}"><span>#${d.priority} ${esc(d.name)}</span><span>${state}</span></div>`;
+  }).join('');
   if(b.open_to_all){
     return `<div class="wfbox"><div class="wfhd">Offer status</div>
-      <div class="wfrow wf-current">🏁 Open to ALL drivers — first to claim wins (T${b.pay_tier})</div>${reofferBtn}</div>`;
+      <div class="wfrow wf-current">🏁 Open to free drivers — first to claim wins (T${b.pay_tier})</div>${pipelineRows}${reofferBtn}</div>`;
   }
   if(b.pay_tier==null) return `<div class="wfbox"><div class="wfhd">Offer status</div><div class="meta">Not offered yet — set a pay tier to start the waterfall.</div>${reofferBtn}</div>`;
-  const ranked=eligibleDrivers(b).filter(d=>d.priority!=null).sort((a,b)=>a.priority-b.priority);
-  const passed=b.passed_by||[];
-  let rows='';
-  for(const d of ranked){
-    let state, cls;
-    if(passed.includes(d.id)){ state='Passed'; cls='wf-passed'; }
-    else if(b.offer_rank!=null && d.priority===b.offer_rank){ state='⏳ Their turn now'; cls='wf-current'; }
-    else if(b.offer_rank!=null && d.priority>b.offer_rank){ state='Waiting'; cls='wf-waiting'; }
-    else if(b.offer_rank==null){ state='—'; cls=''; }
-    else { state='—'; cls=''; }
-    rows+=`<div class="wfrow ${cls}"><span>#${d.priority} ${esc(d.name)}</span><span>${state}</span></div>`;
-  }
-  if(b.offer_rank==null && passed.length) rows+=`<div class="wfrow wf-passed"><span>All drivers passed</span><span>back to you</span></div>`;
-  return `<div class="wfbox"><div class="wfhd">Offer pipeline (T${b.pay_tier})</div>${rows}${reofferBtn}</div>`;
+  const free=ranked.filter(d=>!passed.includes(d.id) && !driverBusyWith(d.id, b, DATA.bookings));
+  let tail='';
+  if(b.offer_rank==null && passed.length && !free.length) tail=`<div class="wfrow wf-passed"><span>All drivers passed</span><span>back to you</span></div>`;
+  else if(b.offer_rank==null && !free.length && ranked.length) tail=`<div class="wfrow wf-passed"><span>No free driver</span><span>back to you</span></div>`;
+  return `<div class="wfbox"><div class="wfhd">Offer pipeline (T${b.pay_tier})</div>${pipelineRows}${tail}${reofferBtn}</div>`;
 }
 
 function bookingBalanceDue(b){
