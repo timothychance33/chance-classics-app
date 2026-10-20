@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LightboxGallery } from "@/components/Lightbox";
+import { PhotoSlideshow } from "@/components/PhotoSlideshow";
 import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
 import { WeddingPackage } from "@/components/WeddingPackage";
@@ -46,7 +47,11 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
       {occasion.pictures && occasion.pictures.length > 0 && (
         <section className="wedding-pictures" aria-label="Wedding pictures">
           <h2>Pictures</h2>
-          <LightboxGallery images={occasion.pictures} />
+          {occasion.slug === "weddings" ? (
+            <PhotoSlideshow images={occasion.pictures} label="Wedding pictures" />
+          ) : (
+            <LightboxGallery images={occasion.pictures} />
+          )}
         </section>
       )}
       <WhyBook />
