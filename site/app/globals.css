@@ -791,15 +791,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
 .occasions span, .occasion-cars span span { display: block; color: var(--ink-soft); font-size: 14px; }
 .occasion-hero { display: block; width: auto; height: auto; max-width: 100%; max-height: min(80vh, 760px); margin: 0 auto 1em; }
 .occasion-hero.portrait { width: 100%; max-width: 600px; aspect-ratio: 1 / 1; max-height: none; object-fit: cover; }
-.wedding-pictures { margin: 8px 0 32px; }
-.wedding-pictures .masonry {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  columns: unset;
-}
-.wedding-pictures .masonry button { width: min(100%, 440px); margin: 0; }
+.occasion-pictures { margin: 8px 0 32px; }
 
 /* One photo at a time. The frame stays a fixed stage so portraits keep their
    full frame (object-fit: contain) instead of cropping faces. */
