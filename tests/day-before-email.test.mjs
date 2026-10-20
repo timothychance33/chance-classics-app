@@ -8,10 +8,12 @@ import {
   BUSINESS_PHONE,
   DAY_BEFORE_STATUSES,
   NO_DRIVER_LINE,
+  PAID_NEW_PAYMENTS,
   balanceDue,
   clientNoteFields,
   dayBeforeSkipReason,
   dayBeforeWindow,
+  isPaidNewBooking,
   renderDayBeforeEmail,
   tripDetails,
 } from '../supabase/functions/_shared/day-before-email.mjs';
@@ -57,6 +59,14 @@ assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'prepping' }), '');
 assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'cancelled' }), 'cancelled');
 assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'declined' }), 'declined');
 assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'new' }), 'unconfirmed');
+assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'new', payment_status: 'unpaid' }), 'unconfirmed');
+assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'new', payment_status: 'deposit' }), '');
+assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'new', payment_status: 'paid' }), '');
+assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'cancelled', payment_status: 'paid' }), 'cancelled');
+assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'declined', payment_status: 'deposit' }), 'declined');
+assert.equal(isPaidNewBooking({ status: 'new', payment_status: 'deposit' }), true);
+assert.equal(isPaidNewBooking({ status: 'prepping', payment_status: 'paid' }), false);
+assert.deepEqual(PAID_NEW_PAYMENTS, ['deposit', 'paid']);
 assert.equal(dayBeforeSkipReason({ ...confirmed, status: 'hold' }), 'unconfirmed');
 assert.equal(dayBeforeSkipReason({ ...confirmed, customer_email: '  ' }), 'no_email');
 assert.equal(dayBeforeSkipReason({ ...confirmed, replied_at: '2026-10-01T00:00:00Z' }), 'suppressed');
@@ -202,6 +212,10 @@ assert.match(scheduled, /day_before_email_sent_at/);
 assert.match(scheduled, /dayBeforeWindow/);
 assert.match(scheduled, /renderDayBeforeEmail/);
 assert.match(scheduled, /DAY_BEFORE_STATUSES/);
+assert.match(scheduled, /PAID_NEW_PAYMENTS/);
+assert.match(scheduled, /isPaidNewBooking/);
+assert.match(scheduled, /\.eq\("status", "new"\)/);
+assert.match(scheduled, /\.in\("payment_status", PAID_NEW_PAYMENTS\)/);
 assert.match(scheduled, /balancePayLink/);
 assert.match(scheduled, /day_before_email_sent_at: null/);
 assert.match(scheduled, /Apply the day-before email migration/);
@@ -209,6 +223,8 @@ assert.doesNotMatch(scheduled, /service_role/);
 assert.doesNotMatch(scheduled, /payment_method_types\s*[:=]/);
 
 const garage = read('index.html');
+assert.match(garage, /function statusAfterPayment/);
+assert.match(garage, /status:statusAfterPayment\(chosenStatus, chosenPay\)/);
 assert.match(garage, /function dayBeforeEmailLine/);
 assert.match(garage, /dayBeforeSentNote\(b&&b\.day_before_email_sent_at\)/);
 assert.match(read('pay-link-note.js'), /Day-before email sent /);
@@ -219,5 +235,26 @@ assert.match(migration, /enable row level security|already has row level securit
 assert.match(migration, /grant select \(day_before_email_sent_at\) on table rental\.bookings to authenticated/);
 assert.match(migration, /grant select \(day_before_email_sent_at\), update \(day_before_email_sent_at\) on table rental\.bookings to service_role/);
 assert.doesNotMatch(migration, /create table/i);
+const confirmPaid = read('supabase/migrations/20261021010000_bookings_confirm_paid.sql');
+assert.match(confirmPaid, /function rental\.confirm_paid_booking/);
+assert.match(confirmPaid, /before insert or update/);
+assert.match(confirmPaid, /new\.status := 'confirmed'/);
+assert.match(confirmPaid, /payment_status, ''\)\) in \('deposit', 'paid'\)/);
+assert.match(confirmPaid, /grant execute on function rental\.confirm_paid_booking\(\) to authenticated/);
+assert.match(confirmPaid, /grant execute on function rental\.confirm_paid_booking\(\) to service_role/);
+assert.match(confirmPaid, /revoke all on function rental\.confirm_paid_booking\(\) from anon/);
+assert.match(confirmPaid, /It is not applied by this pull request/);
+assert.match(confirmPaid, /where lower\(status\) = 'new'/);
+assert.doesNotMatch(confirmPaid, /create table/i);
+const chargeSrc = read('site/lib/booking-charge.ts');
+assert.match(chargeSrc, /promotedStatusIfNew\(row\.status, paymentStatus\)/);
+assert.match(chargeSrc, /select\("id,status,notes,total_usd,amount_paid_usd,payment_status"\)/);
+const refundSrc = read('site/lib/booking-refund.ts');
+assert.match(refundSrc, /promotedStatusIfNew\(loaded\.data\.status, paymentStatus\)/);
+assert.match(refundSrc, /select\("id,status,notes,total_usd,amount_paid_usd,payment_status"\)/);
+const depositSrc = read('site/lib/deposit-payment.ts');
+assert.match(depositSrc, /LOCKED_AFTER_PAYMENT/);
+assert.match(depositSrc, /"cancelled"/);
+assert.match(depositSrc, /"declined"/);
 
 console.log('day-before email tests passed');

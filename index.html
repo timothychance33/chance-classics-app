@@ -3413,6 +3413,12 @@ function bookingModal(id){
     ${!id?'<small class="hint">A car\'s prep template is copied into this booking when you save.</small>':''}
   `);
 }
+function statusAfterPayment(status, payment){
+  const current=String(status||'').trim().toLowerCase();
+  const pay=String(payment||'').trim().toLowerCase();
+  if(current==='new' && (pay==='deposit' || pay==='paid')) return 'confirmed';
+  return status||'new';
+}
 async function saveBooking(id){
   const v=x=>document.getElementById(x).value||null;
   const tier=document.getElementById('f_tier').value?parseInt(document.getElementById('f_tier').value):null;
@@ -3421,10 +3427,12 @@ async function saveBooking(id){
   const typedAmt=isOwnerView()?parseMoneyInput(document.getElementById('f_amount')&&document.getElementById('f_amount').value):null;
   const keepAmt=typedAmt!=null?typedAmt:storedCustomerAmount(existing);
   if(keepAmt!=null) notes=setWixPriceInNotes(notes, keepAmt);
+  const chosenStatus=v('f_status')||'new';
+  const chosenPay=v('f_pay')||'unpaid';
   const rec={customer_name:v('f_cust'),event_type:v('f_evt'),event_date:v('f_date'),
     start_time:v('f_start'),end_time:v('f_end'),customer_phone:v('f_phone'),customer_email:v('f_email'),
     pickup_location:v('f_pick'),return_location:v('f_ret'),car_id:v('f_car'),driver_id:v('f_drv'),
-    status:v('f_status')||'new',payment_status:v('f_pay')||'unpaid',pay_tier:tier,
+    status:statusAfterPayment(chosenStatus, chosenPay),payment_status:chosenPay,pay_tier:tier,
     needs_trailer:document.getElementById('f_trailer').checked,notes:notes||null};
   // Warn if assigning a driver who already has a booking that day (different booking).
   if(rec.driver_id && rec.event_date){

@@ -11,7 +11,32 @@ function salesTaxOn(subtotal: number) {
 /** Garage jobs with a collected deposit use confirmed, not the import default `new`. */
 export const CONFIRMED_DEPOSIT_STATUS = "confirmed";
 
-const KEEP_STATUS = new Set(["confirmed", "prepping", "ready", "out", "completed"]);
+/**
+ * A paid deposit or balance confirms a `new` booking.
+ * Cancelled, declined, and later garage statuses stay as written.
+ * A website hold is not in this set: paying the deposit still confirms it.
+ */
+const LOCKED_AFTER_PAYMENT = new Set([
+  "confirmed",
+  "prepping",
+  "ready",
+  "out",
+  "completed",
+  "cancelled",
+  "canceled",
+  "declined",
+]);
+
+/** `confirmed` only when a still-new booking is deposit or paid. Otherwise leave status alone. */
+export function promotedStatusIfNew(
+  status: string | null | undefined,
+  paymentStatus: string | null | undefined,
+): "confirmed" | null {
+  const current = String(status ?? "").trim().toLowerCase();
+  const pay = String(paymentStatus ?? "").trim().toLowerCase();
+  if (current === "new" && (pay === "deposit" || pay === "paid")) return "confirmed";
+  return null;
+}
 
 export function moneyNumber(value: unknown) {
   if (value == null || value === "") return null;
@@ -96,7 +121,10 @@ export function confirmedDepositUpdate(input: {
   const paid = input.existingPaid != null && input.existingPaid > 0
     ? Math.max(input.existingPaid, input.depositUsd ?? 0)
     : input.depositUsd;
-  const status = input.status && KEEP_STATUS.has(input.status) ? input.status : CONFIRMED_DEPOSIT_STATUS;
+  const current = String(input.status || "").trim();
+  const status = current && LOCKED_AFTER_PAYMENT.has(current.toLowerCase())
+    ? current
+    : CONFIRMED_DEPOSIT_STATUS;
   const patch: Record<string, unknown> = {
     status,
     payment_status: input.paymentStatus === "paid" ? "paid" : "deposit",

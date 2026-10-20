@@ -29,6 +29,7 @@ import {
 import {
   confirmedDepositUpdate,
   depositDollarsFromSession,
+  promotedStatusIfNew,
   totalDollarsFromCheckout,
 } from "../lib/deposit-payment.ts";
 import { balanceReminderMonday, chargeAmounts, depositCheckoutSaveCard, refundAmounts } from "../lib/saved-card.ts";
@@ -150,6 +151,46 @@ const kept = confirmedDepositUpdate({
   includeSessionId: true,
 });
 assert(kept.status === "prepping" && kept.payment_status === "paid" && kept.amount_paid_usd === 500, "a later payment is not reset to the deposit");
+const paidNew = confirmedDepositUpdate({
+  status: "new",
+  paymentStatus: "deposit",
+  existingTotal: 400,
+  existingPaid: 250,
+  totalUsd: 400,
+  depositUsd: 250,
+  notes: "Price: $400.00 ($150.00 due)",
+});
+assert(paidNew.status === "confirmed" && paidNew.payment_status === "deposit", "a new booking with a deposit is confirmed");
+const cancelledPaid = confirmedDepositUpdate({
+  status: "cancelled",
+  paymentStatus: "paid",
+  existingTotal: 400,
+  existingPaid: 400,
+  totalUsd: 400,
+  depositUsd: 250,
+  notes: "Deposit paid.",
+});
+assert(cancelledPaid.status === "cancelled" && cancelledPaid.payment_status === "paid", "a cancelled booking stays cancelled after payment");
+const declinedPaid = confirmedDepositUpdate({
+  status: "declined",
+  paymentStatus: "deposit",
+  existingTotal: 400,
+  existingPaid: 250,
+  totalUsd: 400,
+  depositUsd: 250,
+  notes: "Deposit paid.",
+});
+assert(declinedPaid.status === "declined", "a declined booking stays declined after a deposit");
+assert(promotedStatusIfNew("new", "paid") === "confirmed", "new plus paid promotes");
+assert(promotedStatusIfNew("new", "deposit") === "confirmed", "new plus deposit promotes");
+assert(promotedStatusIfNew("new", "unpaid") === null, "unpaid new stays new");
+assert(promotedStatusIfNew("prepping", "paid") === null, "prepping is not rewritten");
+assert(promotedStatusIfNew("ready", "deposit") === null, "ready is not rewritten");
+assert(promotedStatusIfNew("out", "paid") === null, "out is not rewritten");
+assert(promotedStatusIfNew("completed", "paid") === null, "completed is not rewritten");
+assert(promotedStatusIfNew("cancelled", "paid") === null, "cancelled is not rewritten");
+assert(promotedStatusIfNew("declined", "deposit") === null, "declined is not rewritten");
+assert(promotedStatusIfNew("hold", "deposit") === null, "a hold is confirmed by the deposit patch, not this helper");
 const withCard = confirmedDepositUpdate({
   status: "hold",
   paymentStatus: "unpaid",
