@@ -8,6 +8,9 @@
 //      Wed–Sun: Monday of that week. Mon or Tue: the previous Monday.
 //      The email says the balance is due the day before the event.
 //      Skips a $0 balance and any booking already stamped balance_reminder_sent_at.
+//   5) Day-before client email: 10:00 AM America/Chicago the day before the event.
+//      The hourly job sends it on the 10:00 run. A later run the same day retries
+//      only bookings that are still unstamped. day_before_email_sent_at stops a second send.
 //
 // Weekly digest also accepts a Vercel cron POST { weekly_only: true }.
 // Idempotent per driver + week via rental.driver_weekly_digest_sends.
@@ -25,6 +28,12 @@ import { balanceReminderMonday, reminderEventWindow } from "../_shared/saved-car
 import { CUSTOMER_REPLY_TO, DEFAULT_FROM_EMAIL, htmlToPlainText } from "../_shared/email-plain.mjs";
 import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/balance-pay-email.mjs";
 import { driverBusyWith, offerRankFor } from "../_shared/driver-availability.mjs";
+import {
+  DAY_BEFORE_STATUSES,
+  dayBeforeSkipReason,
+  dayBeforeWindow,
+  renderDayBeforeEmail,
+} from "../_shared/day-before-email.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -74,6 +83,7 @@ type Staff = {
   priority?: number | null;
   pay_rate?: number | null;
   pulls_trailer?: boolean | null;
+  phone?: string | null;
 };
 
 function staffName(d: Staff | undefined) {
@@ -679,6 +689,7 @@ Deno.serve(async (req) => {
               endTime: b.end_time,
               pickup: b.pickup_location,
               dropoff: b.return_location,
+              mondayReminder: true,
             };
             await sendEmail(
               email,
@@ -690,6 +701,116 @@ Deno.serve(async (req) => {
           } catch (e) {
             await sb.from("bookings").update({ balance_reminder_sent_at: null }).eq("id", b.id);
             balanceSummary.errors.push(`${email}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+      }
+    }
+  }
+
+  // ================= 5) DAY-BEFORE CLIENT EMAIL (10:00 AM Chicago, event is tomorrow) =================
+  // Same sender as the other scheduled mail. Balance still due uses balancePayLink,
+  // the same checkout the Monday reminder and a garage pay link create.
+  // day_before_email_sent_at stops a second email. A failed send clears the stamp.
+  summary.day_before = { sent: 0, skipped: 0, errors: [] as string[] };
+  {
+    const chicagoNow = chicagoParts(now);
+    const daySummary = summary.day_before as { sent: number; skipped: number; errors: string[]; reason?: string };
+    const window = dayBeforeWindow(chicagoNow);
+    if (!window.ok) {
+      daySummary.reason = window.reason;
+    } else if (!RESEND_API_KEY) {
+      daySummary.reason = "RESEND_API_KEY is not set";
+      daySummary.errors.push(daySummary.reason);
+    } else {
+      const due = await sb.from("bookings")
+        .select("id,customer_name,customer_email,event_type,event_date,start_time,end_time,pickup_location,return_location,status,notes,source,total_usd,amount_paid_usd,balance_due_usd,payment_status,stripe_customer_id,car_id,driver_id,replied_at,reviewed_at,photos_received_at,day_before_email_sent_at")
+        .eq("event_date", window.eventDate)
+        .in("status", DAY_BEFORE_STATUSES)
+        .is("day_before_email_sent_at", null);
+      if (due.error) {
+        const missing = /day_before_email_sent_at/i.test(due.error.message || "");
+        daySummary.errors.push(missing
+          ? "Apply the day-before email migration before these emails can send."
+          : `day-before query failed: ${due.error.message}`);
+      } else {
+        const rows = due.data ?? [];
+        const ids = rows.map((row) => row.id);
+        const carIds = [...new Set(rows.map((row) => row.car_id).filter(Boolean))];
+        const cars = new Map<string, { id: string; name?: string | null; year?: number | null; make?: string | null; model?: string | null }>();
+        if (carIds.length) {
+          const loaded = await sb.from("cars").select("id,name,year,make,model").in("id", carIds);
+          if (loaded.error) daySummary.errors.push(`day-before cars: ${loaded.error.message}`);
+          for (const car of loaded.data ?? []) cars.set(car.id, car);
+        }
+        const quotes = new Map<string, Record<string, unknown>>();
+        if (ids.length) {
+          const loaded = await sb.from("quote_requests")
+            .select("booking_id,hours,event_type,event_location,dropoff_location,details")
+            .in("booking_id", ids);
+          if (loaded.error) daySummary.errors.push(`day-before quotes: ${loaded.error.message}`);
+          for (const quote of loaded.data ?? []) {
+            if (quote.booking_id) quotes.set(quote.booking_id, quote);
+          }
+        }
+        const staffById = new Map(((staff ?? []) as Staff[]).map((person) => [person.id, person]));
+        for (const row of rows) {
+          const reason = dayBeforeSkipReason(row);
+          if (reason) {
+            daySummary.skipped += 1;
+            continue;
+          }
+          const email = String(row.customer_email || "").trim();
+          const preview = renderDayBeforeEmail({
+            booking: row,
+            car: row.car_id ? cars.get(row.car_id) : null,
+            quote: quotes.get(row.id) || null,
+            driver: null,
+          });
+          if (preview.needsPayLink && !STRIPE_SECRET_KEY) {
+            daySummary.errors.push(`${row.id}: STRIPE_SECRET_KEY is not set on scheduled-tasks`);
+            continue;
+          }
+          if (dryRun) {
+            daySummary.sent += 1;
+            continue;
+          }
+          const claimed = await sb.from("bookings")
+            .update({ day_before_email_sent_at: now.toISOString() })
+            .eq("id", row.id)
+            .is("day_before_email_sent_at", null)
+            .in("status", DAY_BEFORE_STATUSES)
+            .select("id");
+          if (claimed.error || !claimed.data?.length) {
+            daySummary.skipped += 1;
+            continue;
+          }
+          try {
+            const person = row.driver_id ? staffById.get(row.driver_id) : undefined;
+            const driverName = (person?.name || person?.full_name || "").trim();
+            const driver = driverName ? { name: driverName, phone: person?.phone || "" } : null;
+            let payUrl = "";
+            if (preview.needsPayLink) {
+              payUrl = await balancePayLink({
+                bookingId: String(row.id),
+                email,
+                customerId: row.stripe_customer_id ? String(row.stripe_customer_id) : "",
+                amount: Number(preview.balance),
+                eventDate: String(row.event_date || "").slice(0, 10),
+              });
+            }
+            const mail = renderDayBeforeEmail({
+              booking: row,
+              car: row.car_id ? cars.get(row.car_id) : null,
+              quote: quotes.get(row.id) || null,
+              driver,
+              payUrl,
+            });
+            if (mail.needsPayLink && !mail.payUrl) throw new Error("Stripe did not return a pay link.");
+            await sendEmail(email, mail.subject, mail.html, mail.text);
+            daySummary.sent += 1;
+          } catch (e) {
+            await sb.from("bookings").update({ day_before_email_sent_at: null }).eq("id", row.id);
+            daySummary.errors.push(`${row.id}: ${e instanceof Error ? e.message : String(e)}`);
           }
         }
       }

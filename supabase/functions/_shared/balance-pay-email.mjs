@@ -74,6 +74,9 @@ function detailPairs(input) {
   return pairs.filter(([, value]) => value);
 }
 
+export const MONDAY_DRIVER_LINE =
+  "You'll get your driver's name and contact info the day before your event.";
+
 function warmCopy(input) {
   const who = balanceFirstName(input?.firstName ?? input?.customerName);
   const date = balanceEventDate(input?.eventDate) || "your event";
@@ -103,6 +106,7 @@ export function balancePayHtml(input) {
   const writtenLink = href
     ? `<p style="font-size:14px;word-break:break-all;margin:0 0 16px">${esc(href)}</p>`
     : "";
+  const driverLine = input?.mondayReminder ? `<p>${esc(MONDAY_DRIVER_LINE)}</p>` : "";
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#21130f">
     <p>Hi ${esc(copy.who)},</p>
     <p>${esc(copy.greeting)}</p>
@@ -110,6 +114,7 @@ export function balancePayHtml(input) {
     ${button}
     ${detailsTable}
     ${writtenLink}
+    ${driverLine}
     <p>If you have any questions at all, just reply to this email or give us a call at (318) 344-5001.</p>
     <p>See you soon!<br>Tim Chance<br>Chance Classics</p>
   </div>`;
@@ -132,6 +137,7 @@ export function balancePayText(input) {
     for (const [label, value] of details) lines.push(`${label}: ${value}`);
   }
   if (href) lines.push("", href);
+  if (input?.mondayReminder) lines.push("", MONDAY_DRIVER_LINE);
   lines.push(
     "",
     "If you have any questions at all, just reply to this email or give us a call at (318) 344-5001.",
