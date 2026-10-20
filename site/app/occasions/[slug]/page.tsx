@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LightboxGallery } from "@/components/Lightbox";
+import { PhotoSlideshow } from "@/components/PhotoSlideshow";
 import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
 import { WeddingPackage } from "@/components/WeddingPackage";
@@ -8,6 +8,13 @@ import { WhyBook } from "@/components/WhyBook";
 import { EXTRA_HOUR_USD, DEPOSIT_USD, MILE_THRESHOLD, MILEAGE_RULE_TEXT, MIN_LEAD_DAYS, CANCEL_HOURS } from "@/lib/booking-rules";
 import { occasionBySlug, occasions } from "@/lib/occasions";
 import { carsForOccasion, pageMeta } from "@/lib/content";
+
+function picturesLabel(slug: string, title: string) {
+  if (slug === "weddings") return "Wedding pictures";
+  if (slug === "photo-shoots") return "Photo shoot pictures";
+  if (slug === "parades-and-special-events") return "Parade pictures";
+  return `${title} pictures`;
+}
 
 export function generateStaticParams() {
   return occasions.map((item) => ({ slug: item.slug }));
@@ -44,9 +51,9 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
       )}
       <p>{occasion.text}</p>
       {occasion.pictures && occasion.pictures.length > 0 && (
-        <section className="wedding-pictures" aria-label="Wedding pictures">
+        <section className="occasion-pictures" aria-label={picturesLabel(occasion.slug, occasion.title)}>
           <h2>Pictures</h2>
-          <LightboxGallery images={occasion.pictures} />
+          <PhotoSlideshow images={occasion.pictures} label={picturesLabel(occasion.slug, occasion.title)} />
         </section>
       )}
       <WhyBook />
