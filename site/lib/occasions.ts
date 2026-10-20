@@ -119,6 +119,43 @@ export const occasions: {
     alt: "Homecoming queen waving from a blue classic convertible in a downtown parade",
     /** Wide photo in a 4:3 card: keep the car's front, the flowers, and the waving rider in frame. */
     cardPosition: "5% center",
+    pictures: [
+      {
+        src: "/images/occasion-parades-01.webp",
+        alt: "Phyllis, our cream 1941 Buick Super convertible, decorated with roses, pearls and a crown for a parade",
+        w: 1600,
+        h: 1200,
+        file: "occasion-parades-01.jpg",
+      },
+      {
+        src: "/images/occasion-parades-02.webp",
+        alt: "Brenda, our blue 1961 Buick Invicta convertible, carrying Miss Louisiana Tech University in a parade",
+        w: 1600,
+        h: 1200,
+        file: "occasion-parades-02.jpg",
+      },
+      {
+        src: "/images/occasion-parades-03.webp",
+        alt: "Elsa, our white and blue 1954 Packard Caribbean convertible, carrying a homecoming court member",
+        w: 1600,
+        h: 1200,
+        file: "occasion-parades-03.jpg",
+      },
+      {
+        src: "/images/occasion-parades-04.webp",
+        alt: "Rosie, our red and white 1960 Corvette, carrying a homecoming maid in a parade",
+        w: 1200,
+        h: 1600,
+        file: "occasion-parades-04.jpg",
+      },
+      {
+        src: "/images/occasion-parades-05.webp",
+        alt: "Brenda, our blue 1961 Buick Invicta convertible, carrying a pageant contestant in a parade",
+        w: 1600,
+        h: 1200,
+        file: "occasion-parades-05.jpg",
+      },
+    ],
     text: "Our classic car rental service for parades is the perfect way to make a grand entrance. Whether you're attending a homecoming parade, other homecoming parades, a festival parade, or a beauty pageant, the car and driver are part of the rental. Other special occasions use the same cars and the same listing price.",
   },
 ];
