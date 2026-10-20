@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { descriptiveAlt } from "@/lib/alt";
 import type { Img } from "@/lib/content";
 
 export function LightboxGallery({ images }: { images: Img[] }) {
@@ -22,7 +23,7 @@ export function LightboxGallery({ images }: { images: Img[] }) {
       <div className="masonry">
         {images.map((image, i) => (
           <button key={image.src + i} type="button" onClick={() => setOpen(i)} aria-label={`Open photo ${i + 1}`}>
-            <img src={image.src} alt={image.alt || `Photo ${i + 1}`} width={image.w || 800} height={image.h || 600} loading="lazy" decoding="async" />
+            <img src={image.src} alt={descriptiveAlt(image.alt, `Photo ${i + 1}`)} width={image.w || 800} height={image.h || 600} loading="lazy" decoding="async" />
           </button>
         ))}
       </div>
@@ -31,7 +32,7 @@ export function LightboxGallery({ images }: { images: Img[] }) {
           <button className="close" type="button" onClick={() => setOpen(null)} aria-label="Close">
             ×
           </button>
-          <img src={images[open].src} alt={images[open].alt || ""} />
+          <img src={images[open].src} alt={descriptiveAlt(images[open].alt, `Photo ${open + 1}`)} />
         </div>
       )}
     </>

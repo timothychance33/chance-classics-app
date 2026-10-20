@@ -33,6 +33,7 @@ export function PhotoSlideshow({
   const manualAnnounce = useRef(false);
   const safeIndex = count === 0 ? 0 : ((index % count) + count) % count;
   const current = images[safeIndex];
+  const [paintedSrc, setPaintedSrc] = useState(current?.src || "");
 
   const pauseAutoplay = useCallback(() => {
     holdUntil.current = Date.now() + AUTO_MS;
@@ -61,6 +62,33 @@ export function PhotoSlideshow({
     },
     [count],
   );
+
+  useEffect(() => {
+    if (!current?.src) return;
+    let cancel = false;
+    const img = new Image();
+    img.decoding = "async";
+    const reveal = () => {
+      if (!cancel) setPaintedSrc(current.src);
+    };
+    img.onload = reveal;
+    img.src = current.src;
+    if (img.complete && img.naturalWidth > 0) reveal();
+    return () => {
+      cancel = true;
+    };
+  }, [current]);
+
+  useEffect(() => {
+    if (count < 2) return;
+    for (const delta of [1, -1]) {
+      const image = images[(safeIndex + delta + count) % count];
+      if (!image?.src) continue;
+      const preload = new Image();
+      preload.decoding = "async";
+      preload.src = image.src;
+    }
+  }, [count, images, safeIndex]);
 
   useEffect(() => {
     if (!manualAnnounce.current) return;
@@ -111,15 +139,6 @@ export function PhotoSlideshow({
     };
   }, [count, hold, safeIndex]);
 
-  function preloadNext() {
-    if (count < 2) return;
-    const upcoming = images[(safeIndex + 1) % count];
-    if (!upcoming) return;
-    const preload = new Image();
-    preload.decoding = "async";
-    preload.src = upcoming.src;
-  }
-
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "ArrowRight") {
       event.preventDefault();
@@ -166,7 +185,8 @@ export function PhotoSlideshow({
 
   if (!current) return null;
 
-  const alt = current.alt || `Photo ${safeIndex + 1}`;
+  const shown = images.find((image) => image.src === (paintedSrc || current.src)) || current;
+  const alt = shown.alt || `Photo ${safeIndex + 1}`;
   const position = `${safeIndex + 1} / ${count}`;
 
   return (
@@ -193,15 +213,12 @@ export function PhotoSlideshow({
         }}
       >
         <img
-          key={current.src + safeIndex}
-          src={current.src}
+          src={paintedSrc || current.src}
           alt={alt}
           width={current.w || 1200}
           height={current.h || 1600}
-          loading="lazy"
           decoding="async"
           draggable={false}
-          onLoad={preloadNext}
         />
         {count > 1 && (
           <>

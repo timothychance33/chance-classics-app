@@ -16,7 +16,7 @@
 //   Settings -> Verify JWT OFF (same as today).
 //   Reuses: RESEND_API_KEY, FROM_EMAIL, OWNER_EMAIL, APP_URL
 //   Balance pay links also need STRIPE_SECRET_KEY (same secret as the website).
-//   Optional SITE_URL (defaults to https://www.chanceclassics.com).
+//   Optional SITE_URL (defaults to https://chanceclassics.com).
 //   Plus the automatic SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY.
 // ============================================================
 
@@ -32,7 +32,7 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? DEFAULT_FROM_EMAIL;
 const OWNER_EMAIL = Deno.env.get("OWNER_EMAIL") ?? "chanceclassics@gmail.com";
 const APP_URL = Deno.env.get("APP_URL") ?? "https://app.chanceclassics.com";
-const SITE_URL = Deno.env.get("SITE_URL") ?? "https://www.chanceclassics.com";
+const SITE_URL = Deno.env.get("SITE_URL") ?? "https://chanceclassics.com";
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const CHICAGO_TZ = "America/Chicago";
 
@@ -567,7 +567,7 @@ Deno.serve(async (req) => {
     summary.quote_reminders = 0;
     for (const q of dueQuotes ?? []) {
       const cn = await carName(q.car_id);
-      let bookUrl = "https://www.chanceclassics.com/book-online?referral=quote_email";
+      let bookUrl = "https://chanceclassics.com/book-online?referral=quote_email";
       if (q.car_id) {
         const { data: carRow } = await sb.from("cars").select("book_url").eq("id", q.car_id).maybeSingle();
         if (carRow?.book_url) bookUrl = carRow.book_url;

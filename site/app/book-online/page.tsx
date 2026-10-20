@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { CallLine } from "@/components/CallLine";
+import { Reviews } from "@/components/Reviews";
 import { carIdentity, factsForCar } from "@/data/carFacts";
 import { pageMeta, services } from "@/lib/content";
 
@@ -17,6 +19,7 @@ export default function BookOnlinePage() {
         A $500 subtotal is $51.25 tax and $551.25 total. The $250 deposit goes toward that total.
         The booking form lists the tax, the deposit, and the balance.
       </p>
+      <CallLine />
       <ul className="book-list">
         {services.map((service) => {
           const facts = factsForCar(service.car);
@@ -25,7 +28,7 @@ export default function BookOnlinePage() {
             <li key={service.slug} className="book-row">
               <img
                 src={service.image.src}
-                alt=""
+                alt={`Photo of ${service.car}, the ${identity}`}
                 width={192}
                 height={144}
               />
@@ -43,6 +46,7 @@ export default function BookOnlinePage() {
           );
         })}
       </ul>
+      <Reviews />
     </article>
   );
 }

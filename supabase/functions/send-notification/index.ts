@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
       const q = body.quote ?? {};
       const to = body.to;
       if (!to) throw new Error("quote_reminder requires 'to'");
-      const bookUrl = body.book_url || "https://www.chanceclassics.com/book-online?referral=quote_email";
+      const bookUrl = body.book_url || "https://chanceclassics.com/book-online?referral=quote_email";
       const money = (n: unknown) => `$${Number(n || 0).toFixed(2)}`;
       const subject = `Still interested? Your Chance Classics quote${q.event_date ? ` — ${q.event_date}` : ""}`;
       const html = `
@@ -210,7 +210,7 @@ Deno.serve(async (req) => {
       const to = body.to;
       if (!to) throw new Error("quote requires 'to'");
       const money = (n: unknown) => `$${Number(n || 0).toFixed(2)}`;
-      const bookUrl = body.book_url || "https://www.chanceclassics.com/book-online?referral=quote_email";
+      const bookUrl = body.book_url || "https://chanceclassics.com/book-online?referral=quote_email";
       const lockedBook = String(bookUrl).includes("/book/quote/");
       const lines: string[] = [];
       lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(q.car_name ?? "Classic car")} — base (up to 2 hours)</td><td style="padding:6px 0;text-align:right">${money(q.base_rate)}</td></tr>`);

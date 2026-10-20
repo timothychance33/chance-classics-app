@@ -62,6 +62,8 @@ export const occasions: {
   heroPosition?: string;
   /** Extra event photos shown under the intro. The hero image stays separate. */
   pictures?: Img[];
+  /** One line on the home-page card. Different for each occasion. */
+  blurb: string;
   text: string;
 }[] = [
   {
@@ -73,6 +75,7 @@ export const occasions: {
     cardPosition: "center 70%",
     /** Square hero trims the trees above and keeps the couple through the license plate. */
     heroPosition: "center 85%",
+    blurb: "A chauffeur for the ceremony exit, the photos, and the ride to the reception.",
     pictures: [
       {
         src: "/images/cars-elsa_gallery_21.webp",
@@ -110,6 +113,7 @@ export const occasions: {
     title: "Photo Shoots",
     image: photo("/images/cars-sylvia_gallery_07.webp"),
     alt: "Couple posing with Sylvia, the silver 1970 Chevelle SS, during a photo session",
+    blurb: "Book the car for pictures only. The chauffeur stays with it while you shoot.",
     text: "Our classic car rental photo sessions are the perfect way to capture lasting memories. We provide classic cars that create the perfect backdrop for your pictures, whether it's for a wedding, engagement, senior or any other special occasion. Photo-only bookings are available, not just transportation.",
   },
   {
@@ -119,6 +123,7 @@ export const occasions: {
     alt: "Homecoming queen waving from a blue classic convertible in a downtown parade",
     /** Wide photo in a 4:3 card: keep the car's front, the flowers, and the waving rider in frame. */
     cardPosition: "5% center",
+    blurb: "An open car and a driver for homecoming, festivals, and other parades.",
     text: "Our classic car rental service for parades is the perfect way to make a grand entrance. Whether you're attending a homecoming parade, other homecoming parades, a festival parade, or a beauty pageant, the car and driver are part of the rental. Other special occasions use the same cars and the same listing price.",
   },
 ];

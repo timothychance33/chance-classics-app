@@ -1,4 +1,5 @@
 import { PlannerForm } from "@/components/PlannerForm";
+import { Reviews } from "@/components/Reviews";
 import { EMAIL, PHONE_DISPLAY, PHONE_TEL, pageMeta } from "@/lib/content";
 
 export const metadata = pageMeta({
@@ -18,6 +19,7 @@ export default function PlannersPage() {
         Or email <a href={`mailto:${EMAIL}`}>{EMAIL}</a> or call <a href={`tel:${PHONE_TEL}`}>{PHONE_DISPLAY}</a>.
       </p>
       <PlannerForm />
+      <Reviews />
     </article>
   );
 }

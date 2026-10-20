@@ -1,4 +1,6 @@
+import { CallLine } from "@/components/CallLine";
 import { QuoteForm } from "@/components/QuoteForm";
+import { Reviews } from "@/components/Reviews";
 import { pageMeta } from "@/lib/content";
 
 export const metadata = pageMeta({
@@ -10,7 +12,9 @@ export const metadata = pageMeta({
 export default function QuotePage() {
   return (
     <article className="wrap page">
+      <CallLine lead="Prefer to call or text?" />
       <QuoteForm />
+      <Reviews />
     </article>
   );
 }

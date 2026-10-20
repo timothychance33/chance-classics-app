@@ -1,5 +1,8 @@
+import Link from "next/link";
+import { CallLine } from "@/components/CallLine";
 import { Picture } from "@/components/Picture";
 import { aboutImages, pageMeta } from "@/lib/content";
+import { SHOP_ADDRESS } from "@/lib/booking-rules";
 
 export const metadata = pageMeta({
   title: "About | Chance Classics, Classic Car Rental",
@@ -46,6 +49,24 @@ export default function AboutPage() {
         <p className="lede center">
           Eric has extensive knowledge about classic cars. He helps to maintain the fleet and also drives them to events.
         </p>
+      </section>
+      <section className="bio">
+        <h2>The shop</h2>
+        <p>
+          The cars are kept in Benton and maintained in our own shop, 2nd Chance Speed Shop. Chance Classics is at {SHOP_ADDRESS}. Tim coordinates the rentals. Carl owns some of the vehicles. Eric helps keep the fleet ready. All three drive.
+        </p>
+        <p>
+          Every rental includes a chauffeur. You do not drive the car. We keep a 2-hour buffer before and after each booking, so the car is not coming straight from another event. If the car you booked is not available, we offer a comparable backup. Starting prices are on the car pages, and you can book online.
+        </p>
+        <p>
+          Most of the work is in Northwest Louisiana. The cars also go as far as New Orleans, Longview, Jackson, and Hot Springs. A pickup more than 30 miles from Benton is trailered, and that mileage is part of the quote.
+        </p>
+        <p>
+          <Link href="/portfolio/">See the cars</Link>
+          {" · "}
+          <Link href="/service-area/">Service area</Link>
+        </p>
+        <CallLine />
       </section>
     </article>
   );

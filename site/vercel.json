@@ -1,6 +1,38 @@
 {
   "redirects": [
     {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.chanceclassics.com" }],
+      "destination": "https://chanceclassics.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.chanceclassics.com" }],
+      "destination": "https://chanceclassics.com/",
+      "permanent": true
+    },
+    {
+      "source": "/cart-page",
+      "destination": "/book-online/",
+      "permanent": true
+    },
+    {
+      "source": "/portfolio-collections/my-portfolio",
+      "destination": "/portfolio/",
+      "permanent": true
+    },
+    {
+      "source": "/portfolio-collections/my-portfolio/others",
+      "destination": "/portfolio/",
+      "permanent": true
+    },
+    {
+      "source": "/others",
+      "destination": "/portfolio/",
+      "permanent": true
+    },
+    {
       "source": "/blank-2",
       "destination": "/quoterequest/",
       "permanent": true

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CallLine } from "@/components/CallLine";
 import { PhotoSlideshow } from "@/components/PhotoSlideshow";
 import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
@@ -7,7 +8,7 @@ import { WeddingPackage } from "@/components/WeddingPackage";
 import { WhyBook } from "@/components/WhyBook";
 import { EXTRA_HOUR_USD, DEPOSIT_USD, MILE_THRESHOLD, MILEAGE_RULE_TEXT, MIN_LEAD_DAYS, CANCEL_HOURS } from "@/lib/booking-rules";
 import { occasionBySlug, occasions } from "@/lib/occasions";
-import { carsForOccasion, pageMeta } from "@/lib/content";
+import { carsForOccasion, fleetModel, pageMeta } from "@/lib/content";
 
 function picturesLabel(slug: string, title: string) {
   if (slug === "weddings") return "Wedding pictures";
@@ -29,6 +30,7 @@ export function generateMetadata({ params }: { params: Promise<{ slug: string }>
       description: occasion.text,
       path: `/occasions/${occasion.slug}`,
       image: occasion.image?.src,
+      imageAlt: occasion.alt,
     });
   });
 }
@@ -50,6 +52,7 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
         />
       )}
       <p>{occasion.text}</p>
+      <CallLine />
       {occasion.pictures && occasion.pictures.length > 0 && (
         <section className="occasion-pictures" aria-label={picturesLabel(occasion.slug, occasion.title)}>
           <h2>Pictures</h2>
@@ -78,10 +81,15 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
         {carsForOccasion(occasion.slug).map((service) => (
           <li key={service.slug}>
             <Link href={`/service-page/${service.slug}/#book`}>
-              <img src={service.image.src} alt="" width={160} height={120} />
+              <img
+                src={service.image.src}
+                alt={`Photo of ${service.car}, the ${fleetModel(service.car) || service.name}`}
+                width={160}
+                height={120}
+              />
               <span>
                 <strong>{service.car}</strong>
-                <span>{service.name}</span>
+                <span>{fleetModel(service.car) || service.name}</span>
                 <span>Starting at ${service.price}</span>
               </span>
             </Link>

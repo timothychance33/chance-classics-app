@@ -1,5 +1,8 @@
+import Link from "next/link";
+import { CallLine } from "@/components/CallLine";
 import { ServiceAreaMap } from "@/components/ServiceAreaMap";
-import { SITE_URL, pageMeta } from "@/lib/content";
+import { cities } from "@/data/cities";
+import { EMAIL, PHONE_TEL, SITE_URL, pageMeta } from "@/lib/content";
 import { EXTRA_MILE_USD, MILE_THRESHOLD, MILEAGE_EXAMPLES, SHOP_ADDRESS } from "@/lib/booking-rules";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +25,10 @@ const areaServed = [
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "LocalBusiness",
-  name: "Chance Classic Car Rental",
+  name: "Chance Classics",
   url: `${SITE_URL}/service-area/`,
-  telephone: "+13183445001",
-  email: "chanceclassics@gmail.com",
+  telephone: PHONE_TEL,
+  email: EMAIL,
   address: {
     "@type": "PostalAddress",
     streetAddress: "118 5th St E",
@@ -34,7 +37,14 @@ const jsonLd = {
     postalCode: "71006",
     addressCountry: "US",
   },
-  areaServed,
+  areaServed: [
+    ...areaServed,
+    { "@type": "City", name: "Shreveport" },
+    { "@type": "City", name: "Bossier City" },
+    { "@type": "City", name: "Benton" },
+    { "@type": "City", name: "Minden" },
+    { "@type": "City", name: "Ruston" },
+  ],
 };
 
 export default function ServiceAreaPage() {
@@ -43,6 +53,15 @@ export default function ServiceAreaPage() {
       <h1>Service area</h1>
       <p>Chance Classics is based at {SHOP_ADDRESS}.</p>
       <p>We work mostly in Northwest Louisiana and go as far as New Orleans, Longview, Jackson, and Hot Springs.</p>
+      <CallLine />
+      <h2>Cities</h2>
+      <ul>
+        {cities.map((city) => (
+          <li key={city.slug}>
+            <Link href={`/service-area/${city.slug}/`}>{city.name}, {city.region}</Link>
+          </li>
+        ))}
+      </ul>
       <ServiceAreaMap apiKey={process.env.GOOGLE_MAPS_API_KEY || ""} />
       <h2>Mileage</h2>
       <p>

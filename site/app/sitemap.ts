@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { cities } from "@/data/cities";
 import { SITE_URL, portfolioOrder, posts, services } from "@/lib/content";
 import { occasions } from "@/lib/occasions";
 
@@ -10,7 +11,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/about",
     "/services",
     "/portfolio",
-    "/portfolio-collections/my-portfolio",
     ...portfolioOrder.map((slug) => `/portfolio-collections/my-portfolio/${slug}`),
     "/quoterequest",
     "/book-online",
@@ -20,10 +20,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...occasions.map((occasion) => `/occasions/${occasion.slug}`),
     "/faq",
     "/service-area",
+    ...cities.map((city) => `/service-area/${city.slug}`),
+    "/contact",
     "/planners",
     "/blog",
     ...posts.map((post) => `/post/${post.slug}`),
-    "/cart-page",
   ];
   return paths.map((path) => ({
     url: `${SITE_URL}${path === "/" ? "/" : `${path}/`}`,
