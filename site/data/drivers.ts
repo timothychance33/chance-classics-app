@@ -1,7 +1,7 @@
 /**
  * Drivers on the About page. Each person has one image path.
- * Drop the photo at that file under public/ and the card uses it.
- * Until the file is there, the card shows an initials placeholder.
+ * The card has no picture until that file exists under public/.
+ * Set image to "" to keep the card text-only, like Eric's.
  */
 export type AboutDriver = {
   name: string;

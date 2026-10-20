@@ -13,13 +13,7 @@ export const metadata = pageMeta({
   path: "/about",
 });
 
-function monogram(name: string) {
-  const trimmed = name.trim();
-  if (trimmed.length <= 3) return trimmed.toUpperCase();
-  return trimmed.slice(0, 1).toUpperCase();
-}
-
-/** Use the driver's one image path when that file is in public/. */
+/** Show a portrait only when drivers.ts has a path and that file is in public/. */
 function driverPhoto(src: string) {
   if (!src.startsWith("/")) return "";
   const file = path.join(process.cwd(), "public", src.slice(1));
@@ -70,23 +64,7 @@ export default function AboutPage() {
         const photo = driverPhoto(driver.image);
         return (
           <section className="bio" key={driver.name}>
-            {photo ? (
-              <img className="bio-portrait" src={photo} alt={driver.name} width={1200} height={1500} />
-            ) : (
-              <div className="bio-portrait" aria-hidden="true">
-                <svg viewBox="0 0 120 120">
-                  <circle cx="60" cy="46" r="18" fill="none" stroke="currentColor" strokeWidth="2.25" />
-                  <path
-                    d="M24 104c6-22 16-32 36-32s30 10 36 32"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.25"
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <span className="monogram">{monogram(driver.name)}</span>
-              </div>
-            )}
+            {photo ? <img className="bio-portrait" src={photo} alt={driver.name} width={1200} height={1500} /> : null}
             <h2>{driver.name}</h2>
             <p className="lede center">{driver.role}</p>
             <p className="lede center">{driver.text}</p>

@@ -340,38 +340,14 @@ p { margin: 0 0 1em; }
   margin: 0 auto 18px;
   display: block;
 }
-.bio-portrait {
+img.bio-portrait {
   width: min(100%, 420px);
   aspect-ratio: 4 / 5;
   margin: 0 auto 18px;
-  background: #efece6;
-  color: #6f6c66;
-}
-img.bio-portrait {
   display: block;
   height: auto;
   object-fit: cover;
   object-position: center 18%;
-}
-div.bio-portrait {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-}
-.bio-portrait svg {
-  width: 88px;
-  height: 88px;
-  display: block;
-}
-.bio-portrait .monogram {
-  font-family: var(--serif);
-  font-size: 40px;
-  line-height: 1;
-  letter-spacing: 0.14em;
-  padding-left: 0.14em;
-  color: var(--ink);
 }
 .contact-block { padding: 10px 0 40px; }
 .contact-block a { text-decoration: none; }
