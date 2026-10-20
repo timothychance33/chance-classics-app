@@ -828,6 +828,7 @@ async function notifyOwnerNewBooking(booking){
         day_of_contact_name:booking.day_of_contact_name||'',
         day_of_contact_phone:booking.day_of_contact_phone||'',
         day_of_contact_role:booking.day_of_contact_role||'',
+        ...weddingOwnerFields(booking),
         total_usd:booking.total_usd!=null?booking.total_usd:''
       }
     });
@@ -867,6 +868,7 @@ function ownerBookingPayload(booking){
     day_of_contact_name:booking.day_of_contact_name||'',
     day_of_contact_phone:booking.day_of_contact_phone||'',
     day_of_contact_role:booking.day_of_contact_role||'',
+    ...weddingOwnerFields(booking),
     total_usd:total!=null?total:'',
     status:booking.status||'',
     payment_status:booking.payment_status||'',
@@ -1069,6 +1071,36 @@ function dayOfContactLine(b){
   if(!p) return '';
   const who=[p.name,p.role].filter(Boolean).map(esc).join(' · ');
   return `<div class="meta">Day-of: ${who}${p.phone?(who?' · ':'')+dayOfPhoneLink(p.phone):''}</div>`;
+}
+function weddingOwnerFields(booking){
+  booking=booking||{};
+  return {
+    wedding_partner_1_name:booking.wedding_partner_1_name||'',
+    wedding_partner_1_social:booking.wedding_partner_1_social||'',
+    wedding_partner_2_name:booking.wedding_partner_2_name||'',
+    wedding_partner_2_social:booking.wedding_partner_2_social||'',
+    wedding_photographer_name:booking.wedding_photographer_name||'',
+    wedding_photographer_email:booking.wedding_photographer_email||'',
+    wedding_photographer_instagram:booking.wedding_photographer_instagram||''
+  };
+}
+function weddingCelebrationBlock(b){
+  if(!b) return '';
+  const one=(value)=>String(value||'').replace(/[\r\n]+/g,' ').replace(/\s+/g,' ').trim();
+  const line=(name,social)=>[one(name),one(social)].filter(Boolean).join(' · ');
+  const rows=[
+    ['Bride / partner 1', line(b.wedding_partner_1_name, b.wedding_partner_1_social)],
+    ['Groom / partner 2', line(b.wedding_partner_2_name, b.wedding_partner_2_social)],
+    ['Photographer', one(b.wedding_photographer_name)],
+    ['Photographer email', one(b.wedding_photographer_email)],
+    ['Photographer Instagram', one(b.wedding_photographer_instagram)]
+  ].filter((pair)=>pair[1]);
+  if(!rows.length) return '';
+  const body=rows.map((pair)=>`<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052">${esc(pair[0])}</div><div style="font-size:16px;margin-top:2px">${esc(pair[1])}</div></div>`).join('');
+  return `<div style="margin:4px 0 14px;padding:10px 12px;border:1px solid #c5d4e3;background:#f7f4ef">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052">Help us celebrate</div>
+    ${body}
+  </div>`;
 }
 function dayOfContactBlock(b){
   const p=dayOfParts(b);
@@ -1430,6 +1462,8 @@ async function persistDriverPaid(bid, paid){
 }
 // Follow-up email flags (owner-only). Setting these stops the matching reminder
 // email from send-followups-next: reviewed_at → review reminder, photos_received_at → photo reminder.
+// TODO: photo reminder emails (photos_received_at / send-followups-next) may CC or
+// prefill wedding_photographer_email. Do not email the photographer automatically.
 const FOLLOWUP_FLAG_COLS=['reviewed_at','photos_received_at'];
 async function persistFollowupFlag(bid, col, on){
   if(!FOLLOWUP_FLAG_COLS.includes(col)) return false;
@@ -3792,6 +3826,7 @@ function bookingDetail(bid){
     ${row('Pickup', b.pickup_location)}
     ${row('Drop-off', b.return_location)}
     ${dayOfContactBlock(b)}
+    ${weddingCelebrationBlock(b)}
     ${row('Phone', b.customer_phone)}
     ${row('Email', b.customer_email)}
     ${b.needs_trailer?`<div style="margin-bottom:10px"><span class="trailertag">🚛 Car must be trailered</span></div>`:''}

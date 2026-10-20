@@ -14,6 +14,8 @@ import {
   quoteRequestRecord,
   dayOfContactColumns,
   dayOfContactNotes,
+  weddingCelebrationColumns,
+  weddingCelebrationErrors,
   quoteTotal,
   salesTax,
   DEPOSIT_USD,
@@ -243,6 +245,36 @@ if (dayOf.ok) {
   assert(columns.day_of_contact_phone === "3185550199", "day-of phone column");
   assert(dayOfContactNotes(dayOf.value).includes("not the booker"), "day-of note names the driver contact");
 }
+
+const weddingBlank = {
+  partner1Name: "  ",
+  partner1Social: "",
+  partner2Name: "",
+  partner2Social: "",
+  photographerName: "",
+  photographerEmail: "",
+  photographerInstagram: "",
+};
+assert(Object.keys(weddingCelebrationErrors("Wedding", weddingBlank)).length === 0, "empty wedding answers are allowed");
+assert(Object.values(weddingCelebrationColumns("Wedding", weddingBlank)).every((value) => value == null), "blank wedding answers store null");
+const weddingFilled = weddingCelebrationColumns("Wedding", {
+  partner1Name: "  Ann  Marie ",
+  partner1Social: "@ann",
+  partner2Name: "Jon",
+  partner2Social: "",
+  photographerName: "Pat Photo",
+  photographerEmail: " pat@studio.example ",
+  photographerInstagram: "patphoto",
+});
+assert(weddingFilled.wedding_partner_1_name === "Ann Marie", "wedding names are trimmed");
+assert(weddingFilled.wedding_partner_1_social === "@ann", "wedding social is kept");
+assert(weddingFilled.wedding_photographer_email === "pat@studio.example", "photographer email is trimmed");
+assert(weddingCelebrationErrors("Wedding", { photographerEmail: "not-an-email" }).photographerEmail === "Enter a valid photographer email, or leave it blank.", "bad photographer email is rejected");
+assert(weddingCelebrationErrors("Wedding", { partner1Name: "Ann\nMarie" }).partner1Name === "Enter the bride or partner 1 name on one line.", "wedding names stay on one line");
+assert("partner1Name" in weddingCelebrationErrors("Wedding", { partner1Name: "A".repeat(121) }), "over-long wedding name is rejected");
+const hidden = weddingCelebrationColumns("Parade", { partner1Name: "Ann", photographerEmail: "not-an-email" });
+assert(Object.values(hidden).every((value) => value == null), "wedding answers are not stored for another occasion");
+assert(Object.keys(weddingCelebrationErrors("Parade", { photographerEmail: "not-an-email" })).length === 0, "wedding checks run only for a wedding");
 
 assert(bookingSource({ stripeSecret: "sk_test_x", vercelEnv: "production" }) === "site-test", "test key");
 assert(bookingSource({ stripeSecret: "sk_live_x", vercelEnv: "preview" }) === "site-test", "preview");

@@ -67,7 +67,7 @@ export async function openTimesForCar(db: Db, carId: string, date: string, hours
 }
 
 function optionalBookingColumn(name: string) {
-  return /^(mileage_|day_of_contact_)/.test(name)
+  return /^(mileage_|day_of_contact_|wedding_)/.test(name)
     || name === "stripe_deposit_session_id"
     || name === "stripe_balance_session_id"
     || name === "stripe_customer_id"
@@ -80,7 +80,7 @@ function columnNamedInError(message: string) {
   return message.match(/'([a-z0-9_]+)' column/i)?.[1] || message.match(/column "([a-z0-9_]+)"/i)?.[1] || "";
 }
 
-/** Mileage, money, and deposit-session columns are additive. Drop a missing one and retry so a booking still saves. */
+/** Mileage, day-of, wedding, money, and deposit-session columns are additive. Drop a missing one and retry so a booking still saves. */
 export async function insertBooking(db: Db, row: Record<string, unknown>) {
   let payload = { ...row };
   let inserted = await db.from("bookings").insert(payload).select("id").single();

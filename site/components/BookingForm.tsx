@@ -24,7 +24,9 @@ import {
   toMinutes,
   validateBooking,
   validateDayOfContact,
+  weddingCelebrationErrors,
   type BookingInput,
+  type WeddingCelebrationInput,
 } from "@/lib/booking-rules";
 
 type MileagePreview = {
@@ -48,7 +50,7 @@ const STEP_LABEL: Record<Step, string> = {
 
 const STEP_FIELDS: Record<Step, string[]> = {
   when: ["date", "hours", "start"],
-  contact: ["name", "email", "phone", "occasion"],
+  contact: ["name", "email", "phone", "occasion", "partner1Name", "partner1Social", "partner2Name", "partner2Social", "photographerName", "photographerEmail", "photographerInstagram"],
   where: ["pickup", "dropoff", "dayOfName", "dayOfPhone", "dayOfRole"],
   review: ["waiver", "reliability"],
 };
@@ -61,6 +63,13 @@ const FIELD_ID: Record<string, string> = {
   email: "book-email",
   phone: "book-phone",
   occasion: "book-occasion",
+  partner1Name: "wedding-partner-1-name",
+  partner1Social: "wedding-partner-1-social",
+  partner2Name: "wedding-partner-2-name",
+  partner2Social: "wedding-partner-2-social",
+  photographerName: "wedding-photographer-name",
+  photographerEmail: "wedding-photographer-email",
+  photographerInstagram: "wedding-photographer-instagram",
   pickup: "book-pickup",
   dropoff: "book-dropoff",
   dayOfName: "day-of-name",
@@ -80,6 +89,13 @@ type Draft = {
   email: string;
   phone: string;
   occasion: string;
+  partner1Name: string;
+  partner1Social: string;
+  partner2Name: string;
+  partner2Social: string;
+  photographerName: string;
+  photographerEmail: string;
+  photographerInstagram: string;
   secondCar: boolean;
   pickup: string;
   pickupPlaceId: string;
@@ -106,6 +122,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const [slotNote, setSlotNote] = useState("");
   const [mileage, setMileage] = useState<MileagePreview | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [celebrateOpen, setCelebrateOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const stack = useRef<Step[]>(["when"]);
@@ -133,6 +150,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
       setFurthest(saved.furthest);
       stack.current = [saved.step];
       initial = saved.step;
+      if (weddingFilled(saved.draft)) setCelebrateOpen(true);
     }
     const cancelled = new URLSearchParams(window.location.search).get("booking") === "cancelled";
     if (cancelled) {
@@ -261,7 +279,8 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   }, [car, draft.date, draft.hours]);
 
   const input = useMemo(() => bookingInput(draft, car), [draft, car]);
-  const errors = useMemo(() => collectErrors(input, slots, slotsReady), [input, slots, slotsReady]);
+  const wedding = useMemo(() => weddingInput(draft), [draft]);
+  const errors = useMemo(() => collectErrors(input, slots, slotsReady, wedding), [input, slots, slotsReady, wedding]);
   const money = quoteTotal(basePrice, draft.hours, mileage?.fee ?? 0);
   const returnToReview = furthest >= STEPS.length - 1 && step !== "review";
 
@@ -296,8 +315,13 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   function focusProblem(problem: { step: Step; field: string }) {
     reveal(problem.step);
     const id = FIELD_ID[problem.field];
+    const weddingField = problem.field in wedding;
+    if (weddingField) setCelebrateOpen(true);
     if (problem.step === step) {
-      if (id) document.getElementById(id)?.focus();
+      if (id) {
+        if (weddingField) window.setTimeout(() => document.getElementById(id)?.focus(), 0);
+        else document.getElementById(id)?.focus();
+      }
       return;
     }
     pendingFocus.current = id || null;
@@ -378,6 +402,13 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           dayOfName: input.dayOfName,
           dayOfPhone: input.dayOfPhone,
           dayOfRole: input.dayOfRole,
+          partner1Name: draft.partner1Name,
+          partner1Social: draft.partner1Social,
+          partner2Name: draft.partner2Name,
+          partner2Social: draft.partner2Social,
+          photographerName: draft.photographerName,
+          photographerEmail: draft.photographerEmail,
+          photographerInstagram: draft.photographerInstagram,
           waiver: draft.waiver,
           reliability: draft.reliability,
         }),
@@ -584,6 +615,88 @@ export function BookingForm({ car, carName, basePrice }: Props) {
             ))}
           </fieldset>
           <FieldError id="book-occasion-error" message={shown("occasion")} />
+          {draft.occasion === "Wedding" && (
+            <details
+              className="celebrate"
+              open={celebrateOpen || WEDDING_KEYS.some((field) => shown(field))}
+              onToggle={(event) => setCelebrateOpen(event.currentTarget.open)}
+            >
+              <summary>Help us celebrate (optional)</summary>
+              <p className="note">These details are optional. Skipping them does not change the price.</p>
+              <WeddingField
+                id="wedding-partner-1-name"
+                label="Bride / partner 1 name"
+                name="partner1Name"
+                autoComplete="section-wedding name"
+                value={draft.partner1Name}
+                error={shown("partner1Name")}
+                onBlur={() => touch("partner1Name")}
+                onChange={(value) => patch({ partner1Name: value })}
+              />
+              <WeddingField
+                id="wedding-partner-1-social"
+                label="Social handle"
+                name="partner1Social"
+                autoComplete="off"
+                value={draft.partner1Social}
+                error={shown("partner1Social")}
+                onBlur={() => touch("partner1Social")}
+                onChange={(value) => patch({ partner1Social: value })}
+              />
+              <WeddingField
+                id="wedding-partner-2-name"
+                label="Groom / partner 2 name"
+                name="partner2Name"
+                autoComplete="section-wedding name"
+                value={draft.partner2Name}
+                error={shown("partner2Name")}
+                onBlur={() => touch("partner2Name")}
+                onChange={(value) => patch({ partner2Name: value })}
+              />
+              <WeddingField
+                id="wedding-partner-2-social"
+                label="Social handle"
+                name="partner2Social"
+                autoComplete="off"
+                value={draft.partner2Social}
+                error={shown("partner2Social")}
+                onBlur={() => touch("partner2Social")}
+                onChange={(value) => patch({ partner2Social: value })}
+              />
+              <WeddingField
+                id="wedding-photographer-name"
+                label="Photographer name"
+                name="photographerName"
+                autoComplete="section-photographer name"
+                value={draft.photographerName}
+                error={shown("photographerName")}
+                onBlur={() => touch("photographerName")}
+                onChange={(value) => patch({ photographerName: value })}
+              />
+              <WeddingField
+                id="wedding-photographer-email"
+                label="Photographer email"
+                name="photographerEmail"
+                type="email"
+                inputMode="email"
+                autoComplete="section-photographer email"
+                value={draft.photographerEmail}
+                error={shown("photographerEmail")}
+                onBlur={() => touch("photographerEmail")}
+                onChange={(value) => patch({ photographerEmail: value })}
+              />
+              <WeddingField
+                id="wedding-photographer-instagram"
+                label="Photographer Instagram"
+                name="photographerInstagram"
+                autoComplete="off"
+                value={draft.photographerInstagram}
+                error={shown("photographerInstagram")}
+                onBlur={() => touch("photographerInstagram")}
+                onChange={(value) => patch({ photographerInstagram: value })}
+              />
+            </details>
+          )}
         </>
       )}
 
@@ -674,6 +787,21 @@ export function BookingForm({ car, carName, basePrice }: Props) {
             <SummaryRow label="Time" onChange={() => pushStep("when")}>{draft.start ? clockLabel(draft.start) : "Choose a time"}</SummaryRow>
             <SummaryRow label="Hours" onChange={() => pushStep("when")}>{draft.hours} hours</SummaryRow>
             <SummaryRow label="Occasion" onChange={() => pushStep("contact")}>{draft.occasion || "Choose an occasion"}</SummaryRow>
+            {draft.occasion === "Wedding" && [draft.partner1Name, draft.partner1Social].some((item) => item.trim()) && (
+              <SummaryRow label="Partner 1" onChange={() => pushStep("contact")}>
+                {[draft.partner1Name, draft.partner1Social].map((item) => item.trim()).filter(Boolean).join(" · ")}
+              </SummaryRow>
+            )}
+            {draft.occasion === "Wedding" && [draft.partner2Name, draft.partner2Social].some((item) => item.trim()) && (
+              <SummaryRow label="Partner 2" onChange={() => pushStep("contact")}>
+                {[draft.partner2Name, draft.partner2Social].map((item) => item.trim()).filter(Boolean).join(" · ")}
+              </SummaryRow>
+            )}
+            {draft.occasion === "Wedding" && [draft.photographerName, draft.photographerEmail, draft.photographerInstagram].some((item) => item.trim()) && (
+              <SummaryRow label="Photographer" onChange={() => pushStep("contact")}>
+                {[draft.photographerName, draft.photographerEmail, draft.photographerInstagram].map((item) => item.trim()).filter(Boolean).join(" · ")}
+              </SummaryRow>
+            )}
             <SummaryRow label="Name" onChange={() => pushStep("contact")}>{draft.name}</SummaryRow>
             <SummaryRow label="Email" onChange={() => pushStep("contact")}>{draft.email}</SummaryRow>
             <SummaryRow label="Phone" onChange={() => pushStep("contact")}>{draft.phone}</SummaryRow>
@@ -775,6 +903,63 @@ function SummaryRow({ label, onChange, children }: { label: string; onChange?: (
   );
 }
 
+const WEDDING_KEYS = [
+  "partner1Name",
+  "partner1Social",
+  "partner2Name",
+  "partner2Social",
+  "photographerName",
+  "photographerEmail",
+  "photographerInstagram",
+] as const;
+
+function WeddingField({
+  id,
+  label,
+  name,
+  value,
+  error,
+  autoComplete,
+  type = "text",
+  inputMode,
+  onBlur,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  name: string;
+  value: string;
+  error: string;
+  autoComplete: string;
+  type?: string;
+  inputMode?: "email";
+  onBlur: () => void;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label htmlFor={id}>
+      {label}
+      <input
+        id={id}
+        type={type}
+        inputMode={inputMode}
+        name={name}
+        autoComplete={autoComplete}
+        autoCapitalize={type === "email" ? "none" : undefined}
+        autoCorrect={type === "email" ? "off" : undefined}
+        spellCheck={type === "email" ? false : undefined}
+        enterKeyHint="next"
+        value={value}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={`${id}-error`}
+        onBlur={onBlur}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <FieldError id={`${id}-error`} message={error} />
+    </label>
+  );
+}
+
 function FieldError({ id, message }: { id: string; message: string }) {
   return (
     <span id={id} className="field-error" role={message ? "alert" : undefined}>
@@ -792,6 +977,13 @@ function blankDraft(earliest: string): Draft {
     email: "",
     phone: "",
     occasion: "",
+    partner1Name: "",
+    partner1Social: "",
+    partner2Name: "",
+    partner2Social: "",
+    photographerName: "",
+    photographerEmail: "",
+    photographerInstagram: "",
     secondCar: false,
     pickup: "",
     pickupPlaceId: "",
@@ -825,6 +1017,13 @@ function readDraft(car: string, earliest: string) {
     if (typeof source.occasion === "string" && OCCASIONS.includes(source.occasion as (typeof OCCASIONS)[number])) {
       draft.occasion = source.occasion;
     }
+    if (typeof source.partner1Name === "string") draft.partner1Name = source.partner1Name;
+    if (typeof source.partner1Social === "string") draft.partner1Social = source.partner1Social;
+    if (typeof source.partner2Name === "string") draft.partner2Name = source.partner2Name;
+    if (typeof source.partner2Social === "string") draft.partner2Social = source.partner2Social;
+    if (typeof source.photographerName === "string") draft.photographerName = source.photographerName;
+    if (typeof source.photographerEmail === "string") draft.photographerEmail = source.photographerEmail;
+    if (typeof source.photographerInstagram === "string") draft.photographerInstagram = source.photographerInstagram;
     if (typeof source.secondCar === "boolean") draft.secondCar = source.secondCar;
     if (typeof source.pickup === "string") draft.pickup = source.pickup;
     if (typeof source.pickupPlaceId === "string") draft.pickupPlaceId = source.pickupPlaceId;
@@ -867,7 +1066,23 @@ function bookingInput(draft: Draft, car: string): BookingInput {
   };
 }
 
-function collectErrors(input: BookingInput, open: string[], ready: boolean) {
+function weddingInput(draft: Draft): WeddingCelebrationInput {
+  return {
+    partner1Name: draft.partner1Name,
+    partner1Social: draft.partner1Social,
+    partner2Name: draft.partner2Name,
+    partner2Social: draft.partner2Social,
+    photographerName: draft.photographerName,
+    photographerEmail: draft.photographerEmail,
+    photographerInstagram: draft.photographerInstagram,
+  };
+}
+
+function weddingFilled(draft: Draft) {
+  return WEDDING_KEYS.some((key) => draft[key].trim());
+}
+
+function collectErrors(input: BookingInput, open: string[], ready: boolean, wedding: WeddingCelebrationInput) {
   const errors: Record<string, string> = {};
   // Day-of contact is checked after the review checkboxes. Ask again with those
   // accepted so a missing day-of name is not hidden until the last step.
@@ -889,6 +1104,10 @@ function collectErrors(input: BookingInput, open: string[], ready: boolean) {
     if (errors[key]) continue;
     const result = validateDayOfContact({ ...dayOfFilled, [field]: input[key] });
     if (!result.ok) errors[key] = result.error;
+  }
+  if (input.occasion === "Wedding") {
+    const extra = weddingCelebrationErrors(input.occasion, wedding);
+    for (const [key, message] of Object.entries(extra)) errors[key] ||= message;
   }
   if (ready && input.start && !errors.start) {
     const minutes = toMinutes(input.start);
@@ -916,6 +1135,13 @@ function fieldForError(error: string) {
   if (error === "Enter a valid email.") return "email";
   if (error === "Enter a phone number.") return "phone";
   if (error === "Choose an occasion.") return "occasion";
+  if (error.includes("partner 1 social")) return "partner1Social";
+  if (error.includes("partner 1")) return "partner1Name";
+  if (error.includes("partner 2 social")) return "partner2Social";
+  if (error.includes("partner 2")) return "partner2Name";
+  if (error.includes("photographer email") || error.includes("Photographer email")) return "photographerEmail";
+  if (error.includes("Instagram")) return "photographerInstagram";
+  if (error.includes("photographer") || error.includes("Photographer")) return "photographerName";
   if (error === "Enter a pickup location.") return "pickup";
   if (error === "Enter a drop-off location.") return "dropoff";
   if (error.includes("day-of contact") && error.includes("name")) return "dayOfName";

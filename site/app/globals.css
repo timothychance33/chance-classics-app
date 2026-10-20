@@ -1162,6 +1162,21 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
 .book-back { width: 100%; min-height: 48px; }
 .book-alt { margin: 14px 0 0; }
 .book-alt a { display: inline-block; min-height: 44px; padding: 10px 0; }
+.celebrate {
+  margin: 16px 0 4px;
+  border: 1px solid var(--line);
+  background: #f7f4ef;
+  padding: 0 12px 4px;
+}
+.celebrate summary {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+.celebrate summary::-webkit-details-marker { display: none; }
 .summary-edit {
   min-height: 44px;
   padding: 8px 0;

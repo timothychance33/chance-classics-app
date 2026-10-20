@@ -14,6 +14,10 @@ function oneLine(value) {
   return String(value ?? "").replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function weddingLine(name, social) {
+  return [oneLine(name), oneLine(social)].filter(Boolean).join(" · ");
+}
+
 function moneyNumber(value) {
   if (value == null || value === "") return null;
   const n = Number(String(value).replace(/[$,]/g, ""));
@@ -110,6 +114,11 @@ export function ownerBookingCreatedRows(booking) {
   }
   rows.push(["Price", bookingPriceText(booking)]);
   rows.push(["Planner", bookingPlannerText(booking)]);
+  rows.push(["Bride / partner 1", weddingLine(booking?.wedding_partner_1_name, booking?.wedding_partner_1_social)]);
+  rows.push(["Groom / partner 2", weddingLine(booking?.wedding_partner_2_name, booking?.wedding_partner_2_social)]);
+  rows.push(["Photographer", oneLine(booking?.wedding_photographer_name)]);
+  rows.push(["Photographer email", oneLine(booking?.wedding_photographer_email)]);
+  rows.push(["Photographer Instagram", oneLine(booking?.wedding_photographer_instagram)]);
   return rows.filter(([, value]) => value);
 }
 

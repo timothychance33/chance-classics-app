@@ -75,6 +75,24 @@ assert.deepEqual(labels, [
   'Booking id', 'Client', 'Phone', 'Email', 'Car', 'Date', 'Time', 'Pickup / event location', 'Price', 'Planner',
 ]);
 
+const weddingMail = ownerBookingCreatedHtml({
+  ...booking,
+  wedding_partner_1_name: 'Ann <b>',
+  wedding_partner_1_social: '@ann',
+  wedding_partner_2_name: 'Jon',
+  wedding_photographer_name: 'Pat Photo',
+  wedding_photographer_email: 'pat@studio.example',
+  wedding_photographer_instagram: 'patphoto',
+}, '');
+assert.match(weddingMail, /Bride \/ partner 1/);
+assert.match(weddingMail, /Ann &lt;b&gt; · @ann/);
+assert.match(weddingMail, /Groom \/ partner 2/);
+assert.match(weddingMail, /Photographer email/);
+assert.match(weddingMail, /pat@studio\.example/);
+assert.match(weddingMail, /Photographer Instagram/);
+assert.doesNotMatch(weddingMail, /<b>/);
+assert.doesNotMatch(ownerBookingCreatedHtml(booking, ''), /Bride \/ partner 1|Photographer email/);
+
 const mail = ownerBookingCreatedHtml(booking, 'https://app.chanceclassics.com');
 assert.match(mail, /b4060b02-5f08-4cc8-90b6-a35152324b2c/);
 assert.match(mail, /Ada &lt;script&gt; Lovelace/);

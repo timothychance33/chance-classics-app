@@ -1,4 +1,5 @@
 import type { rentalDb } from "@/lib/rental-db";
+import { WEDDING_COLUMN_NAMES } from "@/lib/booking-rules";
 import { ownerBookingCreatedRows, shouldEmailOwnerAboutBooking } from "./owner-booking-email.mjs";
 
 export {
@@ -12,25 +13,63 @@ type Db = NonNullable<ReturnType<typeof rentalDb>>;
 const BOOKING_COLUMNS =
   "id,customer_name,customer_email,customer_phone,event_type,event_date,start_time,end_time,pickup_location,return_location,car_id,status,notes,total_usd,day_of_contact_name,day_of_contact_phone,day_of_contact_role";
 
-function missingColumn(message: string, column: string) {
-  return new RegExp(column, "i").test(message || "");
+const WEDDING_COLUMNS = WEDDING_COLUMN_NAMES.join(",");
+
+function columnNamedInError(message: string) {
+  return message.match(/'([a-z0-9_]+)' column/i)?.[1] || message.match(/column "([a-z0-9_]+)"/i)?.[1] || "";
 }
 
+type BookingNoticeRow = {
+  id: string;
+  car_id: string | null;
+  status: string | null;
+  notes: string | null;
+  total_usd: number | null;
+  owner_notified_at?: string | null;
+  customer_name?: string | null;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  event_type?: string | null;
+  event_date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  pickup_location?: string | null;
+  return_location?: string | null;
+  day_of_contact_name?: string | null;
+  day_of_contact_phone?: string | null;
+  day_of_contact_role?: string | null;
+  wedding_partner_1_name?: string | null;
+  wedding_partner_1_social?: string | null;
+  wedding_partner_2_name?: string | null;
+  wedding_partner_2_social?: string | null;
+  wedding_photographer_name?: string | null;
+  wedding_photographer_email?: string | null;
+  wedding_photographer_instagram?: string | null;
+};
+
 async function selectBooking(db: Db, bookingId: string) {
-  const withStamp = await db
-    .from("bookings")
-    .select(
-      "id,customer_name,customer_email,customer_phone,event_type,event_date,start_time,end_time,pickup_location,return_location,car_id,status,notes,total_usd,day_of_contact_name,day_of_contact_phone,day_of_contact_role,owner_notified_at" satisfies `${typeof BOOKING_COLUMNS},owner_notified_at`,
-    )
-    .eq("id", bookingId)
-    .maybeSingle();
-  if (!withStamp.error) return { row: withStamp.data, tracksNotified: true };
-  if (!missingColumn(withStamp.error.message || "", "owner_notified_at")) {
-    throw new Error(withStamp.error.message || "The booking could not be loaded.");
+  let includeWedding = true;
+  let includeStamp = true;
+  let lastError = "The booking could not be loaded.";
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const columns = [BOOKING_COLUMNS, includeWedding ? WEDDING_COLUMNS : "", includeStamp ? "owner_notified_at" : ""]
+      .filter(Boolean)
+      .join(",");
+    const loaded = await db.from("bookings").select(columns).eq("id", bookingId).maybeSingle();
+    if (!loaded.error) return { row: loaded.data as BookingNoticeRow | null, tracksNotified: includeStamp };
+    lastError = loaded.error.message || lastError;
+    const named = columnNamedInError(lastError);
+    if (named.startsWith("wedding_") && includeWedding) {
+      includeWedding = false;
+      continue;
+    }
+    if (named === "owner_notified_at" && includeStamp) {
+      includeStamp = false;
+      continue;
+    }
+    break;
   }
-  const plain = await db.from("bookings").select(BOOKING_COLUMNS).eq("id", bookingId).maybeSingle();
-  if (plain.error) throw new Error(plain.error.message || "The booking could not be loaded.");
-  return { row: plain.data, tracksNotified: false };
+  throw new Error(lastError);
 }
 
 async function carName(db: Db, carId: unknown) {
