@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { balanceReminderMonday, reminderEventWindow } from '../supabase/functions/_shared/saved-card.mjs';
 import {
+  MONDAY_DRIVER_LINE,
   balanceEventDate,
   balanceFirstName,
   balancePayHtml,
@@ -148,6 +149,14 @@ assert.match(payText, /Time: 2:00PM – 6:00PM/);
 assert.match(payText, /Balance: \$301\.25/);
 assert.match(payText, /https:\/\/checkout\.stripe\.com\/c\/pay\/cs_test_123/);
 assert.doesNotMatch(payText, /<a |<p>/);
+assert.doesNotMatch(payMail, /You'll get your driver's name/);
+assert.doesNotMatch(payText, /You'll get your driver's name/);
+const mondayHtml = balancePayHtml({ ...payInput, mondayReminder: true });
+const mondayText = balancePayText({ ...payInput, mondayReminder: true });
+assert.equal(mondayHtml.split(MONDAY_DRIVER_LINE).length, 2);
+assert.equal(mondayText.split(MONDAY_DRIVER_LINE).length, 2);
+const questionsAt = mondayHtml.indexOf('If you have any questions at all');
+assert.ok(mondayHtml.indexOf(MONDAY_DRIVER_LINE) < questionsAt, 'the driver line sits above the existing questions line');
 assert.equal(
   htmlToPlainText('<p>Hi <b>Ada</b>,</p><p><a href="https://pay.example/abc">Pay</a></p>'),
   'Hi Ada,\n\nPay\nhttps://pay.example/abc',
@@ -156,6 +165,7 @@ assert.equal(
 assert.match(scheduled, /balancePaySubject/);
 assert.match(scheduled, /balancePayHtml/);
 assert.match(scheduled, /balancePayText/);
+assert.match(scheduled, /mondayReminder: true/);
 assert.match(scheduled, /reply_to: CUSTOMER_REPLY_TO/);
 assert.match(scheduled, /text: plain/);
 assert.match(scheduled, /FROM_EMAIL = Deno\.env\.get\("FROM_EMAIL"\) \?\? DEFAULT_FROM_EMAIL/);
@@ -165,6 +175,7 @@ const notify = read('supabase/functions/send-notification/index.ts');
 assert.match(notify, /type === "balance_pay"/);
 assert.match(notify, /balancePayHtml/);
 assert.match(notify, /balancePayText\(payMail\)/);
+assert.doesNotMatch(notify, /mondayReminder/);
 const sharedMail = read('supabase/functions/send-notification/shared.ts');
 assert.match(sharedMail, /FROM_EMAIL = Deno\.env\.get\("FROM_EMAIL"\) \?\? DEFAULT_FROM_EMAIL/);
 assert.match(sharedMail, /reply_to: REPLY_TO/);

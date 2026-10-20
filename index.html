@@ -2844,6 +2844,7 @@ function showPast(){
         <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div><div class="y">${dc.y}</div></div>
         <div class="lmain"><div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span></div>
         <div class="meta lcar">🚗 ${car?esc(car.name):'—'} · 👤 ${drv?esc(drv.name):'no driver'}</div>
+        ${dayBeforeEmailLine(b)}
         ${ownerCustomerAmountTagHtml(b)}
         ${isOwnerView()?ownerPayPillHtml(b):''}</div></div>`;
     }
@@ -2909,6 +2910,7 @@ function bookingRowHtml(b){
       <div class="meta">${esc(b.event_type||'—')}${b.start_time?' · '+fmtTime(b.start_time):''}</div>
       <div class="meta lcar">🚗 ${car?esc(car.name):'<em>no car</em>'} &nbsp;·&nbsp; 👤 ${drv?esc(drv.name):'<em>no driver</em>'}${pct!==null?` &nbsp;·&nbsp; ${pct}% prepped`:''}</div>
       ${dayOfContactLine(b)}
+      ${dayBeforeEmailLine(b)}
       ${payline}
     </div>
     <div class="lactions">${actions}</div>
@@ -3099,6 +3101,7 @@ function calDay(day){
         <div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}</div>
         <div class="meta lcar">🚗 ${car?esc(car.name):'<em>no car</em>'} &nbsp;·&nbsp; 👤 ${drv?esc(drv.name):'<em>no driver</em>'}${b.event_type?' · '+esc(b.event_type):''}</div>
         ${dayOfContactLine(b)}
+        ${dayBeforeEmailLine(b)}
         ${ownerCustomerAmountTagHtml(b)}
         ${isOwnerView()?ownerPayPillHtml(b):''}
       </div></div>`;
@@ -3800,6 +3803,10 @@ async function sendBalancePayLink(bid){
     chargeBusy.delete(bid);
   }
 }
+function dayBeforeEmailLine(b){
+  const text=dayBeforeSentNote(b&&b.day_before_email_sent_at);
+  return text?`<div class="meta">${esc(text)}</div>`:'';
+}
 function bookingDetail(bid){
   const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
   const car=carById(b.car_id), drv=staffById(b.driver_id);
@@ -3813,6 +3820,7 @@ function bookingDetail(bid){
     </div>`;
   }
   openModal('Booking details',`
+    ${dayBeforeEmailLine(b)}
     ${isOwnerView()?ownerPayPillHtml(b,'margin-bottom:14px;font-size:16px'):''}
     ${!isOwnerView()&&pay!=null?`<div class="paypill" style="margin-bottom:14px">You earn $${pay}</div>`:''}
     ${showOwnerCustomerAmount()?ownerCustomerAmountEditorHtml(b,'detail'):''}

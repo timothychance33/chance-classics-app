@@ -52,13 +52,21 @@
     return Number.isFinite(created) && Number.isFinite(startedAt) && created >= startedAt - 15000;
   }
 
+  function dayBeforeSentNote(sentAt) {
+    var when = chicagoPayLinkTime(sentAt);
+    if (!when) return '';
+    return 'Day-before email sent ' + when;
+  }
+
   var api = {
     chicagoPayLinkTime: chicagoPayLinkTime,
     payLinkSentNote: payLinkSentNote,
     isNewPayLinkRow: isNewPayLinkRow,
+    dayBeforeSentNote: dayBeforeSentNote,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.chicagoPayLinkTime = chicagoPayLinkTime;
   root.payLinkSentNote = payLinkSentNote;
   root.isNewPayLinkRow = isNewPayLinkRow;
+  root.dayBeforeSentNote = dayBeforeSentNote;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
