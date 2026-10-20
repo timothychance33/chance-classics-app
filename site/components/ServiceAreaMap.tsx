@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MILE_THRESHOLD, SHOP_ADDRESS } from "@/lib/booking-rules";
+import { mapEmbedSrc } from "@/lib/map-embed";
 import { mountShopMap, type ShopMapApi } from "@/lib/shop-map";
 
 type MapsWindow = Window & {
@@ -73,12 +74,19 @@ export function ServiceAreaMap({ apiKey }: { apiKey: string }) {
         />
         {status === "loading" && <p className="area-map-status">Loading the map…</p>}
         {status === "unavailable" && (
-          <p className="area-map-status">The shop map could not be loaded. The mileage rules below still apply.</p>
+          <iframe
+            className="area-map-embed"
+            title={label}
+            src={mapEmbedSrc(SHOP_ADDRESS)}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
         )}
       </div>
       {status === "ready" && (
         <figcaption>The circle is the {MILE_THRESHOLD}-mile free mileage zone around {SHOP_ADDRESS}.</figcaption>
       )}
+      {status === "unavailable" && <figcaption>Chance Classics at {SHOP_ADDRESS}.</figcaption>}
     </figure>
   );
 }

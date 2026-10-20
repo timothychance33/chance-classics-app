@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CallLine } from "@/components/CallLine";
 import { pageMeta } from "@/lib/content";
 
 export const metadata = pageMeta({
@@ -14,7 +15,8 @@ export default function PaymentPage() {
       <p><Link href="/">CHANCE CLASSIC CAR RENTAL</Link></p>
       <h1>CHECKOUT</h1>
       <p>Pay link not found</p>
-      <p>Refresh your page to try again. If there is still an issue, please contact us.</p>
+      <p>Refresh your page to try again. If there is still an issue, call or text.</p>
+      <CallLine lead="Call or text" />
     </article>
   );
 }

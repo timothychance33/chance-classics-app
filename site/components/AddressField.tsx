@@ -5,15 +5,19 @@ import { useEffect, useId, useRef, useState } from "react";
 type Prediction = { description: string; placeId: string };
 
 type Props = {
+  id?: string;
   name: string;
   required?: boolean;
   value: string;
   placeId: string;
   onValue: (value: string, placeId: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
+  invalid?: boolean;
+  describedBy?: string;
 };
 
-export function AddressField({ name, required, value, placeId, onValue, placeholder }: Props) {
+export function AddressField({ id, name, required, value, placeId, onValue, onBlur, placeholder, invalid, describedBy }: Props) {
   const listId = useId();
   const sessionToken = useRef("");
   const [open, setOpen] = useState(false);
@@ -42,6 +46,7 @@ export function AddressField({ name, required, value, placeId, onValue, placehol
   return (
     <div className="address-field">
       <input
+        id={id}
         name={name}
         required={required}
         autoComplete="off"
@@ -49,6 +54,8 @@ export function AddressField({ name, required, value, placeId, onValue, placehol
         aria-expanded={open && items.length > 0}
         aria-controls={listId}
         aria-autocomplete="list"
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         placeholder={placeholder}
         value={value}
         onChange={(event) => {
@@ -56,7 +63,10 @@ export function AddressField({ name, required, value, placeId, onValue, placehol
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onBlur={() => {
+          setTimeout(() => setOpen(false), 150);
+          onBlur?.();
+        }}
       />
       {open && items.length > 0 && (
         <ul id={listId} className="address-suggest" role="listbox">

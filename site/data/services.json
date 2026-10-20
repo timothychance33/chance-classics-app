@@ -21,8 +21,8 @@
       {
         "src": "/images/service-1953-packard-limo_1953-packard-limo_02.webp",
         "alt": "1953 Packard Limousine",
-        "w": 4032,
-        "h": 3024,
+        "w": 1260,
+        "h": 945,
         "file": "service-1953-packard-limo_1953-packard-limo_02.png"
       },
       {
@@ -34,7 +34,7 @@
       },
       {
         "src": "/images/home_main_02.webp",
-        "alt": "Starting at $500",
+        "alt": "Photo of Patsy, the 1953 Packard Patrician Limousine",
         "w": 4032,
         "h": 3024,
         "file": "home_main_02.png"
@@ -87,8 +87,8 @@
     "image": {
       "src": "/images/book-online_1937-cadillac-fleetwood-series_01.webp",
       "alt": "1937 Cadillac Fleetwood Series 75",
-      "w": 4284,
-      "h": 4284,
+      "w": 1100,
+      "h": 1100,
       "file": "book-online_1937-cadillac-fleetwood-series_01.jpg"
     },
     "gallery": [],
@@ -132,8 +132,8 @@
     "image": {
       "src": "/images/book-online_1954-packard-caribbean_01.webp",
       "alt": "1954 Packard Caribbean",
-      "w": 4284,
-      "h": 4284,
+      "w": 1100,
+      "h": 1100,
       "file": "book-online_1954-packard-caribbean_01.jpg"
     },
     "gallery": [

@@ -1,13 +1,20 @@
 import { visibleSocial } from "@/data/social";
-import { EMAIL } from "@/lib/content";
+import { EMAIL, PHONE_DISPLAY, PHONE_TEL } from "@/lib/content";
 
 export function Footer() {
   const social = visibleSocial();
+  const year = new Date().getFullYear();
   return (
     <footer className="site-footer">
-      <p>Chance Classic Car Rental</p>
+      <p>Chance Classics</p>
+      <p>
+        <a href={`tel:${PHONE_TEL}`}>{PHONE_DISPLAY}</a>
+      </p>
       <p>
         <a href={`mailto:${EMAIL}`}>{EMAIL}</a>
+      </p>
+      <p>
+        <a href="/contact/">Contact</a>
       </p>
       {social.length > 0 && (
         <p className="footer-social">
@@ -18,7 +25,7 @@ export function Footer() {
           ))}
         </p>
       )}
-      <p className="fine">©2023 by Chance Classic Car Rental.</p>
+      <p className="fine">©{year} by Chance Classics.</p>
     </footer>
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CallLine } from "@/components/CallLine";
 import { Picture } from "@/components/Picture";
 import { pageMeta } from "@/lib/content";
 import { occasions } from "@/lib/occasions";
@@ -53,6 +54,7 @@ export default function ServicesPage() {
   return (
     <article className="wrap page">
       <h1>Services</h1>
+      <CallLine />
       {blocks.map((block) => (
         <section key={block.title} className={block.reverse ? "svc-row reverse" : "svc-row"}>
           <Picture image={block.image} alt={block.alt} position={block.position} />

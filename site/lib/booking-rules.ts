@@ -408,6 +408,125 @@ export function dayOfContactColumns(contact: DayOfContact) {
   };
 }
 
+export const WEDDING_COLUMN_NAMES = [
+  "wedding_partner_1_name",
+  "wedding_partner_1_social",
+  "wedding_partner_2_name",
+  "wedding_partner_2_social",
+  "wedding_photographer_name",
+  "wedding_photographer_email",
+  "wedding_photographer_instagram",
+] as const;
+
+export type WeddingCelebrationInput = {
+  partner1Name?: unknown;
+  partner1Social?: unknown;
+  partner2Name?: unknown;
+  partner2Social?: unknown;
+  photographerName?: unknown;
+  photographerEmail?: unknown;
+  photographerInstagram?: unknown;
+};
+
+const WEDDING_FIELDS: Array<{
+  key: keyof WeddingCelebrationInput;
+  max: number;
+  breakMessage: string;
+  longMessage: string;
+}> = [
+  {
+    key: "partner1Name",
+    max: 120,
+    breakMessage: "Enter the bride or partner 1 name on one line.",
+    longMessage: "Bride or partner 1 name is too long.",
+  },
+  {
+    key: "partner1Social",
+    max: 80,
+    breakMessage: "Enter the bride or partner 1 social handle on one line.",
+    longMessage: "Bride or partner 1 social handle is too long.",
+  },
+  {
+    key: "partner2Name",
+    max: 120,
+    breakMessage: "Enter the groom or partner 2 name on one line.",
+    longMessage: "Groom or partner 2 name is too long.",
+  },
+  {
+    key: "partner2Social",
+    max: 80,
+    breakMessage: "Enter the groom or partner 2 social handle on one line.",
+    longMessage: "Groom or partner 2 social handle is too long.",
+  },
+  {
+    key: "photographerName",
+    max: 120,
+    breakMessage: "Enter the photographer name on one line.",
+    longMessage: "Photographer name is too long.",
+  },
+  {
+    key: "photographerInstagram",
+    max: 80,
+    breakMessage: "Enter the photographer Instagram on one line.",
+    longMessage: "That Instagram handle is too long.",
+  },
+];
+
+function optionalLine(raw: unknown, max: number) {
+  const text = String(raw ?? "");
+  if (/[\r\n]/.test(text)) return { ok: false as const, reason: "break" as const };
+  const value = text.replace(/[^\S\r\n]+/g, " ").trim();
+  if (value.length > max) return { ok: false as const, reason: "long" as const };
+  return { ok: true as const, value };
+}
+
+/** Optional wedding answers. Empty is valid. Nothing here is required. */
+export function weddingCelebrationErrors(occasion: string, input: WeddingCelebrationInput) {
+  const errors: Record<string, string> = {};
+  if (occasion !== "Wedding") return errors;
+  for (const field of WEDDING_FIELDS) {
+    const parsed = optionalLine(input[field.key], field.max);
+    if (!parsed.ok) errors[field.key] = parsed.reason === "break" ? field.breakMessage : field.longMessage;
+  }
+  const email = optionalLine(input.photographerEmail, 160);
+  if (!email.ok || (email.ok && email.value && !EMAIL.test(email.value))) {
+    errors.photographerEmail = email.ok
+      ? "Enter a valid photographer email, or leave it blank."
+      : email.reason === "break"
+        ? "Enter the photographer email on one line."
+        : "Enter a valid photographer email, or leave it blank.";
+  }
+  return errors;
+}
+
+function weddingValue(raw: unknown, max: number) {
+  const parsed = optionalLine(raw, max);
+  return parsed.ok && parsed.value ? parsed.value : null;
+}
+
+/** Persist only when the occasion is Wedding. Other occasions store nulls. */
+export function weddingCelebrationColumns(occasion: string, input: WeddingCelebrationInput) {
+  const empty = {
+    wedding_partner_1_name: null,
+    wedding_partner_1_social: null,
+    wedding_partner_2_name: null,
+    wedding_partner_2_social: null,
+    wedding_photographer_name: null,
+    wedding_photographer_email: null,
+    wedding_photographer_instagram: null,
+  };
+  if (occasion !== "Wedding" || Object.keys(weddingCelebrationErrors(occasion, input)).length) return empty;
+  return {
+    wedding_partner_1_name: weddingValue(input.partner1Name, 120),
+    wedding_partner_1_social: weddingValue(input.partner1Social, 80),
+    wedding_partner_2_name: weddingValue(input.partner2Name, 120),
+    wedding_partner_2_social: weddingValue(input.partner2Social, 80),
+    wedding_photographer_name: weddingValue(input.photographerName, 120),
+    wedding_photographer_email: weddingValue(input.photographerEmail, 160),
+    wedding_photographer_instagram: weddingValue(input.photographerInstagram, 80),
+  };
+}
+
 export type BookingInput = {
   car: string;
   date: string;

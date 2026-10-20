@@ -1,5 +1,5 @@
 import { CarTile } from "@/components/CarTile";
-import { galleries, portfolioCovers, portfolioOrder, serviceByPortfolio } from "@/lib/content";
+import { fleetModel, galleries, portfolioCovers, portfolioOrder, serviceByPortfolio } from "@/lib/content";
 
 export function CarsGrid() {
   const covers = portfolioCovers.map((cover) => {
@@ -17,7 +17,7 @@ export function CarsGrid() {
         const galleryHref = car.href.endsWith("/") ? car.href : `${car.href}/`;
         const meetHref = service ? `/service-page/${service.slug}/` : galleryHref;
         const bookHref = service ? `/service-page/${service.slug}/#book` : meetHref;
-        const subtitle = galleries[car.slug]?.subtitle;
+        const subtitle = fleetModel(car.title) || galleries[car.slug]?.subtitle;
         return (
           <CarTile
             key={car.slug}

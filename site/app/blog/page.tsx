@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CallLine } from "@/components/CallLine";
 import { LikeButton } from "@/components/LikeButton";
 import { pageMeta, posts } from "@/lib/content";
 
@@ -12,6 +13,7 @@ export default function BlogPage() {
   return (
     <article className="wrap page">
       <h1 className="center">All Posts</h1>
+      <CallLine />
       <div className="posts">
         {posts.map((post) => (
           <article key={post.slug}>

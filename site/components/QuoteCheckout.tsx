@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { DayOfContactFields } from "@/components/DayOfContactFields";
-import { CARD_SAVE_TEXT, DEPOSIT_USD, QUOTE_LINK_EXPIRED, RELIABILITY_TEXT, WAIVER_TEXT } from "@/lib/booking-rules";
+import { CARD_SAVE_TEXT, DEPOSIT_USD, QUOTE_LINK_EXPIRED, RELIABILITY_TEXT, WAIVER_TEXT, validateDayOfContact } from "@/lib/booking-rules";
 
 type Line = { label: string; amount: number };
 type QuoteView = {
@@ -28,6 +28,12 @@ function money(amount: number) {
   return Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`;
 }
 
+function dayOfFieldError(field: "name" | "phone" | "role", value: string) {
+  const filled = { name: "Day Contact", phone: "3183445001", role: "Planner", [field]: value };
+  const result = validateDayOfContact(filled);
+  return result.ok ? "" : result.error;
+}
+
 export function QuoteCheckout({ token }: { token: string }) {
   const [quote, setQuote] = useState<QuoteView | null>(null);
   const [closed, setClosed] = useState("");
@@ -39,6 +45,8 @@ export function QuoteCheckout({ token }: { token: string }) {
   const [dayOfRole, setDayOfRole] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let ignore = false;
@@ -61,12 +69,22 @@ export function QuoteCheckout({ token }: { token: string }) {
     };
   }, [token]);
 
+  const dayOf = validateDayOfContact({ name: dayOfName, phone: dayOfPhone, role: dayOfRole });
+  function show(field: "name" | "phone" | "role" | "waiver" | "reliability") {
+    return tried || touched[field];
+  }
+  const dayOfErrors = {
+    name: show("name") ? dayOfFieldError("name", dayOfName) : "",
+    phone: show("phone") ? dayOfFieldError("phone", dayOfPhone) : "",
+    role: show("role") ? dayOfFieldError("role", dayOfRole) : "",
+  };
+  const waiverError = show("waiver") && !waiver ? "Accept the rental terms to continue." : "";
+  const reliabilityError = show("reliability") && !reliability ? "Accept the classic-car reliability notice to continue." : "";
+
   async function pay() {
     setMessage("");
-    if (!waiver || !reliability) {
-      setMessage("Accept both notices to continue.");
-      return;
-    }
+    setTried(true);
+    if (!dayOf.ok || !waiver || !reliability) return;
     setBusy(true);
     try {
       const response = await fetch("/api/quotes/book/", {
@@ -131,28 +149,46 @@ export function QuoteCheckout({ token }: { token: string }) {
       </div>
       {quote.note && <p>{quote.note}</p>}
       {availability && <p className="form-error" role="alert">{availability}</p>}
-      <form className="book-form" onSubmit={(event) => { event.preventDefault(); pay(); }}>
+      <form className="book-form" noValidate onSubmit={(event) => { event.preventDefault(); pay(); }}>
         <DayOfContactFields
           name={dayOfName}
           phone={dayOfPhone}
           role={dayOfRole}
+          errors={dayOfErrors}
+          onBlur={(field) => setTouched((current) => ({ ...current, [field]: true }))}
           onName={setDayOfName}
           onPhone={setDayOfPhone}
           onRole={setDayOfRole}
         />
         <label className="check">
-          <input type="checkbox" checked={waiver} onChange={(event) => setWaiver(event.target.checked)} required />
+          <input
+            type="checkbox"
+            checked={waiver}
+            aria-invalid={waiverError ? true : undefined}
+            aria-describedby="quote-waiver-error"
+            onBlur={() => setTouched((current) => ({ ...current, waiver: true }))}
+            onChange={(event) => setWaiver(event.target.checked)}
+          />
           <span>
             {WAIVER_TEXT}{" "}
             <Link href="/rental-terms/">Read the rental terms</Link>
           </span>
         </label>
+        <span id="quote-waiver-error" className="field-error" role={waiverError ? "alert" : undefined}>{waiverError}</span>
         <label className="check">
-          <input type="checkbox" checked={reliability} onChange={(event) => setReliability(event.target.checked)} required />
+          <input
+            type="checkbox"
+            checked={reliability}
+            aria-invalid={reliabilityError ? true : undefined}
+            aria-describedby="quote-reliability-error"
+            onBlur={() => setTouched((current) => ({ ...current, reliability: true }))}
+            onChange={(event) => setReliability(event.target.checked)}
+          />
           <span>{RELIABILITY_TEXT}</span>
         </label>
-        {message && <p className="form-error" role="alert">{message}</p>}
-        <button className="btn" type="submit" disabled={busy || Boolean(availability)}>
+        <span id="quote-reliability-error" className="field-error" role={reliabilityError ? "alert" : undefined}>{reliabilityError}</span>
+        <p className="book-alert form-error" role={message ? "alert" : undefined}>{message}</p>
+        <button className="btn book-pay" type="submit" disabled={busy || Boolean(availability)}>
           {busy ? "Please wait…" : `Book with $${quote.deposit || DEPOSIT_USD} deposit`}
         </button>
       </form>

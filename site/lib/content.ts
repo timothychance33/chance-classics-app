@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { carIdentity, factsForCar } from "@/data/carFacts";
 import servicesData from "@/data/services.json";
 import galleriesData from "@/data/galleries.json";
 import agreementsData from "@/data/agreements.json";
@@ -8,7 +9,8 @@ import servicesPageData from "@/data/services-page.json";
 import portfolioData from "@/data/portfolio.json";
 import thanksData from "@/data/thanks.json";
 
-export const SITE_URL = "https://www.chanceclassics.com";
+/** Apex host. www.chanceclassics.com redirects here. */
+export const SITE_URL = "https://chanceclassics.com";
 export const FACEBOOK = "https://www.facebook.com/profile.php?id=100094754298768";
 export const EMAIL = "chanceclassics@gmail.com";
 export const PHONE_DISPLAY = "318-344-5001";
@@ -113,9 +115,21 @@ export const servicePhotos = servicesPageData as Img[];
 export const portfolioCovers = portfolioData as { alt: string; href: string; image: Img }[];
 export const thanksImage = thanksData as Img;
 
+/** Year, make, and model Tim confirmed in carFacts. Empty when that car has no facts row. */
+export function fleetModel(car: string) {
+  const facts = factsForCar(car);
+  return facts ? carIdentity(facts) : "";
+}
+
+/** "Phyllis - 1941 Buick Super" from the fleet facts, or the fallback line. */
+export function fleetTag(car: string, fallback = "") {
+  const model = fleetModel(car);
+  return model ? `${car} - ${model}` : fallback;
+}
+
 export const portfolioOrder = byModelYear(
-  Object.values(galleries),
-  (gallery) => gallery.subtitle,
+  Object.values(galleries).filter((gallery) => gallery.slug !== "others"),
+  (gallery) => fleetModel(gallery.title) || gallery.subtitle,
   (gallery) => gallery.title,
 ).map((gallery) => gallery.slug);
 
@@ -162,16 +176,24 @@ export function fixCopy(text: string) {
     .replaceAll("idication", "indication");
 }
 
+function absoluteUrl(path: string) {
+  if (!path || path === "/") return `${SITE_URL}/`;
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${SITE_URL}${normalized.endsWith("/") ? normalized : `${normalized}/`}`;
+}
+
 export function pageMeta(opts: {
   title: string;
   description?: string;
   path: string;
   image?: string;
+  imageAlt?: string;
   noindex?: boolean;
 }): Metadata {
   const description = opts.description || undefined;
-  const url = `${SITE_URL}${opts.path === "/" ? "/" : opts.path}`;
+  const url = absoluteUrl(opts.path);
   const image = opts.image || OG_IMAGE;
+  const imageAlt = opts.imageAlt || "Chance Classics";
   return {
     title: opts.title,
     description,
@@ -183,24 +205,19 @@ export function pageMeta(opts: {
       url,
       siteName: "Chance Classics, Classic Car Rental",
       type: "website",
-      images: [{ url: image, alt: "Chance Classics" }],
+      images: [{ url: image, alt: imageAlt }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: opts.title,
+      description,
+      images: [image],
     },
   };
 }
 
 export const quoteServices = byModelYear(
-  [
-    "Patsy - 1953 Packard Patrician Limousine",
-    "Brenda - 1961 Buick Invicta Convertible",
-    "Phyllis - 1941 Buick Super Convertible",
-    "Rosie - 1960 Chevrolet Corvette",
-    "Black Betty - 1950 Ford Custom Convertible",
-    "Veronica - 1957 Chevrolet Bel Air",
-    "Sylvia - 1970 Chevelle SS454",
-    "Elsa - 1954 Packard Caribbean",
-    "Carmen - 1976 Cadillac Eldorado",
-    "Bonnie - 1937 Cadillac Fleetwood 75",
-  ],
+  services.map((service) => fleetTag(service.car, `${service.car} - ${service.name}`)),
   (option) => option,
   (option) => option.split(" - ")[0].trim(),
 );
@@ -222,6 +239,120 @@ export type Post = {
 };
 
 export const posts: Post[] = [
+  {
+    slug: "prom-car-rental-tips",
+    title: "Prom Car Rental Tips for Northwest Louisiana",
+    description:
+      "What to sort out before you book a chauffeured classic car for prom around Benton, Shreveport, and Bossier: passengers, an open or closed car, time, and the pickup address.",
+    date: "Oct 20, 2026",
+    dateIso: "2026-10-20",
+    read: "3 min read",
+    views: "0 views",
+    blocks: [
+      {
+        type: "p",
+        html: "A prom car from Chance Classics is a chauffeured rental, the same way a wedding or a photo shoot is. You pick the car, we bring it to the address you give us, and a driver stays with it. The students do not drive.",
+      },
+      { type: "h3", text: "Match the car to the number of riders" },
+      {
+        type: "p",
+        html: "Most of the convertibles seat 3 passengers besides the chauffeur. Patsy, the 1953 Packard Patrician Limousine, and Bonnie, the 1937 Cadillac Fleetwood Series 75, each seat 6. Rosie, the 1960 Chevrolet Corvette, is a two-seat roadster: one passenger besides the driver. Count the people who actually need to ride before you choose from a photo.",
+      },
+      { type: "h3", text: "Open car or closed car" },
+      {
+        type: "p",
+        html: 'A convertible is the picture most people want for prom. Phyllis (1941 Buick Super), Black Betty (1950 Ford Custom Deluxe), Elsa (1954 Packard Caribbean), Brenda (1961 Buick Invicta), and Carmen (1976 Cadillac Eldorado) are the open cars, along with Rosie. Veronica, the 1957 Chevrolet Bel Air, and Sylvia, the 1970 Chevrolet Chevelle SS454, are coupes if you would rather be out of the weather. Say so when you <a href="/quoterequest/">request a quote</a> if rain is a concern.',
+      },
+      { type: "h3", text: "Time and distance" },
+      {
+        type: "ul",
+        items: [
+          "The listed price covers the first 2 hours. Each extra hour is $100.",
+          "A pickup 30 miles or less from Benton has no mileage charge.",
+          "Farther than that, the car is trailered and the charge is $3 per mile for the full distance.",
+          "Reservations have to be made at least 7 days ahead. A $250 non-refundable retainer holds the time.",
+          "Prom weekends in the spring can overlap. If you want a specific car, ask while it is still open.",
+        ],
+      },
+      { type: "h3", text: "Pictures, not just the ride" },
+      {
+        type: "p",
+        html: 'You can book the car for photos and not only for the drive. Say so on the quote so the 2 hours cover the pictures you want. Decorations are allowed, and you bring them. The shop is in Benton. Call or text <a href="tel:+13183445001">318-344-5001</a>, or start with <a href="/quoterequest/">a quote</a>.',
+      },
+    ],
+  },
+  {
+    slug: "homecoming-parade-car-tips",
+    title: "Homecoming Parade Car Tips",
+    description:
+      "How to book an open classic car and driver for a homecoming parade out of Benton: which cars are convertibles, how long to reserve, and what to tell us about the route.",
+    date: "Oct 20, 2026",
+    dateIso: "2026-10-20",
+    read: "3 min read",
+    views: "0 views",
+    blocks: [
+      {
+        type: "p",
+        html: "A homecoming parade around here is a lineup, a short route, and someone waving from an open car. Chance Classics sends a chauffeur with the car. You do not drive it in the parade.",
+      },
+      { type: "h3", text: "Ask for a convertible" },
+      {
+        type: "p",
+        html: 'Parade bookings use the open cars: Phyllis, the 1941 Buick Super; Black Betty, the 1950 Ford Custom Deluxe; Elsa, the 1954 Packard Caribbean; Brenda, the 1961 Buick Invicta; Carmen, the 1976 Cadillac Eldorado; and Rosie, the 1960 Chevrolet Corvette. Rosie seats one passenger besides the chauffeur, so a queen and a court need one of the larger convertibles. Those seat 3 passengers besides the driver. The list is on the <a href="/occasions/parades-and-special-events/">parades page</a>.',
+      },
+      { type: "h3", text: "Build the time around the lineup" },
+      {
+        type: "p",
+        html: "The listed price is for 2 hours, then $100 for each extra hour. A parade afternoon is often more than the ride itself. The driver has to be in line early, wait through the cars ahead, and roll the route. Tell us where to stage and about how long the parade runs so the booking covers it.",
+      },
+      { type: "h3", text: "Flowers, signs, and weather" },
+      {
+        type: "p",
+        html: "You can decorate the car. Bring the flowers, the sash, and the signs. An open car stays open in the rain. Ask about a rain plan when you request the quote. If the car you booked is not available, we offer a comparable backup. The rental terms cover delays the driver cannot control, including weather.",
+      },
+      { type: "h3", text: "Where the car comes from" },
+      {
+        type: "p",
+        html: 'The shop is in Benton. A pickup 30 miles or less from Benton has no mileage charge. Past 30 miles the car is trailered at $3 per mile for the whole distance. Book at least 7 days ahead. Homecoming Fridays in the fall land on the same afternoon, so a specific car can already be taken. Call or text <a href="tel:+13183445001">318-344-5001</a>.',
+      },
+    ],
+  },
+  {
+    slug: "classic-car-photo-shoot-tips",
+    title: "Classic Car Photo Shoot Tips in Benton and Shreveport–Bossier",
+    description:
+      "How to plan a photo-only classic car rental from Chance Classics: which cars you can book, how the 2 hours work, and what to tell the chauffeur.",
+    date: "Oct 20, 2026",
+    dateIso: "2026-10-20",
+    read: "3 min read",
+    views: "0 views",
+    blocks: [
+      {
+        type: "p",
+        html: "A photo shoot does not have to be part of a wedding. Chance Classics books the car for pictures only. A chauffeur brings it and stays with it. You do not drive.",
+      },
+      { type: "h3", text: "Any car in the fleet can sit for photos" },
+      {
+        type: "p",
+        html: 'The <a href="/occasions/weddings/">weddings page</a> lists the cars we send for a ceremony exit. Veronica, Sylvia, and Rosie are not on that list. A <a href="/occasions/photo-shoots/">photo shoot</a> can book any car in the fleet, including those three. Veronica, the 1957 Chevrolet Bel Air, and Sylvia, the 1970 Chevrolet Chevelle SS454, are coupes. Rosie, the 1960 Chevrolet Corvette, is a two-seat roadster. The convertibles, Patsy (the 1953 Packard Patrician Limousine), and Bonnie (the 1937 Cadillac Fleetwood Series 75) are available too. Pick the shape you want in the frame.',
+      },
+      { type: "h3", text: "Use the two hours on purpose" },
+      {
+        type: "p",
+        html: "The listed price covers 2 hours at the location, then $100 an hour. A pickup 30 miles or less from Benton has no mileage fee. Past that, trailer mileage is $3 per mile for the full distance. Shreveport and Bossier City are the short drives from the Benton shop. A session farther out belongs in the quote so the mileage is priced before you book.",
+      },
+      { type: "h3", text: "Tell the driver the stops" },
+      {
+        type: "p",
+        html: "The chauffeur can move the car, turn it, and wait while you take pictures. Send the stops with the booking: one lot, a downtown block, a field road. The more stops you add, the more of the 2 hours you spend driving between them. Be at the first spot on time. The car is the car you booked. If it is not available, we offer a comparable backup.",
+      },
+      { type: "h3", text: "What is included" },
+      {
+        type: "p",
+        html: 'The rental is the car and the chauffeur. Decorations are allowed if you bring them. A photographer is not part of the booking. Call or text <a href="tel:+13183445001">318-344-5001</a>, or <a href="/quoterequest/">request a quote</a> with the date, the car, and the address.',
+      },
+    ],
+  },
   {
     slug: "classic-car-vs-limousine-which-is-right-for-your-wedding",
     title: "Classic Car vs. Limousine: Which Is Right for Your Wedding?",
@@ -263,7 +394,7 @@ export const posts: Post[] = [
       { type: "h3", text: "Why couples choose Chance Classics" },
       {
         type: "p",
-        html: "Chance Classics operates a fleet of 10 vintage automobiles across Louisiana, giving couples more style options than a typical single-car rental company — from Bonnie (a 1939 Cadillac Sedan) to Carmen (a 1976 Cadillac Convertible) — each with a professional chauffeur included.",
+        html: "Chance Classics operates a fleet of 10 vintage automobiles across Louisiana, giving couples more style options than a typical single-car rental company — from Bonnie (a 1937 Cadillac Fleetwood Series 75) to Carmen (a 1976 Cadillac Eldorado) — each with a professional chauffeur included.",
       },
     ],
   },
@@ -340,7 +471,7 @@ export const posts: Post[] = [
       { type: "h3", text: "Getting an exact quote" },
       {
         type: "p",
-        html: 'Because pricing depends on your specific date, venue, and car choice, the most accurate way to get a number is to request a quote directly — you can do that at <a href="https://www.chanceclassics.com/">chanceclassics.com</a> or by calling <a href="tel:+13183445001">(318) 344-5001</a>.',
+        html: 'Because pricing depends on your specific date, venue, and car choice, the most accurate way to get a number is to request a quote directly — you can do that at <a href="https://chanceclassics.com/">chanceclassics.com</a> or by calling <a href="tel:+13183445001">(318) 344-5001</a>.',
       },
     ],
   },

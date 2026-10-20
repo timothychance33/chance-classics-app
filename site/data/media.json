@@ -37,8 +37,8 @@
   "672ad3_345871cfb8034b27911ab3173cbc4bc6~mv2.jpeg": {
     "src": "/images/home_main_04.webp",
     "alt": "Starting at $600",
-    "w": 4284,
-    "h": 4284,
+    "w": 1100,
+    "h": 1100,
     "file": "home_main_04.jpg"
   },
   "672ad3_f032cdc0cf324295a700c71135138caa~mv2.png": {
@@ -72,8 +72,8 @@
   "672ad3_63cba6ebf2244af199377f1ca3a78876~mv2.jpg": {
     "src": "/images/home_main_09.webp",
     "alt": "",
-    "w": 3000,
-    "h": 2250,
+    "w": 1134,
+    "h": 850,
     "file": "home_main_09.jpg"
   },
   "672ad3_85dea90eb6d24927bf8ec64951d7d93a~mv2.jpg": {
@@ -142,8 +142,8 @@
   "672ad3_49c6e0ddd6e343b997f69d3bb925c86c~mv2.jpeg": {
     "src": "/images/book-online_1937-cadillac-fleetwood-series_01.webp",
     "alt": "1937 Cadillac Fleetwood Series 75",
-    "w": 4284,
-    "h": 4284,
+    "w": 1100,
+    "h": 1100,
     "file": "book-online_1937-cadillac-fleetwood-series_01.jpg"
   },
   "672ad3_579547f20cec4eb4b13bdbc8eb286c33~mv2.png": {
@@ -156,8 +156,8 @@
   "672ad3_ef4655d55931441fae2bef69a7ee5008~mv2.jpeg": {
     "src": "/images/book-online_1954-packard-caribbean_01.webp",
     "alt": "1954 Packard Caribbean",
-    "w": 4284,
-    "h": 4284,
+    "w": 1100,
+    "h": 1100,
     "file": "book-online_1954-packard-caribbean_01.jpg"
   },
   "672ad3_988fc2da1b6e453e88bc3687b7964e1c~mv2.png": {
@@ -422,15 +422,15 @@
   "672ad3_d1f1c4c24c944b758983c626cf5641b6~mv2.jpeg": {
     "src": "/images/cars-bonnie_gallery_06.webp",
     "alt": "2026-01-10_17-06-18_340",
-    "w": 4284,
-    "h": 4284,
+    "w": 1100,
+    "h": 1100,
     "file": "cars-bonnie_gallery_06.jpg"
   },
   "672ad3_5d1bfda179564cc78c2a4b5cf92db06a~mv2.jpeg": {
     "src": "/images/cars-bonnie_gallery_07.webp",
     "alt": "2026-01-10_17-06-00_956 (2026-01-18T17_28_26.005)",
-    "w": 4284,
-    "h": 4284,
+    "w": 1100,
+    "h": 1100,
     "file": "cars-bonnie_gallery_07.jpg"
   },
   "672ad3_8bef14d3bccf492092f10aca89e491d5~mv2.jpeg": {
@@ -667,8 +667,8 @@
   "672ad3_e7a72b1b2ab649f1b43189ac4022d788~mv2.png": {
     "src": "/images/cars-carmen_gallery_15.webp",
     "alt": "IMG_2169.HEIC",
-    "w": 4284,
-    "h": 5712,
+    "w": 850,
+    "h": 1134,
     "file": "cars-carmen_gallery_15.png"
   },
   "672ad3_bbd051bce70b4f19b38f11b6d370e562~mv2.jpg": {
@@ -765,8 +765,8 @@
   "672ad3_7ac392538bc44dd095b338a55ef14c29~mv2.jpeg": {
     "src": "/images/cars-elsa_gallery_08.webp",
     "alt": "CBBA0B7D-7A8F-4CDC-BBEF-5A184ABBF168.jpeg",
-    "w": 4284,
-    "h": 4284,
+    "w": 1134,
+    "h": 1134,
     "file": "cars-elsa_gallery_08.jpg"
   },
   "672ad3_058f932ce1734445a8d408c48965b65a~mv2.png": {
@@ -877,8 +877,8 @@
   "672ad3_b22e659620e249b68a3148c40f302a0d~mv2.png": {
     "src": "/images/cars-others_gallery_04.webp",
     "alt": "IMG_0877.HEIC",
-    "w": 5712,
-    "h": 4284,
+    "w": 1134,
+    "h": 850,
     "file": "cars-others_gallery_04.png"
   },
   "672ad3_3a41b9352dec45beb91c173f416e3ae0~mv2.jpg": {
@@ -1066,8 +1066,8 @@
   "672ad3_738050e180964593ae0430df0ebab125~mv2.jpg": {
     "src": "/images/cars-patsy_gallery_27.webp",
     "alt": "IMG_7959.jpg",
-    "w": 3000,
-    "h": 2250,
+    "w": 1260,
+    "h": 945,
     "file": "cars-patsy_gallery_27.jpg"
   },
   "672ad3_52531543e54245e198c10d0be5608a6c~mv2.jpg": {
@@ -1402,8 +1402,8 @@
   "672ad3_4de5d06581434d51ba4a2e298a03e1f8~mv2.jpg": {
     "src": "/images/cars-rosie_gallery_02.webp",
     "alt": "IMG_7678.jpg",
-    "w": 3000,
-    "h": 2250,
+    "w": 1260,
+    "h": 945,
     "file": "cars-rosie_gallery_02.jpg"
   },
   "672ad3_2fbc719c8482430b9785363d47aeafea~mv2.jpg": {
@@ -1479,8 +1479,8 @@
   "672ad3_ace1cf455a34408c9e3c5bb8de2fd378~mv2.jpg": {
     "src": "/images/cars-rosie_gallery_13.webp",
     "alt": "IMG_7707.jpg",
-    "w": 3000,
-    "h": 2250,
+    "w": 1260,
+    "h": 945,
     "file": "cars-rosie_gallery_13.jpg"
   },
   "672ad3_1762c0f63dba49ad8f1efbed19ff8dc3~mv2.jpg": {
@@ -1493,15 +1493,15 @@
   "672ad3_909ff2a0fe8d4922be3f855c53523b9e~mv2.jpg": {
     "src": "/images/cars-rosie_gallery_15.webp",
     "alt": "IMG_7710.jpg",
-    "w": 3000,
-    "h": 2250,
+    "w": 1100,
+    "h": 825,
     "file": "cars-rosie_gallery_15.jpg"
   },
   "672ad3_d736f551538c4b46a5e6738681905094~mv2.jpg": {
     "src": "/images/cars-rosie_gallery_16.webp",
     "alt": "IMG_7713.jpg",
-    "w": 3000,
-    "h": 2250,
+    "w": 1260,
+    "h": 945,
     "file": "cars-rosie_gallery_16.jpg"
   },
   "672ad3_10f29a56b4054e2e80caafce0cc674bd~mv2.jpg": {
@@ -1591,8 +1591,8 @@
   "672ad3_b6d9e22ea39b4332993f9a4e800b055f~mv2.jpg": {
     "src": "/images/cars-sylvia_gallery_13.webp",
     "alt": "IMG_5665.jpg",
-    "w": 3000,
-    "h": 2250,
+    "w": 1260,
+    "h": 945,
     "file": "cars-sylvia_gallery_13.jpg"
   },
   "672ad3_e8d8f471aa854e2e90e0694fcdaa8327~mv2.jpg": {
@@ -1605,8 +1605,8 @@
   "672ad3_f53d98088a6e45b9b435eeae6dbf027c~mv2.jpg": {
     "src": "/images/cars-sylvia_gallery_15.webp",
     "alt": "IMG_5661.jpg",
-    "w": 3000,
-    "h": 2250,
+    "w": 1260,
+    "h": 945,
     "file": "cars-sylvia_gallery_15.jpg"
   },
   "672ad3_0ef42ea830bc4f18b01992510228b260~mv2.jpg": {
@@ -1654,8 +1654,8 @@
   "672ad3_ba8cc299454c4b69ad71cdf4fadac29f~mv2.jpg": {
     "src": "/images/cars-sylvia_gallery_22.webp",
     "alt": "IMG_5640.jpg",
-    "w": 3000,
-    "h": 2250,
+    "w": 1134,
+    "h": 850,
     "file": "cars-sylvia_gallery_22.jpg"
   },
   "672ad3_f5c9b293bb1c4356845ab9ef151f9b70~mv2.jpg": {
@@ -1815,8 +1815,8 @@
   "672ad3_bfde80117e14409cb4a10b3fdb5ac9f8~mv2.jpg": {
     "src": "/images/cars-veronica_gallery_14.webp",
     "alt": "IMG_7485.jpg",
-    "w": 3000,
-    "h": 2250,
+    "w": 1260,
+    "h": 945,
     "file": "cars-veronica_gallery_14.jpg"
   },
   "672ad3_0ac67cf7eaa34ab9854d459f5dcf6618~mv2.jpg": {
@@ -1899,8 +1899,8 @@
   "672ad3_5acdb29497804d75abb53363dc4a29d8~mv2.png": {
     "src": "/images/service-1953-packard-limo_1953-packard-limo_02.webp",
     "alt": "1953 Packard Limo",
-    "w": 4032,
-    "h": 3024,
+    "w": 1260,
+    "h": 945,
     "file": "service-1953-packard-limo_1953-packard-limo_02.png"
   },
   "672ad3_beeb71c9de19480897563f934763bf15~mv2.png": {

@@ -10,7 +10,8 @@ import { Reviews } from "@/components/Reviews";
 import { StickyBookBar } from "@/components/StickyBookBar";
 import { DEPOSIT_USD, EXTRA_HOUR_USD, MILEAGE_RULE_TEXT } from "@/lib/booking-rules";
 import { factsForCar } from "@/data/carFacts";
-import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, pageMeta, serviceBySlug, serviceDescription, services } from "@/lib/content";
+import { descriptiveAlt } from "@/lib/alt";
+import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, fleetModel, fleetTag, pageMeta, serviceBySlug, serviceDescription, services } from "@/lib/content";
 import { carCapacity } from "@/lib/terms";
 
 export function generateStaticParams() {
@@ -21,11 +22,13 @@ export function generateMetadata({ params }: { params: Promise<{ slug: string }>
   return params.then(({ slug }) => {
     const service = serviceBySlug(slug);
     if (!service) return {};
+    const model = fleetModel(service.car) || service.name;
     return pageMeta({
-      title: `${service.name} | Chance Classics, Classic Car Rental`,
+      title: `${model} | Chance Classics, Classic Car Rental`,
       description: serviceDescription(service),
       path: `/service-page/${service.slug}`,
       image: service.image.src,
+      imageAlt: `Photo of ${service.car}, the ${model}`,
     });
   });
 }
@@ -35,14 +38,17 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
   const service = serviceBySlug(slug);
   if (!service) notFound();
   const facts = factsForCar(service.car);
+  const model = fleetModel(service.car) || service.name;
+  const tag = fleetTag(service.car, service.tagLine);
+  const photoAlt = `Photo of ${service.car}, the ${model}`;
   const agreementCapacity = facts?.passengers == null ? carCapacity(service.portfolioSlug) : null;
   return (
     <article className="wrap page">
       <div className="service-top">
-        <img src={service.image.src} alt={service.tagLine} width={service.image.w || 900} height={service.image.h || 600} />
+        <img src={service.image.src} alt={photoAlt} width={service.image.w || 900} height={service.image.h || 600} />
         <div>
-          <h1>{service.name}</h1>
-          <p>{service.tagLine}</p>
+          <h1>{model}</h1>
+          <p>{tag}</p>
           <p className="dur">2 hr - 4 hr</p>
           <p>Customer&apos;s Place</p>
           <p className="price">${service.price}</p>
@@ -59,7 +65,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
       <section className="car-facts">
         <h2>This car</h2>
         <ul>
-          <li>{service.tagLine}</li>
+          <li>{tag}</li>
           <li>${service.price} for the first 2 hours, then ${EXTRA_HOUR_USD} for each additional hour.</li>
           <li>A chauffeur is included. You don’t drive the car.</li>
           {agreementCapacity && <li>{agreementCapacity}</li>}
@@ -74,7 +80,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
       {service.gallery.length > 0 && (
         <div className="thumbs">
           {service.gallery.map((image) => (
-            <img key={image.src} src={image.src} alt={image.alt || service.name} width={232} height={232} loading="lazy" />
+            <img key={image.src} src={image.src} alt={descriptiveAlt(image.alt, photoAlt)} width={232} height={232} loading="lazy" />
           ))}
         </div>
       )}

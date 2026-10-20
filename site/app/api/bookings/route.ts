@@ -7,6 +7,8 @@ import {
   slotTaken,
   stripeReady,
   validateBooking,
+  weddingCelebrationColumns,
+  weddingCelebrationErrors,
 } from "@/lib/booking-rules";
 import { withSecondCarNote } from "@/data/packages";
 import { serviceBySlug } from "@/lib/content";
@@ -41,6 +43,17 @@ export async function POST(request: Request) {
     reliability: raw.reliability === true,
   });
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  const celebrationInput = {
+    partner1Name: raw.partner1Name,
+    partner1Social: raw.partner1Social,
+    partner2Name: raw.partner2Name,
+    partner2Social: raw.partner2Social,
+    photographerName: raw.photographerName,
+    photographerEmail: raw.photographerEmail,
+    photographerInstagram: raw.photographerInstagram,
+  };
+  const celebrationError = Object.values(weddingCelebrationErrors(String(raw.occasion || ""), celebrationInput))[0];
+  if (celebrationError) return NextResponse.json({ error: celebrationError }, { status: 400 });
   const value = parsed.value;
   const service = serviceBySlug(value.car);
   if (!service) return NextResponse.json({ error: "Unknown car." }, { status: 404 });
@@ -129,6 +142,7 @@ export async function POST(request: Request) {
       mileage_fee_usd: mileage.fee,
       mileage_needs_review: mileage.needsReview,
       ...dayOfContactColumns({ name: value.dayOfName, phone: value.dayOfPhone, role: value.dayOfRole }),
+      ...weddingCelebrationColumns(value.occasion, celebrationInput),
     };
     const inserted = await insertBooking(db, row);
 

@@ -3,7 +3,7 @@ import { CarTile } from "@/components/CarTile";
 import { Picture } from "@/components/Picture";
 import { Reviews } from "@/components/Reviews";
 import { WhyBook } from "@/components/WhyBook";
-import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, byModelYear, home, pageMeta, services } from "@/lib/content";
+import { ADDRESS, EMAIL, PHONE_DISPLAY, PHONE_TEL, byModelYear, fleetModel, home, pageMeta, services } from "@/lib/content";
 import { occasions } from "@/lib/occasions";
 
 export const metadata = pageMeta({
@@ -26,7 +26,7 @@ export default function HomePage() {
       <section className="wrap fleet" aria-label="The cars">
         {byModelYear(home.fleet, (car) => car.caption, (car) => car.name).map((car) => {
           const service = services.find((item) => item.car === car.name);
-          const model = car.caption.split(" / ")[0];
+          const model = fleetModel(car.name) || car.caption.split(" / ")[0];
           const galleryHref = `${car.href.replace(/\/$/, "")}/`;
           const meetHref = service ? `/service-page/${service.slug}/` : galleryHref;
           const bookHref = service ? `/service-page/${service.slug}/#book` : meetHref;
@@ -60,7 +60,7 @@ export default function HomePage() {
                   />
                 )}
                 <strong>{occasion.title}</strong>
-                <span>See the cars, the listing price, and what’s included.</span>
+                <span>{occasion.blurb}</span>
               </Link>
             </li>
           ))}

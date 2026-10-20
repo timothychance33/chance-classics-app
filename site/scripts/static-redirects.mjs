@@ -17,7 +17,7 @@ function html(destination) {
 <head>
 <meta charset="utf-8">
 <title>Redirecting…</title>
-<link rel="canonical" href="${href.startsWith("http") ? href : "https://www.chanceclassics.com" + href}">
+<link rel="canonical" href="${href.startsWith("http") ? href : "https://chanceclassics.com" + href}">
 <meta http-equiv="refresh" content="0; url=${href}">
 <script>location.replace(${JSON.stringify(href)});</script>
 </head>

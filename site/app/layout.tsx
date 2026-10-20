@@ -5,7 +5,9 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
-import { OG_IMAGE, SITE_URL } from "@/lib/content";
+import { visibleSocial } from "@/data/social";
+import { EMAIL, OG_IMAGE, PHONE_TEL, SITE_URL } from "@/lib/content";
+import { reviewsListing } from "@/lib/reviews";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -38,22 +40,43 @@ export const metadata: Metadata = {
   },
 };
 
+function servedCity(name: string, region: string) {
+  return {
+    "@type": "City",
+    name,
+    containedInPlace: { "@type": "State", name: region },
+  };
+}
+
+/** Social profiles and the Google place link already stored in the repo. */
+const sameAs = [...visibleSocial().map((link) => link.href), reviewsListing.mapsUrl].filter((href) => href.trim());
+
+// Opening hours are not published on the site, so openingHours is omitted.
 const jsonLd = {
   "@context": "https://schema.org/",
   "@type": "LocalBusiness",
-  name: "Chance Classic Car Rental",
-  url: SITE_URL,
+  name: "Chance Classics",
+  url: `${SITE_URL}/`,
   image: `${SITE_URL}${OG_IMAGE}`,
-  telephone: "+13183445001",
-  email: "chanceclassics@gmail.com",
+  telephone: PHONE_TEL,
+  email: EMAIL,
   address: {
     "@type": "PostalAddress",
-    streetAddress: "118 5th Street",
+    streetAddress: "118 5th St E",
     addressLocality: "Benton",
     addressRegion: "LA",
-    postalCode: "71006-9471",
+    postalCode: "71006",
     addressCountry: "US",
   },
+  areaServed: [
+    servedCity("Shreveport", "Louisiana"),
+    servedCity("Bossier City", "Louisiana"),
+    servedCity("Benton", "Louisiana"),
+    servedCity("Minden", "Louisiana"),
+    servedCity("Ruston", "Louisiana"),
+    servedCity("Longview", "Texas"),
+  ],
+  ...(sameAs.length ? { sameAs } : {}),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
