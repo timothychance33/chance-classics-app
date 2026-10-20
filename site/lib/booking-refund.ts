@@ -1,5 +1,6 @@
 import type { rentalDb } from "@/lib/rental-db";
 import { quoteLinkedBookingId } from "@/lib/owner-booking-notify";
+import { promotedStatusIfNew } from "@/lib/deposit-payment";
 import { bookingTotals, notesWithPrice, paymentStatusFor, refundAmounts } from "@/lib/saved-card";
 import { updateBooking } from "@/lib/site-booking";
 
@@ -112,7 +113,7 @@ export async function applyBookingRefund(db: Db, input: {
   }
 
   const loaded = await db.from("bookings")
-    .select("id,notes,total_usd,amount_paid_usd,payment_status")
+    .select("id,status,notes,total_usd,amount_paid_usd,payment_status")
     .eq("id", input.bookingId)
     .maybeSingle();
   if (loaded.error || !loaded.data) {
@@ -129,12 +130,15 @@ export async function applyBookingRefund(db: Db, input: {
     await db.from("booking_refunds").delete().eq("stripe_refund_id", input.refundId);
     return { ok: false as const, status: 409, error: next.error };
   }
+  const paymentStatus = next.total == null
+    ? (next.paid > 0 ? "deposit" : "unpaid")
+    : paymentStatusFor(next.total, next.paid);
   const patch: Record<string, unknown> = {
     amount_paid_usd: next.paid,
-    payment_status: next.total == null
-      ? (next.paid > 0 ? "deposit" : "unpaid")
-      : paymentStatusFor(next.total, next.paid),
+    payment_status: paymentStatus,
   };
+  const promoted = promotedStatusIfNew(loaded.data.status, paymentStatus);
+  if (promoted) patch.status = promoted;
   if (next.total != null) {
     patch.total_usd = next.total;
     patch.notes = notesWithPrice(loaded.data.notes, next.total, next.paid);

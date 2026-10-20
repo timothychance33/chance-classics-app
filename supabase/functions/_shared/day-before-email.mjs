@@ -9,6 +9,14 @@ import { carLabelFor } from "./car-label.mjs";
 export const BUSINESS_PHONE = "318-344-5001";
 export const NO_DRIVER_LINE = "Your driver will be confirmed shortly — questions? Call 318-344-5001.";
 export const DAY_BEFORE_STATUSES = ["confirmed", "prepping", "ready", "out", "completed"];
+export const PAID_NEW_PAYMENTS = ["deposit", "paid"];
+
+/** A Wix or garage row can stay `new` after a deposit or full payment. That row is confirmed for this email. */
+export function isPaidNewBooking(booking) {
+  const status = String(booking?.status || "").trim().toLowerCase();
+  const pay = String(booking?.payment_status || "").trim().toLowerCase();
+  return status === "new" && PAID_NEW_PAYMENTS.includes(pay);
+}
 
 const SKIP_STATUSES = new Set([
   "cancelled",
@@ -62,7 +70,9 @@ export function dayBeforeWindow(chicago) {
  */
 export function dayBeforeSkipReason(booking) {
   const status = String(booking?.status || "").trim().toLowerCase();
-  if (!status || SKIP_STATUSES.has(status) || !DAY_BEFORE_STATUSES.includes(status)) {
+  const eligibleStatus = isPaidNewBooking(booking)
+    || (Boolean(status) && !SKIP_STATUSES.has(status) && DAY_BEFORE_STATUSES.includes(status));
+  if (!eligibleStatus) {
     if (status === "cancelled" || status === "canceled") return "cancelled";
     if (status === "declined") return "declined";
     return "unconfirmed";

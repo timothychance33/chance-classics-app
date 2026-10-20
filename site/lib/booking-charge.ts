@@ -8,6 +8,7 @@ import {
   paymentStatusFor,
   type ChargeReason,
 } from "@/lib/saved-card";
+import { promotedStatusIfNew } from "@/lib/deposit-payment";
 import { updateBooking } from "@/lib/site-booking";
 
 type Db = NonNullable<ReturnType<typeof rentalDb>>;
@@ -19,16 +20,20 @@ export function chargePatch(row: {
   total_usd?: unknown;
   amount_paid_usd?: unknown;
   payment_status?: string | null;
+  status?: string | null;
 }, amount: number, reason: ChargeReason, source: "owner" | "checkout", sessionId?: string | null) {
   const totals = bookingTotals(row);
   const next = chargeAmounts({ ...totals, amount, reason, source });
   if ("error" in next) return next;
+  const paymentStatus = paymentStatusFor(next.total, next.paid);
   const patch: Record<string, unknown> = {
     total_usd: next.total,
     amount_paid_usd: next.paid,
-    payment_status: paymentStatusFor(next.total, next.paid),
+    payment_status: paymentStatus,
     notes: notesWithPrice(row.notes, next.total, next.paid),
   };
+  const promoted = promotedStatusIfNew(row.status, paymentStatus);
+  if (promoted) patch.status = promoted;
   if (reason === "balance" && sessionId) patch.stripe_balance_session_id = sessionId;
   return { patch, total: next.total, paid: next.paid };
 }
@@ -98,7 +103,7 @@ export async function applySucceededCharge(db: Db, input: {
   if (!claimed.data?.length) return { ok: true as const, already: true };
 
   const loaded = await db.from("bookings")
-    .select("id,notes,total_usd,amount_paid_usd,payment_status")
+    .select("id,status,notes,total_usd,amount_paid_usd,payment_status")
     .eq("id", input.bookingId)
     .maybeSingle();
   if (loaded.error || !loaded.data) {

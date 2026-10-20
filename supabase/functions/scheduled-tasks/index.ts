@@ -9,8 +9,10 @@
 //      The email says the balance is due the day before the event.
 //      Skips a $0 balance and any booking already stamped balance_reminder_sent_at.
 //   5) Day-before client email: 10:00 AM America/Chicago the day before the event.
-//      The hourly job sends it on the 10:00 run. A later run the same day retries
-//      only bookings that are still unstamped. day_before_email_sent_at stops a second send.
+//      Confirmed (and later) bookings, plus status new when the deposit or full
+//      payment is already recorded. The hourly job sends it on the 10:00 run.
+//      A later run the same day retries only bookings that are still unstamped.
+//      day_before_email_sent_at stops a second send.
 //
 // Weekly digest also accepts a Vercel cron POST { weekly_only: true }.
 // Idempotent per driver + week via rental.driver_weekly_digest_sends.
@@ -30,8 +32,10 @@ import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/ba
 import { driverBusyWith, offerRankFor } from "../_shared/driver-availability.mjs";
 import {
   DAY_BEFORE_STATUSES,
+  PAID_NEW_PAYMENTS,
   dayBeforeSkipReason,
   dayBeforeWindow,
+  isPaidNewBooking,
   renderDayBeforeEmail,
 } from "../_shared/day-before-email.mjs";
 
@@ -722,18 +726,32 @@ Deno.serve(async (req) => {
       daySummary.reason = "RESEND_API_KEY is not set";
       daySummary.errors.push(daySummary.reason);
     } else {
+      const dayBeforeColumns = "id,customer_name,customer_email,event_type,event_date,start_time,end_time,pickup_location,return_location,status,notes,source,total_usd,amount_paid_usd,balance_due_usd,payment_status,stripe_customer_id,car_id,driver_id,replied_at,reviewed_at,photos_received_at,day_before_email_sent_at";
       const due = await sb.from("bookings")
-        .select("id,customer_name,customer_email,event_type,event_date,start_time,end_time,pickup_location,return_location,status,notes,source,total_usd,amount_paid_usd,balance_due_usd,payment_status,stripe_customer_id,car_id,driver_id,replied_at,reviewed_at,photos_received_at,day_before_email_sent_at")
+        .select(dayBeforeColumns)
         .eq("event_date", window.eventDate)
         .in("status", DAY_BEFORE_STATUSES)
         .is("day_before_email_sent_at", null);
-      if (due.error) {
-        const missing = /day_before_email_sent_at/i.test(due.error.message || "");
+      const paidNew = await sb.from("bookings")
+        .select(dayBeforeColumns)
+        .eq("event_date", window.eventDate)
+        .eq("status", "new")
+        .in("payment_status", PAID_NEW_PAYMENTS)
+        .is("day_before_email_sent_at", null);
+      const queryError = due.error || paidNew.error;
+      if (queryError) {
+        const missing = /day_before_email_sent_at/i.test(queryError.message || "");
         daySummary.errors.push(missing
           ? "Apply the day-before email migration before these emails can send."
-          : `day-before query failed: ${due.error.message}`);
+          : `day-before query failed: ${queryError.message}`);
       } else {
-        const rows = due.data ?? [];
+        const seen = new Set<string>();
+        const rows = [...(due.data ?? []), ...(paidNew.data ?? [])].filter((row) => {
+          const id = String(row.id);
+          if (seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
         const ids = rows.map((row) => row.id);
         const carIds = [...new Set(rows.map((row) => row.car_id).filter(Boolean))];
         const cars = new Map<string, { id: string; name?: string | null; year?: number | null; make?: string | null; model?: string | null }>();
@@ -774,12 +792,14 @@ Deno.serve(async (req) => {
             daySummary.sent += 1;
             continue;
           }
-          const claimed = await sb.from("bookings")
+          let claim = sb.from("bookings")
             .update({ day_before_email_sent_at: now.toISOString() })
             .eq("id", row.id)
-            .is("day_before_email_sent_at", null)
-            .in("status", DAY_BEFORE_STATUSES)
-            .select("id");
+            .is("day_before_email_sent_at", null);
+          claim = isPaidNewBooking(row)
+            ? claim.eq("status", "new").in("payment_status", PAID_NEW_PAYMENTS)
+            : claim.in("status", DAY_BEFORE_STATUSES);
+          const claimed = await claim.select("id");
           if (claimed.error || !claimed.data?.length) {
             daySummary.skipped += 1;
             continue;
