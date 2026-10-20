@@ -1081,6 +1081,20 @@
         "w": 3648,
         "h": 5472,
         "file": "cars-carmen_gallery_21.jpg"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_22.webp",
+        "alt": "Laughing newlyweds holding hands beside Carmen, our white Cadillac convertible, at night",
+        "w": 1200,
+        "h": 1600,
+        "file": "cars-carmen_gallery_22.jpg"
+      },
+      {
+        "src": "/images/cars-carmen_gallery_23.webp",
+        "alt": "Newlyweds sharing a kiss in the front seat of Carmen, our white Cadillac convertible",
+        "w": 1200,
+        "h": 1600,
+        "file": "cars-carmen_gallery_23.png"
       }
     ]
   },
