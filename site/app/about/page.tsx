@@ -1,14 +1,30 @@
+import fs from "node:fs";
+import path from "node:path";
 import Link from "next/link";
 import { CallLine } from "@/components/CallLine";
 import { Picture } from "@/components/Picture";
+import { aboutDrivers } from "@/data/drivers";
 import { aboutImages, pageMeta } from "@/lib/content";
 import { SHOP_ADDRESS } from "@/lib/booking-rules";
 
 export const metadata = pageMeta({
   title: "About | Chance Classics, Classic Car Rental",
-  description: "Tim Chance, Carl Chance, and Eric Edwards — the family behind Chance Classics car rental in Benton, Louisiana.",
+  description: "Tim Chance, Carl Chance, Eric Edwards, and the drivers behind Chance Classics car rental in Benton, Louisiana.",
   path: "/about",
 });
+
+function monogram(name: string) {
+  const trimmed = name.trim();
+  if (trimmed.length <= 3) return trimmed.toUpperCase();
+  return trimmed.slice(0, 1).toUpperCase();
+}
+
+/** Use the driver's one image path when that file is in public/. */
+function driverPhoto(src: string) {
+  if (!src.startsWith("/")) return "";
+  const file = path.join(process.cwd(), "public", src.slice(1));
+  return fs.existsSync(file) ? src : "";
+}
 
 export default function AboutPage() {
   const [driving, tim, carl, familyCars] = aboutImages;
@@ -50,10 +66,37 @@ export default function AboutPage() {
           Eric has extensive knowledge about classic cars. He helps to maintain the fleet and also drives them to events.
         </p>
       </section>
+      {aboutDrivers.map((driver) => {
+        const photo = driverPhoto(driver.image);
+        return (
+          <section className="bio" key={driver.name}>
+            {photo ? (
+              <img className="bio-portrait" src={photo} alt={driver.name} width={1200} height={1500} />
+            ) : (
+              <div className="bio-portrait" aria-hidden="true">
+                <svg viewBox="0 0 120 120">
+                  <circle cx="60" cy="46" r="18" fill="none" stroke="currentColor" strokeWidth="2.25" />
+                  <path
+                    d="M24 104c6-22 16-32 36-32s30 10 36 32"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.25"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span className="monogram">{monogram(driver.name)}</span>
+              </div>
+            )}
+            <h2>{driver.name}</h2>
+            <p className="lede center">{driver.role}</p>
+            <p className="lede center">{driver.text}</p>
+          </section>
+        );
+      })}
       <section className="bio">
         <h2>The shop</h2>
         <p>
-          The cars are kept in Benton and maintained in our own shop, 2nd Chance Speed Shop. Chance Classics is at {SHOP_ADDRESS}. Tim coordinates the rentals. Carl owns some of the vehicles. Eric helps keep the fleet ready. All three drive.
+          The cars are kept in Benton and maintained in our own shop, 2nd Chance Speed Shop. Chance Classics is at {SHOP_ADDRESS}. Tim coordinates the rentals. Carl owns some of the vehicles. Eric helps keep the fleet ready. They drive, and so do Zack, Edward, Ed, and Benny.
         </p>
         <p>
           Every rental includes a chauffeur. You do not drive the car. We keep a 2-hour buffer before and after each booking, so the car is not coming straight from another event. If the car you booked is not available, we offer a comparable backup. Starting prices are on the car pages, and you can book online.

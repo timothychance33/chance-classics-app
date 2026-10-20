@@ -55,7 +55,6 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
       <CallLine />
       {occasion.pictures && occasion.pictures.length > 0 && (
         <section className="occasion-pictures" aria-label={picturesLabel(occasion.slug, occasion.title)}>
-          <h2>Pictures</h2>
           <PhotoSlideshow images={occasion.pictures} label={picturesLabel(occasion.slug, occasion.title)} />
         </section>
       )}

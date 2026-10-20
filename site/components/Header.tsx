@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { FACEBOOK, FACEBOOK_ICON, LOGO, PHONE_DISPLAY, PHONE_TEL } from "@/lib/content";
+import { FACEBOOK, FACEBOOK_ICON, LOGO } from "@/lib/content";
 
 const links = [
   { href: "/", label: "Home" },
@@ -31,9 +31,6 @@ export function Header() {
         <img src={LOGO} alt="Chance Classics" width={513} height={255} />
       </Link>
       <p className="tagline">Classic and Luxury Car Rental</p>
-      <p className="header-phone">
-        <a href={`tel:${PHONE_TEL}`}>Call {PHONE_DISPLAY}</a>
-      </p>
       <button
         className="menu-btn"
         aria-expanded={open}

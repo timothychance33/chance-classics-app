@@ -100,17 +100,8 @@ p { margin: 0 0 1em; }
   font-family: var(--serif);
   font-size: clamp(28px, 4vw, 48px);
   line-height: 1.2;
-  margin: 8px 0 14px;
+  margin: 8px 0 18px;
 }
-.header-phone {
-  margin: -4px 0 12px;
-  font-size: 18px;
-}
-.header-phone a {
-  text-decoration: none;
-  font-weight: 600;
-}
-.header-phone a:hover { text-decoration: underline; }
 .menu-btn {
   display: none;
   margin: 0 0 8px auto;
@@ -348,6 +339,39 @@ p { margin: 0 0 1em; }
   height: auto;
   margin: 0 auto 18px;
   display: block;
+}
+.bio-portrait {
+  width: min(100%, 420px);
+  aspect-ratio: 4 / 5;
+  margin: 0 auto 18px;
+  background: #efece6;
+  color: #6f6c66;
+}
+img.bio-portrait {
+  display: block;
+  height: auto;
+  object-fit: cover;
+  object-position: center 18%;
+}
+div.bio-portrait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.bio-portrait svg {
+  width: 88px;
+  height: 88px;
+  display: block;
+}
+.bio-portrait .monogram {
+  font-family: var(--serif);
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  padding-left: 0.14em;
+  color: var(--ink);
 }
 .contact-block { padding: 10px 0 40px; }
 .contact-block a { text-decoration: none; }
@@ -810,7 +834,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
 .occasions span, .occasion-cars span span { display: block; color: var(--ink-soft); font-size: 14px; }
 .occasion-hero { display: block; width: auto; height: auto; max-width: 100%; max-height: min(80vh, 760px); margin: 0 auto 1em; }
 .occasion-hero.portrait { width: 100%; max-width: 600px; aspect-ratio: 1 / 1; max-height: none; object-fit: cover; }
-.occasion-pictures { margin: 8px 0 32px; }
+.occasion-pictures { margin: 0 0 32px; }
 
 /* One photo at a time. The frame stays a fixed stage so portraits keep their
    full frame (object-fit: contain) instead of cropping faces. */
