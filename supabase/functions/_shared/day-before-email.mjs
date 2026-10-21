@@ -254,12 +254,20 @@ function phoneLink(phone) {
   return `<a href="${esc(href)}" style="color:#6e1d1a">${esc(text)}</a>`;
 }
 
-function paymentCopy(balance) {
+export function bookingTaxExempt(booking) {
+  const flag = booking?.tax_exempt;
+  if (flag === true || String(flag).toLowerCase() === "true") return true;
+  if (flag === false || String(flag).toLowerCase() === "false") return false;
+  return /(?:^|\n)\s*Tax exempt\b/i.test(String(booking?.notes || ""));
+}
+
+function paymentCopy(balance, taxExempt) {
+  const exempt = taxExempt ? " Tax exempt." : "";
   if (balance == null) {
-    return `If a balance is still open, it is due the day before your event. Call ${BUSINESS_PHONE} and we will confirm the amount.`;
+    return `If a balance is still open, it is due the day before your event. Call ${BUSINESS_PHONE} and we will confirm the amount.${exempt}`;
   }
-  if (balance <= 0) return "Paid in full.";
-  const line = `Balance remaining ${money(balance)}. The balance is due the day before your event.`;
+  if (balance <= 0) return `Paid in full.${exempt}`;
+  const line = `Balance remaining ${money(balance)}. The balance is due the day before your event.${exempt}`;
   if (balance < 0.5) return `${line} Call ${BUSINESS_PHONE} to pay it.`;
   return line;
 }
@@ -310,7 +318,7 @@ export function renderDayBeforeEmail(input) {
   const needsPayLink = balance != null && balance >= 0.5;
   const payUrl = needsPayLink ? safePayUrl(input?.payUrl) : "";
   const who = balanceFirstName(booking.customer_name);
-  const payment = paymentCopy(balance);
+  const payment = paymentCopy(balance, bookingTaxExempt(booking));
   const driver = driverBlock(input?.driver);
   const pairs = detailPairs(details);
   const button = payUrl

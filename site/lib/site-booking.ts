@@ -73,7 +73,9 @@ function optionalBookingColumn(name: string) {
     || name === "stripe_customer_id"
     || name === "stripe_payment_method_id"
     || name === "total_usd"
-    || name === "amount_paid_usd";
+    || name === "amount_paid_usd"
+    || name === "tax_exempt"
+    || name === "tax_exempt_note";
 }
 
 function columnNamedInError(message: string) {

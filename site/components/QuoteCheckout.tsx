@@ -18,6 +18,7 @@ type QuoteView = {
   phone: string;
   occasion: string;
   note: string;
+  taxExemptNote?: string;
   lines: Line[];
   total: number;
   deposit: number;
@@ -140,7 +141,9 @@ export function QuoteCheckout({ token }: { token: string }) {
       </dl>
       <div className="mileage-line" data-quote-lines>
         {quote.lines.map((line) => (
-          <p key={`${line.label}-${line.amount}`}><span>{line.label}</span> <b>{money(line.amount)}</b></p>
+          line.label === "Tax exempt"
+            ? <p key="tax-exempt"><span>Tax exempt</span>{quote.taxExemptNote ? <> · {quote.taxExemptNote}</> : null}</p>
+            : <p key={`${line.label}-${line.amount}`}><span>{line.label}</span> <b>{money(line.amount)}</b></p>
         ))}
         <p className="price">
           Total {money(quote.total)}. Deposit due now {money(quote.deposit)}. Balance {money(quote.balance)} is billed separately.

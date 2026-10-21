@@ -1876,7 +1876,7 @@ function renderQuotes(){
       ?`<span class="remindertag">🔔 Reminded ${Math.floor(daysSince(q.reminder_sent_at))}d ago</span>`:'';
     return `<div class="lrow${due?' cat-open':''}" style="margin-bottom:8px" onclick="quoteBuilder('${q.id}')">
       <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}${expTag}${reminderTag}</div>
-      <div class="meta">${car?esc(car.name):esc(q.service_name||'—')}${q.event_date?' · '+q.event_date:''}${q.total?` · $${Number(q.total).toFixed(2)}`:''}</div>
+      <div class="meta">${car?esc(car.name):esc(q.service_name||'—')}${q.event_date?' · '+q.event_date:''}${q.total?` · $${Number(q.total).toFixed(2)}`:''}${q.tax_exempt?' · Tax exempt':''}</div>
       <div class="meta">${esc(q.event_location||'')}${sentDateStr?` · sent ${sentDateStr}`:''}</div></div>
       <div class="lactions">
         ${q.status==='sent'&&q.customer_email?`<button class="ghost tinybtn" onclick="event.stopPropagation();sendReminderEmail('${q.id}')">🔔 Remind</button>`:''}
@@ -1910,7 +1910,7 @@ function showOtherQuotes(){
       const sentDateStr=(q.sent_at||q.created_at)?new Date(q.sent_at||q.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):null;
       body+=`<div class="lrow" style="margin-bottom:8px" onclick="closeModal();quoteBuilder('${q.id}')">
         <div class="lmain"><div class="ltop"><span class="ttl">${esc(q.customer_name||'Request')}</span>${tag}</div>
-        <div class="meta">${car?esc(car.name):esc(q.service_name||'—')}${q.event_date?' · '+q.event_date:''}${q.total?` · $${Number(q.total).toFixed(2)}`:''}</div>
+        <div class="meta">${car?esc(car.name):esc(q.service_name||'—')}${q.event_date?' · '+q.event_date:''}${q.total?` · $${Number(q.total).toFixed(2)}`:''}${q.tax_exempt?' · Tax exempt':''}</div>
         <div class="meta">${sentDateStr?`sent ${sentDateStr}`:''}</div></div></div>`;
     }
     body+='</div>';
@@ -1930,7 +1930,7 @@ function mileageFeeNote(miles){
   if(whole<=FREE_MILES) return whole+' miles from Benton to pickup. No mileage fee.';
   return whole+' miles from Benton to pickup. Mileage fee $'+(whole*PER_MILE)+', billed with the balance.';
 }
-function calcQuote(carId, hours, miles, hotelFee){
+function calcQuote(carId, hours, miles, hotelFee, taxExempt){
   const car=carById(carId);
   const base=car?Number(car.base_rate||0):0;
   const extraH=Math.max(0,(Number(hours)||0)-INCLUDED_HOURS);
@@ -1939,9 +1939,9 @@ function calcQuote(carId, hours, miles, hotelFee){
   const travel=mi>FREE_MILES?mi*PER_MILE:0;
   const hotel=(Number(hotelFee)||0)>0?HOTEL_FEE:0;
   const subtotal=base+overage+travel+hotel;
-  const tax=Math.round(Math.round(subtotal*100)*TAX_RATE)/100;
+  const tax=taxExempt?0:Math.round(Math.round(subtotal*100)*TAX_RATE)/100;
   const total=Math.round((subtotal+tax)*100)/100;
-  return {base,extraH,overage,mi,travel,hotel,subtotal,tax,total};
+  return {base,extraH,overage,mi,travel,hotel,subtotal,tax,total,taxExempt:!!taxExempt};
 }
 
 function clockMinutes(value){
@@ -2056,13 +2056,13 @@ function carsOpenOnDate(evDate, excludeCarId, request){
 function carsForAlternateOffers(evDate, excludeCarId, request){
   return carsOpenOnDate(evDate, excludeCarId, request||quoteSlot()).filter(c=>!isElviraCar(c));
 }
-function pricedAlternateQuotes(excludeCarId, hours, miles, hotelFee, evDate){
+function pricedAlternateQuotes(excludeCarId, hours, miles, hotelFee, evDate, taxExempt){
   const when=evDate||window._quoteEventDate;
   return carsForAlternateOffers(when, excludeCarId, quoteSlot(hours)).map(car=>{
-    const c=calcQuote(car.id, hours, miles, hotelFee);
+    const c=calcQuote(car.id, hours, miles, hotelFee, taxExempt);
     return {id:car.id, name:car.name, book_url:car.book_url||null,
       base_rate:c.base, extra_hours:c.extraH, overage:c.overage, miles:c.mi, travel:c.travel,
-      hotel_fee:c.hotel, subtotal:c.subtotal, tax:c.tax, total:c.total};
+      hotel_fee:c.hotel, subtotal:c.subtotal, tax:c.tax, total:c.total, taxExempt:!!taxExempt};
   });
 }
 function quoteCarOptions(selectedId, evDate, request){
@@ -2099,7 +2099,8 @@ function choosePricedAlternates(alts, chosenCarId){
 function alternateEmailFields(a){
   return {name:a.name, total:a.total, book_url:a.book_url,
     base_rate:a.base_rate, extra_hours:a.extra_hours, overage:a.overage,
-    miles:a.miles, travel:a.travel, hotel_fee:a.hotel_fee, subtotal:a.subtotal, tax:a.tax};
+    miles:a.miles, travel:a.travel, hotel_fee:a.hotel_fee, subtotal:a.subtotal, tax:a.tax,
+    tax_exempt:!!a.taxExempt};
 }
 function alternateOfferRowHtml(qid, requestedCarId, a, hasEmail){
   const m=n=>`$${Number(n).toFixed(2)}`;
@@ -2149,7 +2150,7 @@ function alternateQuotesNotice(qid, requestedCarId, chosenCarId){
   const evDate=window._quoteEventDate;
   const requestedCar=carById(requestedCarId);
   const trip=quoteTripInputs();
-  const allAlts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate);
+  const allAlts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate, trip.taxExempt);
   const alts=choosePricedAlternates(allAlts, chosenCarId||null);
   if(!allAlts.length){ unavailableNotice(qid, requestedCarId); return; }
   if(chosenCarId && !alts.length){ toast('That car is not an open alternate'); return; }
@@ -2158,6 +2159,7 @@ function alternateQuotesNotice(qid, requestedCarId, chosenCarId){
   const bits=[`${trip.hours} hours`];
   if(trip.miles) bits.push(`${trip.miles} mi`);
   if(trip.hotel) bits.push('overnight hotel');
+  bits.push(trip.taxExempt?'Tax exempt':'tax included');
   const rows=one
     ? `<div class="qalt"><div class="qalt-main"><span>${esc(chosen.name)}</span><b>$${Number(chosen.total).toFixed(2)}</b></div></div>`
     : alts.map(a=>alternateOfferRowHtml(qid, requestedCarId, a)).join('');
@@ -2171,7 +2173,7 @@ function alternateQuotesNotice(qid, requestedCarId, chosenCarId){
     <div class="qreq">
       <div class="meta">To: ${esc(q.customer_email)}</div>
       <div class="meta">${esc(requestedCar?requestedCar.name:'That car')} is booked${evDate?' on '+esc(evDate):''} — ${one?`sending the ${esc(chosen.name)}`:'same trip, priced for the open cars'}</div>
-      <div class="meta">${esc(bits.join(' · '))} · tax included</div>
+      <div class="meta">${esc(bits.join(' · '))}</div>
     </div>
     <input type="hidden" id="q_hours" value="${trip.hours}">
     <input type="hidden" id="q_miles" value="${trip.miles}">
@@ -2197,7 +2199,7 @@ async function sendAlternateQuotes(qid, requestedCarId, chosenCarId){
   const trip=quoteTripInputs();
   const noteEl=document.getElementById('alt_note');
   const note=noteEl?noteEl.value:(document.getElementById('q_note')&&document.getElementById('q_note').value)||'';
-  const allAlts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate);
+  const allAlts=pricedAlternateQuotes(requestedCarId, trip.hours, trip.miles, trip.hotel, evDate, trip.taxExempt);
   const alts=choosePricedAlternates(allAlts, chosenCarId||null);
   if(!alts.length){ toast(chosenCarId?'That car is not an open alternate':'No other cars are open that day'); return; }
   const one=alts.length===1;
@@ -2210,7 +2212,8 @@ async function sendAlternateQuotes(qid, requestedCarId, chosenCarId){
   const expiresStr=new Date(Date.now()+QUOTE_VALID_DAYS*86400000).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   const patch={
     hours:trip.hours, miles:trip.miles, hotel_fee:trip.hotel,
-    quote_notes:note||null, status:'sent', sent_at:nowIso
+    quote_notes:note||null, status:'sent', sent_at:nowIso,
+    tax_exempt:!!trip.taxExempt, tax_exempt_note:trip.taxExempt?trip.taxNote||null:null
   };
   if(one){
     patch.car_id=chosen.id;
@@ -2221,13 +2224,15 @@ async function sendAlternateQuotes(qid, requestedCarId, chosenCarId){
     patch.tax=chosen.tax;
     patch.total=chosen.total;
   }
-  await SB.from('quote_requests').update(patch).eq('id',qid);
+  const saved=await updateQuoteRow(qid, patch);
+  if(saved.error){ toast(saved.error.message); return; }
   try{
     const r=await postNotification({
       type:'quote_alternatives', to:q.customer_email,
       book_url:'https://www.chanceclassics.com/book-online?referral=quote_email',
       quote:{customer_name:q.customer_name, car_name:requestedCar?requestedCar.name:'', event_date:q.event_date,
         event_location:q.event_location, hours:trip.hours, miles:trip.miles, hotel_fee:trip.hotel,
+        tax_exempt:!!trip.taxExempt, tax_exempt_note:trip.taxNote||'',
         note, expires:expiresStr, alternatives:alts.map(alternateEmailFields)}
     });
     const out=await r.json().catch(()=>({}));
@@ -2305,6 +2310,8 @@ function quoteBuilder(qid){
   const milesAuto=stashed?!!stashed.milesAuto:!milesSaved;
   const initMiles=stashed?stashed.miles:(milesSaved?q.miles:'');
   const initHotel=stashed?stashed.hotel>0:Number(q.hotel_fee)>0;
+  const initTax=stashed&&stashed.taxExempt!=null?!!stashed.taxExempt:!!q.tax_exempt;
+  const initTaxNote=stashed&&stashed.taxNote!=null?stashed.taxNote:(q.tax_exempt_note||'');
   const initDate=/^\d{4}-\d{2}-\d{2}/.test(String(q.event_date||''))?String(q.event_date).slice(0,10):'';
   const initTime=clockInputValue(q.event_time);
   const priceAuto=q.base_rate==null||q.base_rate==='';
@@ -2315,7 +2322,7 @@ function quoteBuilder(qid){
   window._quoteEventDate=initDate||q.event_date||null;
   window._quoteEventTime=q.event_time||null;
   window._quoteId=q.id;
-  if(!stashed) window._quoteTrip={hours:initHours,miles:initMiles===''?0:Number(initMiles)||0,hotel:initHotel?HOTEL_FEE:0,note:q.quote_notes||null,milesAuto};
+  if(!stashed) window._quoteTrip={hours:initHours,miles:initMiles===''?0:Number(initMiles)||0,hotel:initHotel?HOTEL_FEE:0,note:q.quote_notes||null,milesAuto,taxExempt:initTax,taxNote:initTaxNote||null};
   const carOpts=quoteCarOptions(q.car_id, q.event_date, quoteSlot(initHours));
   let statusLine='';
   if(q.status==='sent'){
@@ -2372,6 +2379,11 @@ function quoteBuilder(qid){
       <div><label>Mileage fee</label><input id="q_mileage_fee" type="number" step="0.01" min="0" data-auto="${feeAuto?'1':'0'}" value="${feeAuto?'':esc(Number(q.travel).toFixed(2))}" oninput="quoteFeeTouched()"></div>
     </div>
     <label class="toggle" style="margin-top:10px"><input type="checkbox" id="q_hotel" ${initHotel?'checked':''} onchange="quoteRecalc()"><span class="toggleslide"></span><span>Overnight hotel accommodation — $${HOTEL_FEE}</span></label>
+    <label class="toggle" style="margin-top:10px"><input type="checkbox" id="q_tax_exempt" ${initTax?'checked':''} onchange="quoteRecalc()"><span class="toggleslide"></span><span>Tax exempt</span></label>
+    <div id="q_tax_note_wrap" style="margin-top:8px;${initTax?'':'display:none'}">
+      <label>Exemption note or certificate # (optional)</label>
+      <input id="q_tax_note" value="${esc(initTaxNote)}" placeholder="Certificate or note" oninput="quoteRecalc()">
+    </div>
     <div id="q_items" style="margin-top:10px"></div>
     <div id="q_alts"></div>
     <div id="q_breakdown" class="qbreak"></div>
@@ -2455,19 +2467,37 @@ function quoteHotelOn(){
   if(hidden) return Number(hidden.value)>0;
   return !!(window._quoteTrip&&window._quoteTrip.hotel);
 }
+function quoteTaxExempt(){
+  const el=document.getElementById('q_tax_exempt');
+  if(el) return !!el.checked;
+  if(window._quoteTrip && window._quoteTrip.taxExempt!=null) return !!window._quoteTrip.taxExempt;
+  const qid=window._quoteId;
+  const q=qid?(DATA.quotes||[]).find(x=>x.id===qid):null;
+  return !!(q&&q.tax_exempt);
+}
+function quoteTaxNote(){
+  const el=document.getElementById('q_tax_note');
+  if(el) return String(el.value||'').trim()||null;
+  if(window._quoteTrip && window._quoteTrip.taxNote!=null) return window._quoteTrip.taxNote||null;
+  const qid=window._quoteId;
+  const q=qid?(DATA.quotes||[]).find(x=>x.id===qid):null;
+  return q&&q.tax_exempt_note?String(q.tax_exempt_note):null;
+}
 function quoteTripInputs(){
   const hoursEl=document.getElementById('q_hours');
   const milesEl=document.getElementById('q_miles');
   const noteEl=document.getElementById('q_note')||document.getElementById('alt_note');
+  const taxExempt=quoteTaxExempt();
+  const taxNote=quoteTaxNote();
   if(!hoursEl && window._quoteTrip){
-    return {...window._quoteTrip, note:noteEl?noteEl.value||null:window._quoteTrip.note};
+    return {...window._quoteTrip, note:noteEl?noteEl.value||null:window._quoteTrip.note, taxExempt, taxNote};
   }
   const hours=hoursEl?parseFloat(hoursEl.value)||INCLUDED_HOURS:INCLUDED_HOURS;
   const miles=wholeQuoteMiles(milesEl?milesEl.value:0);
   const hotel=quoteHotelOn()?HOTEL_FEE:0;
   const note=noteEl?noteEl.value||null:null;
   const milesAuto=!!(milesEl&&milesEl.dataset.auto==='1');
-  const trip={hours, miles, hotel, note, milesAuto};
+  const trip={hours, miles, hotel, note, milesAuto, taxExempt, taxNote};
   window._quoteTrip=trip;
   return trip;
 }
@@ -2480,7 +2510,7 @@ function quoteRecalc(){
   const milesEl=document.getElementById('q_miles');
   const miles=milesEl?milesEl.value:0;
   const hotelOn=quoteHotelOn();
-  const c=quoteMoneyParts()||calcQuote(carId,hours,miles,hotelOn?HOTEL_FEE:0);
+  const c=quoteMoneyParts()||calcQuote(carId,hours,miles,hotelOn?HOTEL_FEE:0,quoteTaxExempt());
   const m=n=>`$${n.toFixed(2)}`;
   const qid=window._quoteId;
   const q=qid?(DATA.quotes||[]).find(x=>x.id===qid):null;
@@ -2521,7 +2551,7 @@ function quoteRecalc(){
         </div>`;
         if(altsEl){
           if(others.length){
-            const priced=pricedAlternateQuotes(carId, hours, miles, hotelOn?HOTEL_FEE:0, evDate);
+            const priced=pricedAlternateQuotes(carId, hours, miles, hotelOn?HOTEL_FEE:0, evDate, quoteTaxExempt());
             altsEl.innerHTML=`<div class="qalts"><div class="qahd">Open for this time — tap Send this option on one car, or send all prices</div>${
               priced.map(a=>alternateOfferRowHtml(qid, carId, a, hasEmail)).join('')
             }</div>`;
@@ -2564,7 +2594,14 @@ function quoteRecalc(){
     const text=mileageFeeNote(milesEl?milesEl.value:'');
     if(text) mileageNote.textContent=text;
   }
+  const taxWrap=document.getElementById('q_tax_note_wrap');
+  if(taxWrap) taxWrap.style.display=c.taxExempt?'block':'none';
+  const deposit=Math.min(250, Math.max(0, c.total));
+  const balance=Math.round((Math.max(0, c.total)-deposit)*100)/100;
   const customLines=(c.custom||[]).map(line=>`<div class="qline"><span>${esc(line.label)}</span><span>${m(Number(line.amount)||0)}</span></div>`).join('');
+  const taxLine=c.taxExempt
+    ? `<div class="qline"><span>Tax exempt</span><span>${esc(c.taxNote||'')}</span></div>`
+    : `<div class="qline"><span>Sales tax (10.25%)</span><span>${m(c.tax)}</span></div>`;
   document.getElementById('q_breakdown').innerHTML=`
     ${breakHint}
     <div class="qline"><span>Base (up to ${INCLUDED_HOURS} hrs)</span><span>${m(c.base)}</span></div>
@@ -2573,8 +2610,10 @@ function quoteRecalc(){
     ${c.hotel>0?`<div class="qline"><span>Overnight hotel accommodation</span><span>${m(c.hotel)}</span></div>`:`<div class="qline muted"><span>Overnight hotel (not included)</span><span>$0.00</span></div>`}
     ${customLines}
     <div class="qline"><span>Subtotal</span><span>${m(c.subtotal)}</span></div>
-    <div class="qline"><span>Sales tax (10.25%)</span><span>${m(c.tax)}</span></div>
-    <div class="qline qtotal"><span>Total</span><span>${m(c.total)}</span></div>`;
+    ${taxLine}
+    <div class="qline qtotal"><span>Total</span><span>${m(c.total)}</span></div>
+    <div class="qline"><span>Deposit</span><span>${m(deposit)}</span></div>
+    <div class="qline"><span>Balance</span><span>${m(balance)}</span></div>`;
 }
 
 const SITE_BOOK_ORIGIN='https://www.chanceclassics.com';
@@ -2704,7 +2743,8 @@ function quoteMoneyParts(){
   const milesEl=document.getElementById('q_miles');
   const miles=milesEl?milesEl.value:0;
   const hotelOn=quoteHotelOn();
-  const auto=calcQuote(carEl.value,hoursEl.value,miles,hotelOn?HOTEL_FEE:0);
+  const taxExempt=quoteTaxExempt();
+  const auto=calcQuote(carEl.value,hoursEl.value,miles,hotelOn?HOTEL_FEE:0,taxExempt);
   const feeEl=document.getElementById('q_mileage_fee');
   const priceEl=document.getElementById('q_price');
   if(priceEl&&priceEl.dataset.auto==='1') priceEl.value=Number(auto.base).toFixed(2);
@@ -2714,9 +2754,9 @@ function quoteMoneyParts(){
   const custom=(window._quoteLines||[]).filter(l=>l&&String(l.label||'').trim()).map(l=>({label:String(l.label).trim(),amount:Number(l.amount)||0}));
   const customSum=custom.reduce((sum,line)=>sum+line.amount,0);
   const subtotal=base+auto.overage+travel+(hotelOn?HOTEL_FEE:0)+customSum;
-  const tax=Math.round(Math.round(subtotal*100)*TAX_RATE)/100;
+  const tax=taxExempt?0:Math.round(Math.round(subtotal*100)*TAX_RATE)/100;
   const total=Math.round((subtotal+tax)*100)/100;
-  return {base,extraH:auto.extraH,overage:auto.overage,mi:auto.mi,travel,hotel:hotelOn?HOTEL_FEE:0,subtotal,tax,total,custom};
+  return {base,extraH:auto.extraH,overage:auto.overage,mi:auto.mi,travel,hotel:hotelOn?HOTEL_FEE:0,subtotal,tax,total,custom,taxExempt,taxNote:quoteTaxNote()};
 }
 function renderQuoteLines(){
   const el=document.getElementById('q_items');
@@ -2747,13 +2787,25 @@ function quoteSavePatch(f){
   return {car_id:f.car_id,hours:f.hours,miles:f.miles,base_rate:f.base_rate,overage:f.overage,
     travel:f.travel,hotel_fee:f.hotel_fee,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
     line_items:f.line_items,event_date:f.event_date,event_time:f.event_time,
-    book_token:f.book_token,book_expires_at:f.book_expires_at};
+    book_token:f.book_token,book_expires_at:f.book_expires_at,
+    tax_exempt:!!f.tax_exempt,tax_exempt_note:f.tax_exempt?f.tax_exempt_note||null:null};
+}
+async function updateQuoteRow(qid, patch){
+  const first=await SB.from('quote_requests').update(patch).eq('id',qid);
+  if(!first.error) return {error:null, droppedTax:false};
+  if(!/tax_exempt/i.test(first.error.message||'')) return {error:first.error, droppedTax:false};
+  const next={...patch};
+  delete next.tax_exempt;
+  delete next.tax_exempt_note;
+  const second=await SB.from('quote_requests').update(next).eq('id',qid);
+  return {error:second.error, droppedTax:!second.error};
 }
 async function copyBookLink(qid){
   if(!SB){ toast('Sign in before copying the link'); return; }
   const f=quoteFields(qid);
-  const {error}=await SB.from('quote_requests').update(quoteSavePatch(f)).eq('id',qid);
-  if(error){toast(error.message);return}
+  const saved=await updateQuoteRow(qid, quoteSavePatch(f));
+  if(saved.error){toast(saved.error.message);return}
+  if(saved.droppedTax&&f.tax_exempt) toast('Apply the tax exempt migration so the switch is saved.');
   const url=f.book_url;
   try{ await navigator.clipboard.writeText(url); }
   catch(e){
@@ -2771,7 +2823,7 @@ function quoteFields(qid){
   const milesInput=Number.isFinite(milesRaw)?milesRaw:0;
   const noteEl=document.getElementById('q_note');
   const note=noteEl?noteEl.value||null:null;
-  const c=quoteMoneyParts()||calcQuote(carId,hours,milesInput,quoteHotelOn()?HOTEL_FEE:0);
+  const c=quoteMoneyParts()||calcQuote(carId,hours,milesInput,quoteHotelOn()?HOTEL_FEE:0,quoteTaxExempt());
   const days=Math.max(1, parseInt((document.getElementById('q_valid_days')||{}).value,10)||QUOTE_VALID_DAYS);
   const token=ensureBookToken(q||{id:qid});
   const dateEl=document.getElementById('q_date');
@@ -2781,15 +2833,14 @@ function quoteFields(qid){
     line_items:c.custom||[], event_date:(dateEl&&dateEl.value)||(q&&q.event_date)||null,
     event_time:(timeEl&&timeEl.value)||(q&&q.event_time)||null,
     book_token:token, book_expires_at:new Date(Date.now()+days*86400000).toISOString(),
-    book_url:quoteBookUrl(token)};
+    book_url:quoteBookUrl(token), tax_exempt:!!c.taxExempt, tax_exempt_note:c.taxNote||null};
 }
 
 async function saveQuoteDraft(qid){
   const f=quoteFields(qid);
-  const {error}=await SB.from('quote_requests').update({
-    ...quoteSavePatch(f), status:'quoted'
-  }).eq('id',qid);
-  if(error){toast(error.message);return}
+  const saved=await updateQuoteRow(qid, {...quoteSavePatch(f), status:'quoted'});
+  if(saved.error){toast(saved.error.message);return}
+  if(saved.droppedTax&&f.tax_exempt) toast('Apply the tax exempt migration so the switch is saved.');
   toast('Draft saved');closeModal();await loadAll();
 }
 
@@ -2811,9 +2862,8 @@ async function sendQuote(qid){
   const nowIso=new Date().toISOString();
   const expiresStr=new Date(f.book_expires_at).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   // save first
-  await SB.from('quote_requests').update({
-    ...quoteSavePatch(f), status:'sent', sent_at:nowIso
-  }).eq('id',qid);
+  const saved=await updateQuoteRow(qid, {...quoteSavePatch(f), status:'sent', sent_at:nowIso});
+  if(saved.error){toast(saved.error.message);return}
   // send email
   try{
     await postNotification({
@@ -2822,6 +2872,7 @@ async function sendQuote(qid){
       quote:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:f.event_date||q.event_date,
         event_location:q.event_location, base_rate:f.base_rate, overage:f.overage, extra_hours:f.extra_hours,
         travel:f.travel, miles:f.miles, hotel_fee:f.hotel_fee, subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes,
+        tax_exempt:!!f.tax_exempt, tax_exempt_note:f.tax_exempt_note||'',
         custom_items:f.line_items, expires:expiresStr}
     });
     toast('Quote sent to customer');
@@ -3402,7 +3453,7 @@ function bookingModal(id){
     <small class="hint">Setting a tier offers this job down the priority list. A driver who already has a booking in this window, including the 2-hour buffer, is skipped.</small>
     ${isOwnerView()?`<div><label>Customer amount</label>
       <input id="f_amount" inputmode="decimal" placeholder="$0.00" value="${storedCustomerAmount(b)!=null?esc(storedCustomerAmount(b).toFixed(2)):''}">
-      <small class="hint">Customer total including 10.25% sales tax. Earnings uses this Price line. Staff never see it.</small>
+      <small class="hint">${b.tax_exempt?'Tax exempt. Customer total with no sales tax.':'Customer total including 10.25% sales tax.'} Earnings uses this Price line. Staff never see it.</small>
     </div>`:''}
     <div><label>Notes</label><textarea id="f_notes">${esc(notesWithoutPrice(b.notes))}</textarea></div>
     <label class="toggle"><input type="checkbox" id="f_trailer" ${b.needs_trailer?'checked':''}><span class="toggleslide"></span><span>🚛 Car needs to be trailered</span></label>
@@ -3815,6 +3866,11 @@ function dayBeforeEmailLine(b){
   const text=dayBeforeSentNote(b&&b.day_before_email_sent_at);
   return text?`<div class="meta">${esc(text)}</div>`:'';
 }
+function bookingShowsTaxExempt(b){
+  if(!b) return false;
+  if(b.tax_exempt) return true;
+  return /(?:^|\n)\s*Tax exempt\b/.test(String(b.notes||''));
+}
 function bookingDetail(bid){
   const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
   const car=carById(b.car_id), drv=staffById(b.driver_id);
@@ -3833,6 +3889,7 @@ function bookingDetail(bid){
     ${!isOwnerView()&&pay!=null?`<div class="paypill" style="margin-bottom:14px">You earn $${pay}</div>`:''}
     ${showOwnerCustomerAmount()?ownerCustomerAmountEditorHtml(b,'detail'):''}
     ${isOwnerView()?row('Payment', b.payment_status==='paid'?'Paid in full':b.payment_status==='deposit'?'Deposit':'Unpaid'):''}
+    ${bookingShowsTaxExempt(b)?row('Tax', 'Tax exempt'+(b.tax_exempt_note?' — '+b.tax_exempt_note:'')):''}
     ${isOwnerView()?chargeSavedCardHtml(b):''}
     ${row('Customer', b.customer_name)}
     ${row('Event', b.event_type)}

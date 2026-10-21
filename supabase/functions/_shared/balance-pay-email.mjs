@@ -87,7 +87,9 @@ function warmCopy(input) {
   return {
     who,
     greeting: `We're so excited to be a part of your event on ${date}! ${carSentence}`,
-    balance: `Your remaining balance is ${money(input?.amount)} (the booking total includes 10.25% sales tax), due the day before your event. You can pay securely with the button below.`,
+    balance: input?.taxExempt
+      ? `Your remaining balance is ${money(input?.amount)}. Tax exempt. It is due the day before your event. You can pay securely with the button below.`
+      : `Your remaining balance is ${money(input?.amount)} (the booking total includes 10.25% sales tax), due the day before your event. You can pay securely with the button below.`,
   };
 }
 

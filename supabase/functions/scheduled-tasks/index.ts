@@ -33,6 +33,7 @@ import { driverBusyWith, offerRankFor } from "../_shared/driver-availability.mjs
 import {
   DAY_BEFORE_STATUSES,
   PAID_NEW_PAYMENTS,
+  bookingTaxExempt,
   dayBeforeSkipReason,
   dayBeforeWindow,
   isPaidNewBooking,
@@ -215,6 +216,7 @@ async function balancePayLink(input: {
   customerId: string;
   amount: number;
   eventDate: string;
+  taxExempt?: boolean;
 }) {
   const params = new URLSearchParams();
   params.set("mode", "payment");
@@ -232,7 +234,9 @@ async function balancePayLink(input: {
   params.set("line_items[0][price_data][unit_amount]", String(Math.round(input.amount * 100)));
   params.set("line_items[0][price_data][product_data][name]", "Chance Classics rental balance");
   params.set("line_items[0][price_data][product_data][description]",
-    `Balance for ${input.eventDate}. The booking total includes 10.25% sales tax. The balance is due the day before the event.`);
+    input.taxExempt
+      ? `Balance for ${input.eventDate}. Tax exempt. The balance is due the day before the event.`
+      : `Balance for ${input.eventDate}. The booking total includes 10.25% sales tax. The balance is due the day before the event.`);
   if (input.customerId.startsWith("cus_")) params.set("customer", input.customerId);
   else params.set("customer_email", input.email);
 
@@ -626,14 +630,19 @@ Deno.serve(async (req) => {
       balanceSummary.errors.push(balanceSummary.reason);
     } else {
       const eventWindow = reminderEventWindow(chicagoNow.date);
-      const due = await sb.from("bookings")
-        .select("id,customer_name,customer_email,event_date,event_type,start_time,end_time,pickup_location,return_location,status,total_usd,amount_paid_usd,balance_due_usd,balance_reminder_sent_at,stripe_customer_id,car_id")
+      const balanceColumns = "id,customer_name,customer_email,event_date,event_type,start_time,end_time,pickup_location,return_location,status,notes,total_usd,amount_paid_usd,balance_due_usd,balance_reminder_sent_at,stripe_customer_id,car_id,tax_exempt";
+      const balanceQuery = (columns: string) => sb.from("bookings")
+        .select(columns)
         .is("balance_reminder_sent_at", null)
         .not("customer_email", "is", null)
         .gte("event_date", eventWindow.from)
         .lte("event_date", eventWindow.to)
         .neq("status", "cancelled")
         .neq("status", "hold");
+      let due = await balanceQuery(balanceColumns);
+      if (due.error && /tax_exempt/i.test(due.error.message || "")) {
+        due = await balanceQuery(balanceColumns.replace(",tax_exempt", ""));
+      }
       if (due.error) {
         const missing = /balance_reminder_sent_at|stripe_customer_id/i.test(due.error.message || "");
         balanceSummary.errors.push(missing
@@ -680,6 +689,7 @@ Deno.serve(async (req) => {
               customerId: b.stripe_customer_id ? String(b.stripe_customer_id) : "",
               amount: balance,
               eventDate,
+              taxExempt: bookingTaxExempt(b),
             });
             const cn = await carName(b.car_id);
             const payMail = {
@@ -694,6 +704,7 @@ Deno.serve(async (req) => {
               pickup: b.pickup_location,
               dropoff: b.return_location,
               mondayReminder: true,
+              taxExempt: bookingTaxExempt(b),
             };
             await sendEmail(
               email,
@@ -726,18 +737,25 @@ Deno.serve(async (req) => {
       daySummary.reason = "RESEND_API_KEY is not set";
       daySummary.errors.push(daySummary.reason);
     } else {
-      const dayBeforeColumns = "id,customer_name,customer_email,event_type,event_date,start_time,end_time,pickup_location,return_location,status,notes,source,total_usd,amount_paid_usd,balance_due_usd,payment_status,stripe_customer_id,car_id,driver_id,replied_at,reviewed_at,photos_received_at,day_before_email_sent_at";
-      const due = await sb.from("bookings")
-        .select(dayBeforeColumns)
-        .eq("event_date", window.eventDate)
-        .in("status", DAY_BEFORE_STATUSES)
-        .is("day_before_email_sent_at", null);
-      const paidNew = await sb.from("bookings")
-        .select(dayBeforeColumns)
-        .eq("event_date", window.eventDate)
-        .eq("status", "new")
-        .in("payment_status", PAID_NEW_PAYMENTS)
-        .is("day_before_email_sent_at", null);
+      const dayBeforeColumns = "id,customer_name,customer_email,event_type,event_date,start_time,end_time,pickup_location,return_location,status,notes,source,total_usd,amount_paid_usd,balance_due_usd,payment_status,stripe_customer_id,car_id,driver_id,replied_at,reviewed_at,photos_received_at,day_before_email_sent_at,tax_exempt";
+      const dayBeforeQuery = (columns: string) => Promise.all([
+        sb.from("bookings")
+          .select(columns)
+          .eq("event_date", window.eventDate)
+          .in("status", DAY_BEFORE_STATUSES)
+          .is("day_before_email_sent_at", null),
+        sb.from("bookings")
+          .select(columns)
+          .eq("event_date", window.eventDate)
+          .eq("status", "new")
+          .in("payment_status", PAID_NEW_PAYMENTS)
+          .is("day_before_email_sent_at", null),
+      ]);
+      let [due, paidNew] = await dayBeforeQuery(dayBeforeColumns);
+      if ((due.error && /tax_exempt/i.test(due.error.message || ""))
+        || (paidNew.error && /tax_exempt/i.test(paidNew.error.message || ""))) {
+        [due, paidNew] = await dayBeforeQuery(dayBeforeColumns.replace(",tax_exempt", ""));
+      }
       const queryError = due.error || paidNew.error;
       if (queryError) {
         const missing = /day_before_email_sent_at/i.test(queryError.message || "");
@@ -816,6 +834,7 @@ Deno.serve(async (req) => {
                 customerId: row.stripe_customer_id ? String(row.stripe_customer_id) : "",
                 amount: Number(preview.balance),
                 eventDate: String(row.event_date || "").slice(0, 10),
+                taxExempt: bookingTaxExempt(row),
               });
             }
             const mail = renderDayBeforeEmail({

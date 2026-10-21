@@ -25,7 +25,11 @@ export async function handleQuoteAlternatives(body: any) {
             if (Number(chosen.travel) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Travel (${esc(chosen.miles ?? q.miles)} mi, trailered)</td><td style="padding:6px 0;text-align:right">${money(chosen.travel)}</td></tr>`);
             if (Number(chosen.hotel_fee) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Overnight hotel accommodation</td><td style="padding:6px 0;text-align:right">${money(chosen.hotel_fee)}</td></tr>`);
             lines.push(`<tr><td style="padding:6px 14px 6px 0;border-top:1px solid #ddd">Subtotal</td><td style="padding:6px 0;text-align:right;border-top:1px solid #ddd">${money(chosen.subtotal)}</td></tr>`);
-            lines.push(`<tr><td style="padding:6px 14px 6px 0">Sales tax (10.25%)</td><td style="padding:6px 0;text-align:right">${money(chosen.tax)}</td></tr>`);
+            if (chosen.tax_exempt || q.tax_exempt) {
+              lines.push(`<tr><td style="padding:6px 14px 6px 0">Tax exempt</td><td style="padding:6px 0;text-align:right">${esc(q.tax_exempt_note || "")}</td></tr>`);
+            } else {
+              lines.push(`<tr><td style="padding:6px 14px 6px 0">Sales tax (10.25%)</td><td style="padding:6px 0;text-align:right">${money(chosen.tax)}</td></tr>`);
+            }
           } else {
             lines.push(`<tr><td style="padding:6px 14px 6px 0;font-weight:700">${esc(chosenName)}</td><td></td></tr>`);
           }
@@ -46,7 +50,7 @@ export async function handleQuoteAlternatives(body: any) {
       if (q.hours) bits.push(`${q.hours} hours`);
       if (q.miles) bits.push(`${q.miles} mi trailered`);
       if (Number(q.hotel_fee) > 0) bits.push("overnight hotel");
-      bits.push("tax included");
+      bits.push(q.tax_exempt ? "Tax exempt" : "tax included");
       const intro = q.note
         ? esc(q.note).replace(/\n/g, "<br>")
         : one

@@ -70,6 +70,7 @@ async function payLink(stripe: Stripe, input: {
   amountCents: number;
   reason: "balance" | "overage" | "damage";
   description: string;
+  taxExempt?: boolean;
 }) {
   const paid = input.reason === "balance" ? "balance" : "charge";
   const base: Stripe.Checkout.SessionCreateParams = {
@@ -96,7 +97,9 @@ async function payLink(stripe: Stripe, input: {
           unit_amount: input.amountCents,
           product_data: {
             name: input.description,
-            description: "The balance is due the day before the event. The booking total includes 10.25% sales tax.",
+            description: input.taxExempt
+              ? "Tax exempt. The balance is due the day before the event."
+              : "The balance is due the day before the event. The booking total includes 10.25% sales tax.",
           },
         },
       },
@@ -187,6 +190,7 @@ async function sendBalancePayLink(
     amount_paid_usd?: unknown;
     notes?: string | null;
     stripe_customer_id?: string | null;
+    tax_exempt?: boolean | null;
   },
   input: {
     bookingId: string;
@@ -239,6 +243,7 @@ async function sendBalancePayLink(
         amountCents,
         reason: input.reason,
         description: chargeDescription(input.reason),
+        taxExempt: row.tax_exempt === true || /(?:^|\n)\s*Tax exempt\b/i.test(String(row.notes || "")),
       });
     } catch (error) {
       return json(request, { error: stripeMessage(error) }, 502);
@@ -281,6 +286,7 @@ async function sendBalancePayLink(
     endTime: String(row.end_time || ""),
     pickupLocation: String(row.pickup_location || ""),
     returnLocation: String(row.return_location || ""),
+    taxExempt: row.tax_exempt === true || /(?:^|\n)\s*Tax exempt\b/i.test(String(row.notes || "")),
   });
   let messageIdError = "";
   if (mailed.ok) {
@@ -367,9 +373,14 @@ async function handleChargePost(request: Request) {
   if (!isChargeReason(reason)) return json(request, { error: "Choose balance, overage, or damage." }, 400);
   if (!Number.isFinite(amount)) return json(request, { error: "Enter an amount." }, 400);
 
-  const loaded = await db.from("bookings").select(
-    "id,status,customer_name,customer_email,event_date,event_type,start_time,end_time,pickup_location,return_location,car_id,total_usd,amount_paid_usd,notes,payment_status,stripe_customer_id,stripe_payment_method_id",
+  let loaded = await db.from("bookings").select(
+    "id,status,customer_name,customer_email,event_date,event_type,start_time,end_time,pickup_location,return_location,car_id,total_usd,amount_paid_usd,notes,payment_status,stripe_customer_id,stripe_payment_method_id,tax_exempt",
   ).eq("id", bookingId).maybeSingle();
+  if (loaded.error && /tax_exempt/i.test(loaded.error.message || "")) {
+    loaded = await db.from("bookings").select(
+      "id,status,customer_name,customer_email,event_date,event_type,start_time,end_time,pickup_location,return_location,car_id,total_usd,amount_paid_usd,notes,payment_status,stripe_customer_id,stripe_payment_method_id",
+    ).eq("id", bookingId).maybeSingle();
+  }
   if (loaded.error && /stripe_customer_id|stripe_payment_method_id/i.test(loaded.error.message || "")) {
     return json(request, { error: "Apply the saved-card migration before charging a card." }, 503);
   }

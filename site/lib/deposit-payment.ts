@@ -81,7 +81,8 @@ export function totalDollarsFromCheckout(input: {
   const fee = moneyNumber(input.mileageFeeUsd) ?? moneyNumber(feeLine?.[1]) ?? 0;
   const subtotal = Math.round((listingUsd + fee) * 100) / 100;
   const taxLine = notes.match(/Sales tax[^$\n]*\$([0-9]+(?:\.[0-9]+)?)/i);
-  const tax = taxLine ? (moneyNumber(taxLine[1]) ?? 0) : salesTaxOn(subtotal);
+  const exempt = /(?:^|\n)\s*Tax exempt\b/i.test(notes);
+  const tax = exempt ? 0 : (taxLine ? (moneyNumber(taxLine[1]) ?? 0) : salesTaxOn(subtotal));
   return Math.round((subtotal + tax) * 100) / 100;
 }
 

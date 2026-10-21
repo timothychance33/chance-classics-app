@@ -8,6 +8,7 @@ import {
   BOOKING_BUFFER_HOURS,
   openStartTimes,
   quoteCheckoutLines,
+  quoteIsTaxExempt,
   slotTaken,
   quoteCheckoutMoney,
   quoteLinkOpen,
@@ -254,6 +255,23 @@ const lines = quoteCheckoutLines({
   line_items: [{ label: "Flowers", amount: 40 }],
 });
 assert(lines.some((line) => line.label === "Sales tax (10.25%)" && line.amount === 68), "quote checkout shows sales tax");
+assert(!lines.some((line) => line.label === "Tax exempt"), "a taxed quote does not say tax exempt");
+const exemptLines = quoteCheckoutLines({
+  car_name: "Patsy",
+  base_rate: 500,
+  tax: 0,
+  taxExempt: true,
+});
+assert(exemptLines.some((line) => line.label === "Tax exempt"), "a tax-exempt quote says Tax exempt");
+assert(!exemptLines.some((line) => line.label === "Sales tax (10.25%)"), "a tax-exempt quote drops the sales tax line");
+assert(quoteIsTaxExempt({ tax_exempt: true, tax: 51.25, subtotal: 500 }) === true, "the switch wins");
+assert(quoteIsTaxExempt({ tax_exempt: false, tax: 0, subtotal: 500 }) === false, "an explicit off stays taxed in the label");
+assert(quoteIsTaxExempt({ tax: 0, subtotal: 500 }) === true, "a stored zero tax is exempt when the column is missing");
+assert(quoteIsTaxExempt({ tax: 51.25, subtotal: 500 }) === false, "a normal quote stays taxed");
+assert(totalDollarsFromCheckout({
+  notes: "Tax exempt\nListing total: $500.00\nMileage: 25 miles from Benton to pickup, fee $0.00, billed with the balance.",
+  mileageFeeUsd: 0,
+}) === 500, "a tax-exempt listing note is not taxed again");
 assert(lines.some((line) => line.label.includes("60 mi") && line.amount === 180), "mileage fee is the pickup distance");
 assert(lines.some((line) => line.label === "Flowers" && line.amount === 40), "custom line item");
 assert(!lines.some((line) => /drop-off/i.test(line.label)), "drop-off is not a price line");
