@@ -11,6 +11,7 @@ import {
   PAID_NEW_PAYMENTS,
   balanceDue,
   clientNoteFields,
+  bookingTaxExempt,
   dayBeforeSkipReason,
   dayBeforeWindow,
   isPaidNewBooking,
@@ -187,6 +188,24 @@ const paidMail = renderDayBeforeEmail({
   payUrl: 'https://checkout.stripe.com/should-not-appear',
 });
 assert.equal(paidMail.needsPayLink, false);
+assert.doesNotMatch(paidMail.html, /Tax exempt/);
+const exemptDay = renderDayBeforeEmail({
+  booking: {
+    status: 'confirmed',
+    customer_name: 'Sam',
+    event_date: '2026-10-21',
+    payment_status: 'paid',
+    balance_due_usd: 0,
+    tax_exempt: true,
+    tax_exempt_note: 'CERT-9',
+  },
+  car: { name: 'Phyllis' },
+});
+assert.match(exemptDay.html, /Paid in full\. Tax exempt\./);
+assert.match(exemptDay.text, /Paid in full\. Tax exempt\./);
+assert.doesNotMatch(exemptDay.html, /10\.25%/);
+assert.equal(bookingTaxExempt({ notes: 'Tax exempt: CERT-9' }), true);
+assert.equal(bookingTaxExempt({ tax_exempt: false, notes: 'Tax exempt' }), false);
 assert.match(paidMail.html, /Paid in full/);
 assert.match(paidMail.html, /Jordan &lt;Lee&gt;/);
 assert.match(paidMail.html, /318-555-0148/);

@@ -5,6 +5,7 @@ import {
   fromMinutes,
   quoteCheckoutLines,
   quoteCheckoutMoney,
+  quoteIsTaxExempt,
   quoteLinkOpen,
   slotTaken,
   toMinutes,
@@ -42,8 +43,11 @@ export type QuoteRow = {
   overage: number | null;
   travel: number | null;
   hotel_fee: number | null;
+  subtotal?: number | null;
   tax: number | null;
   total: number | null;
+  tax_exempt?: boolean | null;
+  tax_exempt_note?: string | null;
   line_items?: unknown;
   quote_notes: string | null;
 };
@@ -83,6 +87,7 @@ export function publicQuoteView(quote: QuoteRow, carName: string) {
     miles: quote.miles,
     hotel_fee: quote.hotel_fee,
     tax: quote.tax,
+    taxExempt: quoteIsTaxExempt(quote),
     line_items: quote.line_items,
   });
   return {
@@ -97,6 +102,7 @@ export function publicQuoteView(quote: QuoteRow, carName: string) {
     phone: quote.customer_phone || "",
     occasion: quote.event_type || "",
     note: quote.quote_notes || "",
+    taxExemptNote: quoteIsTaxExempt(quote) ? String(quote.tax_exempt_note || "").trim() : "",
     lines,
     total: money.total,
     deposit: money.deposit,
@@ -179,13 +185,17 @@ export async function confirmPaidQuote(
   const carName = await carNameFor(db, quote.car_id, quote.service_name);
   const money = quoteCheckoutMoney(Number(quote.total) || 0);
   const source = bookingSource(env);
+  const taxExempt = quoteIsTaxExempt(quote);
+  const exemptNote = String(quote.tax_exempt_note || "").trim();
   const notes = [
     source === "site-test" ? "TEST website booking from a quote link. Not a real garage job until you say so." : "Website booking from a quote link.",
     `Quote: ${quote.id}`,
     `Car: ${carName}`,
     quote.event_type ? `Occasion: ${quote.event_type}` : "",
     `Duration: ${slot.hours} hours`,
-    Number(quote.tax) ? `Sales tax (10.25%): $${Number(quote.tax).toFixed(2)}` : "",
+    taxExempt
+      ? `Tax exempt${exemptNote ? `: ${exemptNote}` : ""}`
+      : (Number(quote.tax) ? `Sales tax (10.25%): $${Number(quote.tax).toFixed(2)}` : ""),
     `Quote total: $${Number(money.total).toFixed(2)}`,
     `Mileage fee: $${Number(quote.travel || 0).toFixed(2)}`,
     `Deposit paid: $${Number(money.deposit).toFixed(2)}`,
@@ -209,6 +219,8 @@ export async function confirmPaidQuote(
     payment_status: "deposit",
     total_usd: money.total,
     amount_paid_usd: money.deposit,
+    tax_exempt: taxExempt,
+    tax_exempt_note: taxExempt && exemptNote ? exemptNote : null,
     ...(stripeSessionId ? { stripe_deposit_session_id: stripeSessionId } : {}),
     ...(savedCard?.customerId ? { stripe_customer_id: savedCard.customerId } : {}),
     ...(savedCard?.paymentMethodId ? { stripe_payment_method_id: savedCard.paymentMethodId } : {}),

@@ -302,6 +302,7 @@ export function quoteCheckoutLines(quote: {
   miles?: number | null;
   hotel_fee?: number | null;
   tax?: number | null;
+  taxExempt?: boolean | null;
   line_items?: unknown;
 }): QuoteLine[] {
   const lines: QuoteLine[] = [];
@@ -323,8 +324,20 @@ export function quoteCheckoutLines(quote: {
       if (label) lines.push({ label, amount });
     }
   }
-  if (Number(quote.tax)) add("Sales tax (10.25%)", Number(quote.tax));
+  if (quote.taxExempt) lines.push({ label: "Tax exempt", amount: 0 });
+  else if (Number(quote.tax)) add("Sales tax (10.25%)", Number(quote.tax));
   return lines;
+}
+
+/** A saved quote with the switch on, or a positive subtotal whose tax was stored as $0. */
+export function quoteIsTaxExempt(quote: {
+  tax_exempt?: boolean | null;
+  tax?: number | null;
+  subtotal?: number | null;
+} | null | undefined) {
+  if (!quote) return false;
+  if (typeof quote.tax_exempt === "boolean") return quote.tax_exempt;
+  return (Number(quote.subtotal) || 0) > 0 && (Number(quote.tax) || 0) === 0;
 }
 
 /** Same fields quote-capture writes, plus the drop-off address in the details the garage already shows. */
