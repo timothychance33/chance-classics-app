@@ -1755,13 +1755,6 @@
     },
     "images": [
       {
-        "src": "/images/cars-others_gallery_01.webp",
-        "alt": "A Chance Classics car",
-        "w": 5712,
-        "h": 4284,
-        "file": "cars-others_gallery_01.png"
-      },
-      {
         "src": "/images/cars-others_gallery_02.webp",
         "alt": "A Chance Classics car",
         "w": 5712,

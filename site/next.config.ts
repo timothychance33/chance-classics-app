@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
       { source: "/cart-page", destination: "/book-online/", permanent: true },
       { source: "/portfolio-collections/my-portfolio", destination: "/portfolio/", permanent: true },
       { source: "/portfolio-collections/my-portfolio/others", destination: "/portfolio/", permanent: true },
+      { source: "/portfolio-collections/my-portfolio/daisy", destination: "/portfolio/", permanent: true },
       { source: "/others", destination: "/portfolio/", permanent: true },
       {
         source: "/occasions/prom-and-homecoming",
