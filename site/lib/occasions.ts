@@ -113,13 +113,6 @@ export const occasions: {
         file: "occasion-weddings-01.jpg",
       },
       {
-        src: "/images/occasion-weddings-02.webp",
-        alt: "Couple riding in Elsa, our white Packard Caribbean convertible, at dusk",
-        w: 590,
-        h: 422,
-        file: "occasion-weddings-02.jpg",
-      },
-      {
         src: "/images/occasion-weddings-03.webp",
         alt: "Couple with Brenda, our blue 1961 Buick Invicta convertible, in front of a museum",
         w: 1600,
