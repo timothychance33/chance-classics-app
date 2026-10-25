@@ -739,6 +739,14 @@ const prepFor=bid=>DATA.prep.filter(t=>t.booking_id===bid);
 function prepPct(bid){const t=prepFor(bid);if(!t.length)return null;return Math.round(100*t.filter(x=>x.done).length/t.length)}
 function fmtDate(d){if(!d)return{d:'—',m:'',y:''};const dt=new Date(d+'T00:00:00');return{d:dt.getDate(),m:MONTHS[dt.getMonth()],y:dt.getFullYear()}}
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':');let hh=+h;const ap=hh>=12?'PM':'AM';hh=hh%12||12;return hh+':'+m+ap}
+function timeSpanLabel(start,end){
+  if(!start&&!end) return '';
+  const a=start?fmtTime(start):'';
+  const b=end?fmtTime(end):'';
+  if(!a||!b) return a||b;
+  const as=clockMinutes(start), bs=clockMinutes(end);
+  return a+' – '+b+(as!=null&&bs!=null&&bs<=as?' the next day':'');
+}
 
 // ---------- marketplace helpers ----------
 // Session token only. Notify and crew-login secrets stay on the server.
@@ -2360,8 +2368,10 @@ function quoteBuilder(qid){
     </div>
     <div class="row two" style="margin-top:12px">
       <div><label>Date</label><input id="q_date" type="date" value="${esc(initDate)}" onchange="window._quoteEventDate=this.value||null;quoteRecalc()"></div>
-      <div><label>Start time</label><input id="q_time" type="time" value="${esc(initTime)}"></div>
+      <div><label>Start time</label><input id="q_time" type="time" min="08:00" max="23:45" step="900" value="${esc(initTime)}" oninput="quoteRecalc()"></div>
     </div>
+    <div class="meta" id="q_end_note"></div>
+    <div class="meta">Start times are every 15 minutes, from 8:00 AM to 11:45 PM. A rental may end after midnight.</div>
     <div class="row two" style="margin-top:12px">
       <div><label>Car</label><select id="q_car" onchange="quoteRecalc()">${carOpts}</select></div>
       <div><label>Total hours</label><input id="q_hours" type="number" step="0.5" min="2" value="${initHours}" oninput="quoteRecalc()"></div>
@@ -2501,10 +2511,32 @@ function quoteTripInputs(){
   window._quoteTrip=trip;
   return trip;
 }
+function rentalEndText(start, hours){
+  const startMin=clockMinutes(start);
+  const duration=Number(hours);
+  if(startMin==null||!Number.isFinite(duration)||duration<=0) return '';
+  if(duration>24) return 'That rental runs longer than 24 hours.';
+  const abs=startMin+Math.round(duration*60);
+  const clock=abs%1440;
+  let h=Math.floor(clock/60);
+  const m=String(clock%60).padStart(2,'0');
+  const ap=h>=12?'PM':'AM';
+  h=h%12||12;
+  const label=h+':'+m+' '+ap;
+  return abs>=1440 ? 'Ends at '+label+' the next day.' : 'Ends at '+label+'.';
+}
+function startWindowWarning(start){
+  const mins=clockMinutes(start);
+  if(mins==null) return '';
+  if(mins<8*60||mins>23*60+45||(mins-8*60)%15!==0) return 'Choose a start from 8:00 AM to 11:45 PM, every 15 minutes.';
+  return '';
+}
 function quoteRecalc(){
   const carEl=document.getElementById('q_car');
   const hoursEl=document.getElementById('q_hours');
   if(!carEl||!hoursEl) return;
+  const timeEl=document.getElementById('q_time');
+  if(timeEl) window._quoteEventTime=timeEl.value||null;
   const carId=carEl.value;
   const hours=hoursEl.value;
   const milesEl=document.getElementById('q_miles');
@@ -2523,6 +2555,12 @@ function quoteRecalc(){
   const sendRow=document.getElementById('q_send_row');
   const evDate=window._quoteEventDate;
   const slot=quoteSlot(hours);
+  const endNote=document.getElementById('q_end_note');
+  if(endNote){
+    const ends=rentalEndText(window._quoteEventTime, hours);
+    const warn=startWindowWarning(window._quoteEventTime);
+    endNote.textContent=[ends, warn].filter(Boolean).join(' ');
+  }
   let clash=null, others=[];
   if(avail){
     if(!evDate){
@@ -2539,9 +2577,7 @@ function quoteRecalc(){
       clash=findBookingClash(carId, evDate, slot);
       if(clash){
         const drv=staffById(clash.driver_id);
-        const startLbl=clash.start_time?fmtTime(normTime(clash.start_time)):'';
-        const endLbl=clash.end_time?fmtTime(normTime(clash.end_time)):'';
-        const span=startLbl&&endLbl?`${startLbl}–${endLbl}`:startLbl;
+        const span=timeSpanLabel(clash.start_time, clash.end_time);
         others=carsForAlternateOffers(evDate, carId, slot);
         avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} isn't free for this time — ${esc(clash.customer_name||'another customer')}${span?' is booked '+esc(span):' is already booked that day'}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}. We keep ${BOOKING_BUFFER_HOURS} hours clear before and after.
           <div class="meta" style="margin-top:6px;font-weight:600">Hours, miles, and hotel still apply — we just swap the car. ${others.length?`Prices for the ${others.length} open car${others.length===1?'':'s'} update as you type.`:'Nothing else is free for this time.'}</div>
@@ -3419,9 +3455,10 @@ function bookingModal(id){
     </div>
     <div class="row three">
       <div><label>Date</label><input id="f_date" type="date" value="${esc(b.event_date)}"></div>
-      <div><label>Start</label><input id="f_start" type="time" value="${esc(b.start_time)}"></div>
-      <div><label>End</label><input id="f_end" type="time" value="${esc(b.end_time)}"></div>
+      <div><label>Start</label><input id="f_start" type="time" min="08:00" max="23:45" step="900" value="${esc(b.start_time)}"></div>
+      <div><label>End</label><input id="f_end" type="time" step="900" value="${esc(b.end_time)}"></div>
     </div>
+    <small class="hint">Starts are every 15 minutes, from 8:00 AM to 11:45 PM. An end at or before the start is the next day, such as 11:00 PM to 1:00 AM.</small>
     <div class="row two">
       <div><label>Phone</label><input id="f_phone" value="${esc(b.customer_phone)}"></div>
       <div><label>Email</label><input id="f_email" value="${esc(b.customer_email)}"></div>
@@ -3894,7 +3931,7 @@ function bookingDetail(bid){
     ${row('Customer', b.customer_name)}
     ${row('Event', b.event_type)}
     ${row('Date', b.event_date)}
-    ${row('Time', (b.start_time?fmtTime(b.start_time):'')+(b.end_time?' – '+fmtTime(b.end_time):''))}
+    ${row('Time', timeSpanLabel(b.start_time, b.end_time))}
     ${row('Car', car?car.name:'—')}
     ${row('Pickup', b.pickup_location)}
     ${row('Drop-off', b.return_location)}

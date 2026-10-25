@@ -47,6 +47,7 @@ assert.equal(sameDriverVal('customer_name', null, ''), true);
 assert.equal(normTime('9:05:00'), '09:05');
 assert.equal(fmtTime('14:00:00'), '2:00PM');
 assert.equal(fmtTimeRange('14:00', '18:00'), '2:00PM – 6:00PM');
+assert.equal(fmtTimeRange('23:00', '01:00'), '11:00PM – 1:00AM the next day');
 assert.equal(fmtEventDate('2026-09-12'), 'Sat Sep 12');
 
 const prev = {

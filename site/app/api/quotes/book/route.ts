@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { QUOTE_LINK_EXPIRED, bookingSource, quoteCheckoutMoney, quoteIsTaxExempt, stripeReady, validateDayOfContact } from "@/lib/booking-rules";
+import { QUOTE_LINK_EXPIRED, bookingSource, formatClock, quoteCheckoutMoney, quoteIsTaxExempt, rentalEndLabel, stripeReady, validateDayOfContact } from "@/lib/booking-rules";
 import {
   carNameFor,
   loadQuoteByToken,
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
             unit_amount: Math.round(money.deposit * 100),
             product_data: {
               name: `$${money.deposit} non-refundable deposit — ${carName}`,
-              description: `${carName}, ${quote.event_date} ${slot.start}–${slot.end}. Quote total $${money.total.toFixed(2)} ${quoteIsTaxExempt(quote) ? "is tax exempt" : `includes sales tax${Number(quote.tax) ? ` of $${Number(quote.tax).toFixed(2)}` : ""}`}. Balance $${money.balance.toFixed(2)} is billed separately. The car is reserved after this payment is confirmed. ${CARD_SAVE_TEXT}`,
+              description: `${carName}, ${quote.event_date} ${formatClock(slot.start)}–${rentalEndLabel(slot.start, slot.hours)}. Quote total $${money.total.toFixed(2)} ${quoteIsTaxExempt(quote) ? "is tax exempt" : `includes sales tax${Number(quote.tax) ? ` of $${Number(quote.tax).toFixed(2)}` : ""}`}. Balance $${money.balance.toFixed(2)} is billed separately. The car is reserved after this payment is confirmed. ${CARD_SAVE_TEXT}`,
             },
           },
         },

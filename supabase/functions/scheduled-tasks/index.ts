@@ -121,6 +121,25 @@ function fmtTime(t: unknown) {
   return `${hh}:${m}${ap}`;
 }
 
+function fmtTimeRange(start: unknown, end: unknown) {
+  const a = fmtTime(start);
+  const b = fmtTime(end);
+  if (!a || !b) return a || b;
+  const startMin = clockMinutes(normTime(start));
+  const endMin = clockMinutes(normTime(end));
+  const nextDay = startMin != null && endMin != null && endMin <= startMin;
+  return nextDay ? `${a} – ${b} the next day` : `${a} – ${b}`;
+}
+
+function clockMinutes(value: string) {
+  const match = value.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -277,7 +296,7 @@ function dayOfContactEmailHtml(b: Booking) {
 }
 
 function bookingCardHtml(b: Booking, carName: string | null, pay: number | null) {
-  const time = [fmtTime(b.start_time), fmtTime(b.end_time)].filter(Boolean).join(" – ");
+  const time = fmtTimeRange(b.start_time, b.end_time);
   const notes = driverFacingNotes(b.notes);
   const rows: [string, string][] = [
     ["When", [fmtEventDate(b.event_date) || fmtDate(b.event_date), time].filter(Boolean).join(" · ")],

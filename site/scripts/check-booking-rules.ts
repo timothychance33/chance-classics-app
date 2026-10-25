@@ -1,14 +1,19 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { withSecondCarNote } from "../data/packages.ts";
 import { FREE_MILE_RADIUS, freeMileageRadiusMeters, mountShopMap, SHOP_ADDRESS_LABEL, SHOP_POINT } from "../lib/shop-map.ts";
 import {
   addDays,
   bookingSource,
   earliestBookableDate,
+  endMinutes,
   mileageCharge,
   BOOKING_BUFFER_HOURS,
   openStartTimes,
   quoteCheckoutLines,
   quoteIsTaxExempt,
+  rentalEndLabel,
   slotTaken,
   quoteCheckoutMoney,
   quoteLinkOpen,
@@ -23,6 +28,7 @@ import {
   CARD_SAVE_TEXT,
   MILE_THRESHOLD,
   SHOP_ADDRESS,
+  START_WINDOW_NOTE,
   rangesOverlap,
   validateBooking,
   validateDayOfContact,
@@ -46,13 +52,34 @@ assert(!open.includes("08:00") && !open.includes("10:00") && !open.includes("12:
 assert(open.includes("14:00"), "a start exactly when the buffer ends stays open");
 assert(open.includes("14:15"), "15-minute start after the buffer is offered");
 assert(open.every((time) => ["00", "15", "30", "45"].includes(time.slice(3))), "start minutes are 00, 15, 30, or 45");
-assert(open[0] === "14:00" && open.at(-1) === "20:00", "open starts stay inside 8:00 AM to 8:00 PM");
+assert(open[0] === "14:00" && open.at(-1) === "23:45", "open starts stay inside 8:00 AM to 11:45 PM");
 const sixHours = openStartTimes(6, [], "2026-10-16");
-assert(sixHours.includes("18:00") && !sixHours.includes("18:15"), "a rental must finish the same day");
+assert(sixHours[0] === "08:00" && sixHours.at(-1) === "23:45", "a rental may start through 11:45 PM and end after midnight");
+assert(sixHours.includes("18:15"), "6:15 PM is offered even though a 6-hour rental ends after midnight");
+const empty = openStartTimes(2, [], "2026-10-16");
+assert(empty[0] === "08:00" && empty.at(-1) === "23:45", "an open day runs 8:00 AM through 11:45 PM");
+assert(empty.includes("23:00") && empty.includes("23:15") && empty.includes("23:30") && empty.includes("23:45"), "late starts are every 15 minutes");
+assert(!empty.includes("07:45") && !empty.includes("00:00"), "starts do not begin before 8:00 AM");
+assert(endMinutes("23:00", 2) === 60, "11:00 PM plus 2 hours is 1:00 AM");
+assert(endMinutes("22:00", 2) === 0, "10:00 PM plus 2 hours is midnight");
+assert(endMinutes("18:00", 2) === 20 * 60, "6:00 PM plus 2 hours stays 8:00 PM");
+assert(endMinutes("23:45", 6) === 5 * 60 + 45, "11:45 PM plus 6 hours is 5:45 AM");
+assert(rentalEndLabel("23:00", 2) === "1:00 AM the next day", "end label names the next day");
+assert(rentalEndLabel("14:00", 2) === "4:00 PM", "an afternoon end stays on the same day");
+assert(START_WINDOW_NOTE === "Start times are every 15 minutes, from 8:00 AM to 11:45 PM.", "helper text");
 const overnight = [{ date: "2026-10-10", start: "22:00", end: "00:00" }];
 assert(slotTaken("2026-10-11", "01:00", 1, overnight), "a midnight end blocks the next morning through the buffer");
 assert(!slotTaken("2026-10-11", "02:00", 2, overnight), "2:00 AM is exactly when the post-midnight buffer ends");
 assert(!slotTaken("2026-10-10", "18:00", 2, overnight), "6:00–8:00 PM ends as the pre-booking buffer begins");
+const endsAtOne = [{ date: "2026-10-16", start: "23:00", end: "01:00" }];
+assert(slotTaken("2026-10-17", "01:00", 2, endsAtOne), "11:00 PM–1:00 AM blocks the next morning through the buffer");
+assert(!slotTaken("2026-10-17", "03:00", 2, endsAtOne), "3:00 AM is exactly when that buffer ends");
+const nextMorning = [{ date: "2026-10-17", start: "01:00", end: "03:00" }];
+assert(slotTaken("2026-10-16", "23:00", 2, nextMorning), "11:00 PM plus 2 hours conflicts with a 1:00 AM next-day booking");
+assert(!slotTaken("2026-10-16", "21:00", 2, nextMorning), "9:00–11:00 PM ends as the next-day buffer begins");
+assert(slotTaken("2026-10-16", "21:15", 2, nextMorning), "9:15 PM runs into the buffer before 1:00 AM");
+const afterThree = [{ date: "2026-10-17", start: "03:00", end: "05:00" }];
+assert(!slotTaken("2026-10-16", "23:00", 2, afterThree), "11:00 PM–1:00 AM ends as the 3:00 AM buffer begins");
 assert(rangesOverlap(60, 120, 90, 150) && !rangesOverlap(60, 120, 120, 180), "range math");
 
 const baseHours = quoteTotal(500, 2, 0);
@@ -294,6 +321,35 @@ const early = validateBooking({
   reliability: true,
 }, new Date("2026-10-04T18:00:00Z"));
 assert(!early.ok, "seven day rule");
+
+const bookNow = new Date("2026-10-04T18:00:00Z");
+const lateBooking = {
+  car: "1953-packard-limo",
+  date: earliestBookableDate(bookNow),
+  start: "23:00",
+  hours: 2,
+  name: "Test Guest",
+  email: "guest@example.com",
+  phone: "3185550100",
+  occasion: "Wedding" as const,
+  pickup: "118 5th St, Benton, LA",
+  dropoff: "Same",
+  dayOfName: "Jordan Hale",
+  dayOfPhone: "3185550199",
+  dayOfRole: "Planner",
+  waiver: true,
+  reliability: true,
+};
+const late = validateBooking(lateBooking, bookNow);
+assert(late.ok && late.value.end === "01:00" && late.value.start === "23:00", "11:00 PM plus 2 hours ends at 1:00 AM");
+const latest = validateBooking({ ...lateBooking, start: "23:45", hours: 6 }, bookNow);
+assert(latest.ok && latest.value.end === "05:45", "11:45 PM plus 6 hours ends at 5:45 AM");
+assert(!validateBooking({ ...lateBooking, start: "00:00" }, bookNow).ok, "midnight is not a start time");
+assert(!validateBooking({ ...lateBooking, start: "23:50" }, bookNow).ok, "starts stay on 15-minute steps");
+const form = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../components/BookingForm.tsx"), "utf8");
+assert(form.includes("START_WINDOW_NOTE") && form.includes("rentalEndLabel"), "booking page uses the shared window and shows the end");
+assert(!form.includes("8:00 PM"), "booking page no longer stops at 8:00 PM");
+assert(!form.includes("finish the same day"), "the form no longer requires the rental to finish the same day");
 
 const missingDayOf = validateDayOfContact({ name: "Jordan", phone: "3185550199", role: "" });
 assert(!missingDayOf.ok, "day-of role is required");

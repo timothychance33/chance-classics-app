@@ -94,6 +94,46 @@ assert.equal(
   '6:00–8:00 PM ends as the pre-booking buffer begins',
 );
 
+const endsAtOne = [{
+  id: 'one',
+  car_id: 'brenda',
+  event_date: '2026-10-16',
+  start_time: '23:00',
+  end_time: '01:00',
+  status: 'confirmed',
+}];
+assert.ok(
+  findBookingClash(endsAtOne, 'brenda', '2026-10-17', { startTime: '1:00 AM', hours: 2 }),
+  '11:00 PM–1:00 AM blocks the next morning through the buffer',
+);
+assert.equal(
+  findBookingClash(endsAtOne, 'brenda', '2026-10-17', { startTime: '3:00 AM', hours: 2 }),
+  null,
+  '3:00 AM starts exactly when that buffer ends',
+);
+const nextMorning = [{
+  id: 'am',
+  car_id: 'brenda',
+  event_date: '2026-10-17',
+  start_time: '01:00',
+  end_time: '03:00',
+  status: 'confirmed',
+}];
+assert.ok(
+  findBookingClash(nextMorning, 'brenda', '2026-10-16', { startTime: '11:00 PM', hours: 2 }),
+  '11:00 PM plus 2 hours conflicts with a 1:00 AM next-day booking',
+);
+assert.equal(
+  findBookingClash(
+    [{ id: 'later', car_id: 'brenda', event_date: '2026-10-17', start_time: '03:00', end_time: '05:00', status: 'confirmed' }],
+    'brenda',
+    '2026-10-16',
+    { startTime: '11:00 PM', hours: 2 },
+  ),
+  null,
+  '11:00 PM plus 2 hours ends as the 3:00 AM buffer begins',
+);
+
 assert.equal(
   findBookingClash(bookings, 'phyllis', '2026-10-16', afternoon),
   null,
@@ -156,6 +196,15 @@ assert.deepEqual(parts.active.map((q) => q.id), ['s']);
 assert.deepEqual(parts.old.map((q) => q.id).sort(), ['b', 'd', 'old']);
 
 assert.match(html, /BOOKING_BUFFER_HOURS=2/);
+assert.match(html, /id="q_time" type="time" min="08:00" max="23:45" step="900"/);
+assert.match(html, /id="f_start" type="time" min="08:00" max="23:45" step="900"/);
+assert.match(html, /Start times are every 15 minutes, from 8:00 AM to 11:45 PM/);
+assert.match(html, /if\(timeEl\) window\._quoteEventTime=timeEl\.value\|\|null/);
+assert.match(html, /function rentalEndText/);
+assert.match(html, /the next day/);
+const overlap = readFileSync(join(root, 'supabase/migrations/20261025191600_bookings_overnight_end.sql'), 'utf8');
+assert.match(overlap, /end_time <= start_time then interval '1 day'/);
+assert.doesNotMatch(overlap, /end_time > start_time/);
 assert.match(html, /function blockedInterval/);
 assert.match(html, /function requestedInterval/);
 assert.match(html, /findBookingClash\(carId, evDate, slot\)/);

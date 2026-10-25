@@ -3,7 +3,9 @@ import Stripe from "stripe";
 import {
   bookingSource,
   dayOfContactColumns,
+  formatClock,
   quoteTotal,
+  rentalEndLabel,
   slotTaken,
   stripeReady,
   validateBooking,
@@ -178,7 +180,7 @@ export async function POST(request: Request) {
               unit_amount: money.deposit * 100,
               product_data: {
                 name: `$${money.deposit} non-refundable deposit — ${service.car}`,
-                description: `${service.name}, ${value.date} ${value.start}–${value.end}. Subtotal $${money.subtotal.toFixed(2)}. Sales tax (10.25%) $${money.tax.toFixed(2)}. Total $${money.total.toFixed(2)}. ${mileage.message} Balance $${money.balance.toFixed(2)} is billed separately. ${CARD_SAVE_TEXT}`,
+                description: `${service.name}, ${value.date} ${formatClock(value.start)}–${rentalEndLabel(value.start, value.hours)}. Subtotal $${money.subtotal.toFixed(2)}. Sales tax (10.25%) $${money.tax.toFixed(2)}. Total $${money.total.toFixed(2)}. ${mileage.message} Balance $${money.balance.toFixed(2)} is billed separately. ${CARD_SAVE_TEXT}`,
               },
             },
           },

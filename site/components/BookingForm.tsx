@@ -17,10 +17,13 @@ import {
   OCCASIONS,
   RELIABILITY_TEXT,
   WAIVER_TEXT,
+  START_WINDOW_NOTE,
   earliestBookableDate,
+  formatClock,
   fromMinutes,
   openStartTimes,
   quoteTotal,
+  rentalEndLabel,
   toMinutes,
   validateBooking,
   validateDayOfContact,
@@ -536,8 +539,11 @@ export function BookingForm({ car, carName, basePrice }: Props) {
             <FieldError id="book-start-error" message={shown("start")} />
           </label>
           <p id="start-time-note" className="note" aria-live="polite">
-            {slotNote || "Start times are every 15 minutes, from 8:00 AM to 8:00 PM, and the rental has to finish the same day."}
+            {slotNote ? `${START_WINDOW_NOTE} ${slotNote}` : START_WINDOW_NOTE}
           </p>
+          {draft.start && rentalEndLabel(draft.start, draft.hours) ? (
+            <p className="note">Ends at {rentalEndLabel(draft.start, draft.hours)}.</p>
+          ) : null}
         </>
       )}
 
@@ -784,7 +790,11 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           <dl className="book-summary">
             <SummaryRow label="Car">{carName}</SummaryRow>
             <SummaryRow label="Date" onChange={() => pushStep("when")}>{formatBookDate(draft.date)}</SummaryRow>
-            <SummaryRow label="Time" onChange={() => pushStep("when")}>{draft.start ? clockLabel(draft.start) : "Choose a time"}</SummaryRow>
+            <SummaryRow label="Time" onChange={() => pushStep("when")}>
+              {draft.start
+                ? `${clockLabel(draft.start)} – ${rentalEndLabel(draft.start, draft.hours)}`
+                : "Choose a time"}
+            </SummaryRow>
             <SummaryRow label="Hours" onChange={() => pushStep("when")}>{draft.hours} hours</SummaryRow>
             <SummaryRow label="Occasion" onChange={() => pushStep("contact")}>{draft.occasion || "Choose an occasion"}</SummaryRow>
             {draft.occasion === "Wedding" && [draft.partner1Name, draft.partner1Social].some((item) => item.trim()) && (
@@ -1180,13 +1190,7 @@ function clockValue(value: string) {
 }
 
 function clockLabel(value: string) {
-  const minutes = toMinutes(value);
-  if (minutes == null) return value;
-  const hours24 = Math.floor(minutes / 60);
-  const mins = String(minutes % 60).padStart(2, "0");
-  const period = hours24 >= 12 ? "PM" : "AM";
-  const hour12 = hours24 % 12 || 12;
-  return `${hour12}:${mins} ${period}`;
+  return formatClock(value);
 }
 
 function formatBookDate(iso: string) {

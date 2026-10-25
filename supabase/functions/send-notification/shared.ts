@@ -63,8 +63,27 @@ export function bookingBlock(b: Record<string, unknown>) {
     .join("");
 }
 
+function clockMinutes(value: unknown) {
+  const match = String(value ?? "").trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+export function timeSpan(start: unknown, end: unknown) {
+  const a = String(start ?? "").trim();
+  const b = String(end ?? "").trim();
+  if (!a || !b) return a || b;
+  const startMin = clockMinutes(a);
+  const endMin = clockMinutes(b);
+  const nextDay = startMin != null && endMin != null && endMin <= startMin;
+  return nextDay ? `${a} – ${b} the next day` : `${a} – ${b}`;
+}
+
 export function driverBookingBlock(b: Record<string, unknown>) {
-  const time = [b.start_time, b.end_time].filter(Boolean).join(" – ");
+  const time = timeSpan(b.start_time, b.end_time);
   const rows: [string, unknown][] = [
     ["Customer", b.customer_name],
     ["Event", b.event_type],
