@@ -54,10 +54,26 @@ function clock(value) {
   return `${hour}:${match[2]}${suffix}`;
 }
 
+function minutesOf(value) {
+  const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const mins = Number(match[2]);
+  if (hour > 23 || mins > 59) return null;
+  return hour * 60 + mins;
+}
+
 function timeLabel(input) {
-  const start = clock(input?.startTime ?? input?.start_time);
-  const end = clock(input?.endTime ?? input?.end_time);
-  if (start && end) return `${start} – ${end}`;
+  const startRaw = input?.startTime ?? input?.start_time;
+  const endRaw = input?.endTime ?? input?.end_time;
+  const start = clock(startRaw);
+  const end = clock(endRaw);
+  if (start && end) {
+    const startMin = minutesOf(startRaw);
+    const endMin = minutesOf(endRaw);
+    const nextDay = startMin != null && endMin != null && endMin <= startMin;
+    return nextDay ? `${start} – ${end} the next day` : `${start} – ${end}`;
+  }
   return start || end;
 }
 

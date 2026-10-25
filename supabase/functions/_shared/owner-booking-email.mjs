@@ -38,10 +38,35 @@ export function formatClock(value) {
   return `${hours}:${minutes} ${suffix}`;
 }
 
+function clockMinutes(value) {
+  const text = oneLine(value);
+  const ampm = text.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([ap]m)$/i);
+  if (ampm) {
+    let hours = Number(ampm[1]);
+    const minutes = Number(ampm[2]);
+    const pm = ampm[3].toLowerCase() === "pm";
+    if (hours === 12) hours = pm ? 12 : 0;
+    else if (pm) hours += 12;
+    if (hours > 23 || minutes > 59) return null;
+    return hours * 60 + minutes;
+  }
+  const match = text.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
 export function bookingWhen(booking) {
   const start = formatClock(booking?.start_time);
   const end = formatClock(booking?.end_time);
-  if (start && end) return `${start} – ${end}`;
+  if (start && end) {
+    const startMin = clockMinutes(booking?.start_time);
+    const endMin = clockMinutes(booking?.end_time);
+    const nextDay = startMin != null && endMin != null && endMin <= startMin;
+    return nextDay ? `${start} – ${end} the next day` : `${start} – ${end}`;
+  }
   return start || end;
 }
 

@@ -3,6 +3,7 @@ import {
   dayOfContactColumns,
   endMinutes,
   fromMinutes,
+  rentalEndLabel,
   quoteCheckoutLines,
   quoteCheckoutMoney,
   quoteIsTaxExempt,
@@ -77,6 +78,8 @@ export function dropoffFromQuote(quote: { dropoff_location?: string | null; deta
 }
 
 export function publicQuoteView(quote: QuoteRow, carName: string) {
+  const start = parseEventTime(quote.event_time);
+  const hours = Number(quote.hours);
   const money = quoteCheckoutMoney(Number(quote.total) || 0);
   const lines: QuoteLine[] = quoteCheckoutLines({
     car_name: carName,
@@ -93,7 +96,8 @@ export function publicQuoteView(quote: QuoteRow, carName: string) {
   return {
     carName,
     date: quote.event_date,
-    time: parseEventTime(quote.event_time) || quote.event_time || "",
+    time: start || quote.event_time || "",
+    end: start && Number.isFinite(hours) ? rentalEndLabel(start, hours) : "",
     hours: quote.hours,
     pickup: quote.event_location || "",
     dropoff: dropoffFromQuote(quote),
@@ -132,7 +136,7 @@ export async function quoteTimeFree(db: Db, quote: QuoteRow) {
     return { ok: false as const, error: "This quote is missing a start time. Ask Chance Classics for a new link." };
   }
   const end = endMinutes(start, hours);
-  if (end == null) return { ok: false as const, error: "That rental would run past midnight." };
+  if (end == null) return { ok: false as const, error: "This quote's hours don't make a valid end time. Ask Chance Classics for a new link." };
   await releaseStaleHolds(db, quote.car_id);
   const busy = await busyRanges(db, quote.car_id, quote.event_date);
   const taken = slotTaken(quote.event_date, start, hours, busy);

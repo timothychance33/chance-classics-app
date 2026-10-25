@@ -10,6 +10,7 @@ type QuoteView = {
   carName: string;
   date: string | null;
   time: string;
+  end?: string;
   hours: number | null;
   pickup: string;
   dropoff: string;
@@ -131,6 +132,7 @@ export function QuoteCheckout({ token }: { token: string }) {
       <dl className="quote-lock">
         <div><dt>Car</dt><dd>{quote.carName}</dd></div>
         <div><dt>Date</dt><dd>{quote.date} {quote.time}</dd></div>
+        {quote.end ? <div><dt>Ends</dt><dd>{quote.end}</dd></div> : null}
         <div><dt>Hours</dt><dd>{quote.hours}</dd></div>
         {quote.occasion && <div><dt>Occasion</dt><dd>{quote.occasion}</dd></div>}
         <div><dt>Pickup</dt><dd>{quote.pickup}</dd></div>

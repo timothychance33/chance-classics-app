@@ -59,10 +59,12 @@ export function mileageCharge(pickupMiles: number): MileageCharge {
   return { miles, fee };
 }
 
-/** Shop hours are not listed in the capture. Slots are every 15 minutes (:00, :15, :30, :45), 8:00 AM–8:00 PM Central, and must finish the same day. */
+/** Slots are every 15 minutes (:00, :15, :30, :45), 8:00 AM–11:45 PM Central. A rental may end after midnight. */
 export const DAY_START_MIN = 8 * 60;
-export const LAST_START_MIN = 20 * 60;
+export const LAST_START_MIN = 23 * 60 + 45;
 export const SLOT_STEP_MIN = 15;
+export const START_WINDOW_NOTE =
+  "Start times are every 15 minutes, from 8:00 AM to 11:45 PM.";
 
 export const WAIVER_TEXT =
   "I HAVE READ THE CHANCE CLASSICS, LLC CONTRACT and CONDITIONS AGREEMENT AND ACCEPT IT";
@@ -178,6 +180,16 @@ export function fromMinutes(minutes: number) {
   return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
+export function formatClock(value: string) {
+  const minutes = clockMinutes(value);
+  if (minutes == null) return String(value || "");
+  const hours24 = Math.floor(minutes / 60);
+  const mins = String(minutes % 60).padStart(2, "0");
+  const period = hours24 >= 12 ? "PM" : "AM";
+  const hour12 = hours24 % 12 || 12;
+  return `${hour12}:${mins} ${period}`;
+}
+
 export function quoteTotal(basePrice: number, hours: number, mileageFee = 0) {
   const extraHours = Math.max(0, hours - BASE_HOURS);
   const listing = basePrice + extraHours * EXTRA_HOUR_USD;
@@ -198,12 +210,32 @@ export function quoteTotal(basePrice: number, hours: number, mileageFee = 0) {
   };
 }
 
+/**
+ * Clock minutes of the rental end. A finish at midnight or later wraps into the
+ * next day (11:00 PM + 2 hours is 1:00 AM). More than 24 hours cannot be stored
+ * as one clock time with the end-at-or-before-start convention.
+ */
 export function endMinutes(start: string, hours: number) {
   const startMin = toMinutes(start);
-  if (startMin == null) return null;
-  const end = startMin + hours * 60;
-  if (end > 24 * 60) return null;
-  return end;
+  const duration = Number(hours);
+  if (startMin == null || !Number.isFinite(duration) || duration <= 0 || duration > 24) return null;
+  return (startMin + Math.round(duration * 60)) % (24 * 60);
+}
+
+/** True when the rental is still going at or after midnight. */
+export function endsNextDay(start: string, hours: number) {
+  const startMin = toMinutes(start);
+  const duration = Number(hours);
+  if (startMin == null || !Number.isFinite(duration) || duration <= 0 || duration > 24) return false;
+  return startMin + Math.round(duration * 60) >= 24 * 60;
+}
+
+/** "1:00 AM the next day" or "4:00 PM". Empty when the hours cannot be placed. */
+export function rentalEndLabel(start: string, hours: number) {
+  const end = endMinutes(start, hours);
+  if (end == null) return "";
+  const clock = formatClock(fromMinutes(end));
+  return endsNextDay(start, hours) ? `${clock} the next day` : clock;
 }
 
 export function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number) {
@@ -233,8 +265,6 @@ export function slotTaken(date: string, start: string, hours: number, busy: Busy
 export function openStartTimes(hours: number, busy: Busy[], onDate = "2000-01-01") {
   const slots: string[] = [];
   for (let start = DAY_START_MIN; start <= LAST_START_MIN; start += SLOT_STEP_MIN) {
-    const end = start + hours * 60;
-    if (end > 24 * 60) continue;
     const label = fromMinutes(start);
     if (!slotTaken(onDate, label, hours, busy)) slots.push(label);
   }
@@ -573,7 +603,7 @@ export function validateBooking(input: BookingInput, now = new Date()) {
     return { ok: false as const, error: "Choose an open start time." };
   }
   const end = endMinutes(input.start, hours);
-  if (end == null) return { ok: false as const, error: "That rental would run past midnight. Choose an earlier start." };
+  if (end == null) return { ok: false as const, error: "Choose an open start time." };
   const name = input.name.trim();
   const email = input.email.trim();
   const phone = input.phone.trim();

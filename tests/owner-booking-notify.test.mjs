@@ -49,6 +49,8 @@ const booking = {
 };
 
 assert.equal(bookingWhen(booking), '2:00 PM – 5:00 PM');
+assert.equal(bookingWhen({ start_time: '23:00', end_time: '01:00' }), '11:00 PM – 1:00 AM the next day');
+assert.equal(bookingWhen({ start_time: '22:00:00', end_time: '00:00:00' }), '10:00 PM – 12:00 AM the next day');
 assert.equal(bookingPriceText(booking), '$869.87');
 assert.equal(bookingPriceText({ notes: 'Booking total: $546.25' }), '$546.25');
 assert.equal(bookingPriceText({ notes: 'Quote total: $100' }), '$100.00');
