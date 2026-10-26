@@ -17,6 +17,9 @@ export default function HomePage() {
   return (
     <>
       <Picture image={home.hero} alt="Classic cars from the Chance Classics collection" priority className="hero" />
+      <div className="wrap hero-quote">
+        <Link className="btn hero-quote-btn" href="/quoterequest/">Get a Quote</Link>
+      </div>
       <section className="wrap home-intro center">
         <h1>Make Your Moment a Classic</h1>
         <p className="lede center">

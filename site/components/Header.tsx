@@ -32,6 +32,7 @@ export function Header() {
       </Link>
       <p className="tagline">Classic and Luxury Car Rental</p>
       <button
+        type="button"
         className="menu-btn"
         aria-expanded={open}
         aria-controls="site-nav"

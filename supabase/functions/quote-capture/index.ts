@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const rec = {
+    const rec: Record<string, unknown> = {
       customer_name: parsed.customer_name,
       customer_email: parsed.customer_email,
       customer_phone: parsed.customer_phone,
@@ -132,8 +132,16 @@ Deno.serve(async (req) => {
       planner: parsed.planner,
       status: "new",
     };
-    const { data, error } = await sb.from("quote_requests").insert(rec).select().single();
-    if (error) throw error;
+    // Drop-off is optional. Photo shoots and same-location events omit it.
+    const dropoff = String(parsed.dropoff || "").trim();
+    if (dropoff) rec.dropoff_location = dropoff;
+    let inserted = await sb.from("quote_requests").insert(rec).select().single();
+    if (inserted.error && dropoff && /dropoff_location/i.test(inserted.error.message || "")) {
+      delete rec.dropoff_location;
+      inserted = await sb.from("quote_requests").insert(rec).select().single();
+    }
+    if (inserted.error) throw inserted.error;
+    const data = inserted.data;
 
     let owner_notified = false;
     try {
@@ -148,6 +156,7 @@ Deno.serve(async (req) => {
         event_time: parsed.event_time,
         event_date_raw: parsed.event_date_raw,
         event_location: parsed.event_location,
+        dropoff_location: dropoff,
         details: parsed.details,
         planner: parsed.planner,
       });

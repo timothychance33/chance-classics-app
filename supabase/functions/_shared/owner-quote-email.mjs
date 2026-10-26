@@ -33,13 +33,19 @@ export function collectFields(obj, out = {}, depth = 0) {
   return out;
 }
 
-export function byLabel(ff, needles) {
+export function byLabel(ff, needles, options) {
+  const skip = options && options.skip;
   for (const n of needles) {
     for (const [k, v] of Object.entries(ff)) {
+      if (skip && skip(k)) continue;
       if (k.includes(n) && v) return v;
     }
   }
   return null;
+}
+
+function isDropoffLabel(label) {
+  return /drop[\s-]?off/.test(label);
 }
 
 export function toDate(v) {
@@ -70,7 +76,8 @@ export function quoteFromWixPayload(body) {
     event_date: toDate(dateTime),
     event_time: eventTime,
     event_date_raw: dateTime,
-    event_location: byLabel(ff, ["event location", "location"]),
+    event_location: byLabel(ff, ["event location", "location"], { skip: isDropoffLabel }),
+    dropoff: byLabel(ff, ["drop-off", "drop off", "dropoff"]),
     details: byLabel(ff, ["more details", "give us more details", "details"]),
     planner: byLabel(ff, ["event planner"]),
   };

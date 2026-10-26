@@ -370,6 +370,27 @@ export function quoteIsTaxExempt(quote: {
   return (Number(quote.subtotal) || 0) > 0 && (Number(quote.tax) || 0) === 0;
 }
 
+/** A photo shoot that is not also a ride. Weddings and parades still keep a drop-off field. */
+export function isPhotoShootOnly(eventType: string) {
+  const text = eventType.trim();
+  if (!text) return false;
+  if (/\b(wedding|parade|prom|homecoming|reception|ceremony|getaway|shuttle|processional)\b/i.test(text)) return false;
+  return /\b(photo[\s-]?shoots?|photo[\s-]?sessions?|photoshoots?|picture session|pictures only)\b/i.test(text);
+}
+
+/** Hide the quote drop-off for a photo shoot, or when the car stays at the event address. */
+export function quoteDropoffHidden(input: { eventType: string; sameLocation: boolean }) {
+  return input.sameLocation || isPhotoShootOnly(input.eventType);
+}
+
+/** Empty is allowed. A typed address still has to be a real location. */
+export function quoteDropoffError(dropoff: string) {
+  const text = dropoff.trim();
+  if (!text) return "";
+  if (text.length < 3 || text.length > 300) return "Enter a drop-off location.";
+  return "";
+}
+
 /** Same fields quote-capture writes, plus the drop-off address in the details the garage already shows. */
 export function quoteRequestRecord(input: {
   firstName: string;

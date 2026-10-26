@@ -2710,6 +2710,7 @@ async function autofillQuoteMileage(qid, opts){
   const seq=++_quoteMileageSeq;
   const still=()=>_quoteMileageSeq===seq && window._quoteId===qid;
   const q=(DATA.quotes||[]).find(x=>x.id===qid);
+  // One-way miles are Benton to the pickup. A missing drop-off is ignored.
   const pickup=q?String(q.event_location||'').trim():'';
   try{
     const el=document.getElementById('q_miles');

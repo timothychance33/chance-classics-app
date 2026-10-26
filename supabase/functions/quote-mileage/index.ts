@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
     if (!(await authorize(req))) return json(401, { error: "unauthorized" });
 
     const body = await req.json().catch(() => ({}));
+    // Mileage is the pickup drive only. A quote with no drop-off still looks up.
     const pickup = String(body.pickup ?? body.address ?? "").slice(0, 300);
     const pickupPlaceId = String(body.pickupPlaceId ?? "").slice(0, 300);
     const quote = await quoteDrivingMileage(

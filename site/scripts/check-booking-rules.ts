@@ -18,6 +18,9 @@ import {
   quoteCheckoutMoney,
   quoteLinkOpen,
   quoteRequestRecord,
+  quoteDropoffError,
+  quoteDropoffHidden,
+  isPhotoShootOnly,
   dayOfContactColumns,
   dayOfContactNotes,
   weddingCelebrationColumns,
@@ -116,6 +119,29 @@ const saved = quoteRequestRecord({
 assert(saved.status === "new" && saved.event_date === "2026-11-14" && saved.event_time === "14:00", "quote request date");
 assert(saved.event_location === "1001 Airport Dr, Shreveport, LA" && saved.details.includes("Drop-off: 200 Crockett St"), "drop-off is stored for the driver");
 assert(!saved.details.includes("fee"), "a new request does not invent a price");
+const noDropoff = quoteRequestRecord({
+  firstName: "Emily",
+  lastName: "Smith",
+  email: "emily@example.com",
+  phone: "3185550100",
+  service: "Phyllis - 1941 Buick",
+  eventType: "Photo Session",
+  when: "2026-11-14T14:00",
+  pickup: "1001 Airport Dr, Shreveport, LA",
+  dropoff: "",
+  details: "Golden hour portraits",
+  planner: "",
+  heard: "",
+});
+assert(noDropoff.event_location === "1001 Airport Dr, Shreveport, LA" && !String(noDropoff.details).includes("Drop-off:"), "a missing drop-off is stored without a drop-off line");
+assert(quoteDropoffError("") === "" && quoteDropoffError("   ") === "", "an empty drop-off is valid");
+assert(quoteDropoffError("ab") === "Enter a drop-off location.", "a short drop-off is still rejected");
+assert(quoteDropoffError("200 Crockett St") === "", "a real drop-off is still accepted");
+assert(isPhotoShootOnly("Photo Session") && isPhotoShootOnly("photo-shoot") && isPhotoShootOnly("Pictures only"), "photo-only events hide drop-off");
+assert(!isPhotoShootOnly("Wedding") && !isPhotoShootOnly("Wedding photo shoot") && !isPhotoShootOnly(""), "a ride that mentions photos still asks for drop-off");
+assert(quoteDropoffHidden({ eventType: "Photo Session", sameLocation: false }), "photo shoot hides the drop-off field");
+assert(quoteDropoffHidden({ eventType: "Parade", sameLocation: true }), "same-location events hide the drop-off field");
+assert(!quoteDropoffHidden({ eventType: "Wedding", sameLocation: false }), "a wedding with a different drop-off still shows the field");
 
 const linkNow = new Date("2026-10-11T00:00:00Z");
 assert(quoteLinkOpen({ status: "sent", book_expires_at: "2026-10-18T00:00:00Z" }, linkNow).ok, "link inside 7 days");
