@@ -6,7 +6,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { visibleSocial } from "@/data/social";
-import { EMAIL, OG_IMAGE, PHONE_TEL, SITE_URL } from "@/lib/content";
+import { EMAIL, OG_IMAGE, PHONE_TEL, SITE_URL, defaultShareImage } from "@/lib/content";
 import { reviewsListing } from "@/lib/reviews";
 import "./globals.css";
 
@@ -36,7 +36,11 @@ export const metadata: Metadata = {
   openGraph: {
     siteName: "Chance Classics, Classic Car Rental",
     type: "website",
-    images: [{ url: OG_IMAGE, alt: "Chance Classics" }],
+    images: [defaultShareImage()],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: [`${SITE_URL}${OG_IMAGE}`],
   },
 };
 
