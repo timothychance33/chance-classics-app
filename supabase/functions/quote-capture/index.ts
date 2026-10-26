@@ -30,6 +30,7 @@ import {
   quoteFromWixPayload,
   webhookAuthorized,
 } from "../_shared/owner-quote-email.mjs";
+import { htmlToPlainText } from "../_shared/email-plain.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -60,6 +61,7 @@ function errText(e: unknown) {
 
 async function sendEmail(to: string, subject: string, html: string) {
   if (!RESEND_API_KEY) throw new Error("RESEND_API_KEY is not set");
+  const plain = htmlToPlainText(html) || subject;
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -71,6 +73,7 @@ async function sendEmail(to: string, subject: string, html: string) {
       to,
       subject,
       html,
+      text: plain,
     }),
     signal: AbortSignal.timeout(10000),
   });

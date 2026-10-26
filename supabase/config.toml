@@ -42,3 +42,11 @@ verify_jwt = false
 # Owner assignment does not use this function.
 [functions.claim-booking]
 verify_jwt = false
+
+# send-followups and send-followups-next check x-cron-secret themselves.
+# The gateway JWT check stays on: the cron sends the anon key.
+[functions.send-followups]
+verify_jwt = true
+
+[functions.send-followups-next]
+verify_jwt = true
