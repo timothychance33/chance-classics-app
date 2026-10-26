@@ -16,7 +16,39 @@ export const EMAIL = "chanceclassics@gmail.com";
 export const PHONE_DISPLAY = "318-344-5001";
 export const PHONE_TEL = "+13183445001";
 export const ADDRESS = "118 5th St, Benton, LA, USA";
-export const OG_IMAGE = "/images/home_main_02.webp";
+
+const sharePhotos = {
+  phyllis: {
+    src: "/images/og-phyllis.jpg",
+    alt: "Phyllis, the cream 1941 Buick Super convertible, on green grass",
+  },
+  brenda: {
+    src: "/images/og-brenda.jpg",
+    alt: "Brenda, the blue 1961 Buick Invicta convertible, in a green field",
+  },
+  elsa: {
+    src: "/images/og-elsa.jpg",
+    alt: "Elsa, the white and blue 1954 Packard Caribbean convertible, in front of a columned building",
+  },
+} as const;
+
+type ShareCar = keyof typeof sharePhotos;
+
+/** Sitewide iMessage, Facebook, and Twitter image. Set to "brenda" or "elsa" to swap. */
+export const OG_CHOICE: ShareCar = "phyllis";
+export const OG_IMAGE = sharePhotos[OG_CHOICE].src;
+export const OG_IMAGE_ALT = sharePhotos[OG_CHOICE].alt;
+export const OG_IMAGE_WIDTH = 1200;
+export const OG_IMAGE_HEIGHT = 630;
+
+export function defaultShareImage() {
+  return {
+    url: `${SITE_URL}${OG_IMAGE}`,
+    width: OG_IMAGE_WIDTH,
+    height: OG_IMAGE_HEIGHT,
+    alt: OG_IMAGE_ALT,
+  };
+}
 export const LOGO = "/images/logo_chance-classics-shield_01.webp";
 export const FACEBOOK_ICON = "/images/icon_facebook_01.webp";
 
@@ -192,8 +224,9 @@ export function pageMeta(opts: {
 }): Metadata {
   const description = opts.description || undefined;
   const url = absoluteUrl(opts.path);
-  const image = opts.image || OG_IMAGE;
-  const imageAlt = opts.imageAlt || "Chance Classics";
+  const customImage = opts.image;
+  const imageAlt = opts.imageAlt || (customImage ? "Chance Classics" : OG_IMAGE_ALT);
+  const share = customImage ? { url: customImage, alt: imageAlt } : defaultShareImage();
   return {
     title: opts.title,
     description,
@@ -205,13 +238,13 @@ export function pageMeta(opts: {
       url,
       siteName: "Chance Classics, Classic Car Rental",
       type: "website",
-      images: [{ url: image, alt: imageAlt }],
+      images: [share],
     },
     twitter: {
       card: "summary_large_image",
       title: opts.title,
       description,
-      images: [image],
+      images: [share.url],
     },
   };
 }
