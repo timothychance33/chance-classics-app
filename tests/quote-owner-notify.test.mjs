@@ -46,6 +46,23 @@ assert.equal(parsed.event_time, '2:30 PM');
 assert.equal(parsed.event_location, 'Bossier City');
 assert.equal(parsed.details, 'Arrive early & set up <stage>');
 assert.equal(parsed.planner, 'Yes');
+assert.equal(parsed.dropoff, null);
+
+const withDropoffField = quoteFromWixPayload({
+  data: {
+    fields: [
+      { label: 'Drop-off location', value: '200 Crockett St' },
+      { label: 'Event location', value: 'Bossier City' },
+    ],
+  },
+});
+assert.equal(withDropoffField.event_location, 'Bossier City');
+assert.equal(withDropoffField.dropoff, '200 Crockett St');
+const photoOnly = quoteFromWixPayload({
+  data: { fields: [{ label: 'Event location', value: 'Studio' }, { label: 'Type of event', value: 'Photo Session' }] },
+});
+assert.equal(photoOnly.dropoff, null);
+assert.equal(photoOnly.event_location, 'Studio');
 
 const cars = [
   { id: 'packard', name: 'Packard' },
@@ -141,9 +158,12 @@ assert.doesNotMatch(capture, /sendEmail\(\s*(parsed\.customer_email|customer_ema
 const insertAt = capture.indexOf('.insert(rec)');
 const emailAt = capture.indexOf('await emailOwner(');
 assert.ok(insertAt > 0 && emailAt > insertAt, 'owner email runs only after the insert');
-const recBlock = capture.slice(capture.indexOf('const rec = {'), capture.indexOf('const { data, error }'));
+const recBlock = capture.slice(capture.indexOf('const rec'), capture.indexOf('let inserted'));
 assert.match(recBlock, /status: "new"/);
 assert.doesNotMatch(recBlock, /event_date_raw/);
+assert.match(capture, /if \(dropoff\) rec\.dropoff_location = dropoff/);
+assert.match(capture, /dropoff_location\/i\.test/);
+assert.match(capture, /dropoff_location: dropoff/);
 assert.match(capture, /owner_notified = false/);
 assert.match(capture, /quote-capture owner notify failed/);
 
@@ -154,6 +174,8 @@ const siteInsert = siteQuotes.lastIndexOf('.insert(');
 const siteMail = siteQuotes.indexOf('await emailOwnerAboutQuote');
 assert.ok(siteInsert > 0 && siteMail > siteInsert, 'site quote email runs only after the insert');
 assert.match(siteQuotes, /dropoff_location/);
+assert.match(siteQuotes, /quoteDropoffError/);
+assert.doesNotMatch(siteQuotes, /Enter the drop-off address/);
 assert.match(siteQuotes, /car_name/);
 assert.doesNotMatch(siteQuotes, /sendEmail\(/);
 

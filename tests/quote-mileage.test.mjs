@@ -146,6 +146,11 @@ assert.deepEqual(allowQuoteMileage({ roles: [] }), { ok: false, via: 'denied' })
 assert.match(html, /const MILEAGE_FN_URL = SUPABASE_URL \+ '\/functions\/v1\/quote-mileage'/);
 assert.match(html, /function postQuoteMileage/);
 assert.match(html, /function autofillQuoteMileage/);
+const autofill = html.slice(html.indexOf('async function autofillQuoteMileage'), html.indexOf('function ensureBookToken'));
+assert.match(autofill, /missing drop-off is ignored/);
+assert.match(autofill, /event_location/);
+assert.doesNotMatch(autofill, /dropoff_location/);
+assert.match(fn, /A quote with no drop-off still looks up/);
 assert.match(html, /function lookupQuoteMiles/);
 assert.match(html, /function maybeAutofillQuoteMileage/);
 assert.match(html, /maybeAutofillQuoteMileage\(\)/);

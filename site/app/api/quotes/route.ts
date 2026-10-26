@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { withSecondCarNote } from "@/data/packages";
-import { MILEAGE_ACK_ERROR, quoteRequestRecord } from "@/lib/booking-rules";
+import { MILEAGE_ACK_ERROR, quoteDropoffError, quoteRequestRecord } from "@/lib/booking-rules";
 import { emailOwnerAboutQuote } from "@/lib/owner-booking-notify";
 import { rentalDb } from "@/lib/rental-db";
 
@@ -44,7 +44,9 @@ export async function POST(request: Request) {
   if (!record.event_location || record.event_location.length < 3) {
     return NextResponse.json({ error: "Enter the pickup address." }, { status: 400 });
   }
-  if (!record.details?.includes("Drop-off:")) return NextResponse.json({ error: "Enter the drop-off address." }, { status: 400 });
+  const dropoff = String(raw.dropoff || "").trim();
+  const dropoffError = quoteDropoffError(dropoff);
+  if (dropoffError) return NextResponse.json({ error: dropoffError }, { status: 400 });
   if (raw.mileageAck !== true) return NextResponse.json({ error: MILEAGE_ACK_ERROR }, { status: 400 });
   record.details = withSecondCarNote(record.details || "", raw.secondCar === true);
 
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
   const row = {
     ...record,
     car_id: hit?.id ?? null,
-    dropoff_location: String(raw.dropoff || "").trim() || null,
+    dropoff_location: dropoff || null,
   };
   let inserted = await db.from("quote_requests").insert(row).select("id").single();
   if (inserted.error && /dropoff_location/i.test(inserted.error.message || "")) {
@@ -75,7 +77,7 @@ export async function POST(request: Request) {
     id: inserted.data.id,
     ...record,
     car_name: hit?.name ? String(hit.name) : "",
-    dropoff_location: String(raw.dropoff || "").trim(),
+    dropoff_location: dropoff,
   });
   if (!mailed.ok) {
     console.error("quote request owner email failed:", mailed.error);

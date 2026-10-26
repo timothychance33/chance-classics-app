@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AddressField } from "@/components/AddressField";
 import { SecondCarField } from "@/components/SecondCarField";
-import { MILEAGE_ACK, MILEAGE_ACK_ERROR } from "@/lib/booking-rules";
+import { MILEAGE_ACK, MILEAGE_ACK_ERROR, isPhotoShootOnly, quoteDropoffHidden } from "@/lib/booking-rules";
 import { quoteServices } from "@/lib/content";
 
 const hear = ["Google / Search Engine", "Wedding Planning Site", "Event Planner", "Event Venue", "Friend / Family", "Other"];
@@ -22,7 +22,10 @@ export function QuoteForm() {
   const [placeId, setPlaceId] = useState("");
   const [dropoff, setDropoff] = useState("");
   const [dropoffPlaceId, setDropoffPlaceId] = useState("");
+  const [eventType, setEventType] = useState("");
+  const [sameLocation, setSameLocation] = useState(false);
   const [mileageNote, setMileageNote] = useState("");
+  const hideDropoff = quoteDropoffHidden({ eventType, sameLocation });
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -46,7 +49,7 @@ export function QuoteForm() {
           eventType: data.get("event_type"),
           when: data.get("when"),
           pickup: location,
-          dropoff,
+          dropoff: hideDropoff ? "" : dropoff,
           details: data.get("details"),
           secondCar: data.get("second_car") === "on",
           planner: data.get("planner"),
@@ -133,7 +136,12 @@ export function QuoteForm() {
       </label>
       <label className="field">
         <span>Type of Event</span>
-        <input name="event_type" placeholder="Wedding, Parade, Photo Session, Etc." />
+        <input
+          name="event_type"
+          placeholder="Wedding, Parade, Photo Session, Etc."
+          value={eventType}
+          onChange={(event) => setEventType(event.target.value)}
+        />
       </label>
       <label className="field">
         <span>Event Date and Time</span>
@@ -153,26 +161,45 @@ export function QuoteForm() {
           }}
         />
       </label>
-      <label className="field">
-        <span>Drop-off address</span>
-        <AddressField
-          name="dropoff"
-          required
-          value={dropoff}
-          placeId={dropoffPlaceId}
-          placeholder="Drop-off address"
-          onValue={(next, id) => {
-            setDropoff(next);
-            setDropoffPlaceId(id);
-          }}
-        />
-      </label>
+      {!isPhotoShootOnly(eventType) && (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={sameLocation}
+            onChange={(event) => {
+              setSameLocation(event.target.checked);
+              if (event.target.checked) {
+                setDropoff("");
+                setDropoffPlaceId("");
+              }
+            }}
+          />
+          <span>Same location — the car stays at the event address</span>
+        </label>
+      )}
+      {hideDropoff ? (
+        <p className="mileage-line">No separate drop-off. The car stays at the event location.</p>
+      ) : (
+        <label className="field">
+          <span>Drop-off address (optional)</span>
+          <AddressField
+            name="dropoff"
+            value={dropoff}
+            placeId={dropoffPlaceId}
+            placeholder="Drop-off address"
+            onValue={(next, id) => {
+              setDropoff(next);
+              setDropoffPlaceId(id);
+            }}
+          />
+        </label>
+      )}
       {location.trim().length >= 4 && (
         <p className="mileage-line" data-mileage>{mileageNote || "Checking mileage…"}</p>
       )}
       <label className="field">
         <span>Give us more details</span>
-        <textarea name="details" placeholder="Drop off location, Additional time requested, Multiple stops, etc." />
+        <textarea name="details" placeholder="Additional time requested, multiple stops, etc." />
       </label>
       <label className="field">
         <span>Event Planner</span>
