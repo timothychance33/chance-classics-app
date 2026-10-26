@@ -42,3 +42,8 @@ verify_jwt = false
 # Owner assignment does not use this function.
 [functions.claim-booking]
 verify_jwt = false
+
+# wix-booking-audit checks x-cron-secret itself. The gateway JWT check
+# stays on: the cron sends the anon key.
+[functions.wix-booking-audit]
+verify_jwt = true
