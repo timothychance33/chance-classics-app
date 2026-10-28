@@ -59,12 +59,13 @@ export function depositDollarsFromSession(session: {
 /**
  * Tax-inclusive booking total. Not the $250 deposit.
  * Checkout metadata and "Booking total" / "Quote total" are already final.
- * A listing-only note gets 10.25% sales tax on listing plus mileage.
+ * A listing-only note gets 10.25% sales tax on listing plus mileage and any overnight driver hotel.
  */
 export function totalDollarsFromCheckout(input: {
   metadata?: { total_usd?: string | null } | null;
   notes?: string | null;
   mileageFeeUsd?: number | null;
+  hotelFeeUsd?: number | null;
 }) {
   const fromMeta = moneyNumber(input.metadata?.total_usd);
   if (fromMeta != null) return fromMeta;
@@ -79,7 +80,9 @@ export function totalDollarsFromCheckout(input: {
   if (listingUsd == null) return null;
   const feeLine = notes.match(/fee \$([0-9]+(?:\.[0-9]+)?)/i);
   const fee = moneyNumber(input.mileageFeeUsd) ?? moneyNumber(feeLine?.[1]) ?? 0;
-  const subtotal = Math.round((listingUsd + fee) * 100) / 100;
+  const hotelLine = notes.match(/Overnight driver hotel:\s*\$([0-9]+(?:\.[0-9]+)?)/i);
+  const hotel = moneyNumber(input.hotelFeeUsd) ?? moneyNumber(hotelLine?.[1]) ?? 0;
+  const subtotal = Math.round((listingUsd + fee + hotel) * 100) / 100;
   const taxLine = notes.match(/Sales tax[^$\n]*\$([0-9]+(?:\.[0-9]+)?)/i);
   const exempt = /(?:^|\n)\s*Tax exempt\b/i.test(notes);
   const tax = exempt ? 0 : (taxLine ? (moneyNumber(taxLine[1]) ?? 0) : salesTaxOn(subtotal));

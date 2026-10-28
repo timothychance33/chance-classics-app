@@ -14,6 +14,7 @@ import {
 } from "@/lib/booking-rules";
 import { withSecondCarNote } from "@/data/packages";
 import { serviceBySlug } from "@/lib/content";
+import { hotelNotesLine, overnightDriverHotel } from "@/lib/overnight-hotel";
 import { quoteDrivingMileage } from "@/lib/mileage";
 import { rentalDb } from "@/lib/rental-db";
 import { CARD_SAVE_TEXT, depositCheckoutSaveCard } from "@/lib/saved-card";
@@ -68,7 +69,15 @@ export async function POST(request: Request) {
     pickupPlaceId: String(raw.pickupPlaceId || "").slice(0, 300),
     pickup: value.pickup,
   });
-  const money = quoteTotal(service.price, value.hours, mileage.fee ?? 0);
+  const hotel = overnightDriverHotel({
+    miles: mileage.miles,
+    driveMinutes: mileage.driveMinutes,
+    eventDate: value.date,
+    startTime: value.start,
+    hours: value.hours,
+  });
+  const money = quoteTotal(service.price, value.hours, mileage.fee ?? 0, hotel.fee);
+  const hotelNote = hotelNotesLine(hotel);
   const payments = stripeReady({
     secret: process.env.STRIPE_SECRET_KEY,
     webhook: process.env.STRIPE_WEBHOOK_SECRET,
@@ -115,6 +124,7 @@ export async function POST(request: Request) {
       mileage.needsReview
         ? "Mileage: We'll confirm mileage. Flagged for review."
         : `Mileage: ${mileage.miles} miles from Benton to pickup, fee $${Number(mileage.fee).toFixed(2)}, billed with the balance.`,
+      ...(hotelNote ? [hotelNote] : []),
       `Subtotal: $${money.subtotal.toFixed(2)}`,
       `Sales tax (10.25%): $${money.tax.toFixed(2)}`,
       `Booking total: $${money.total.toFixed(2)}`,
@@ -143,6 +153,10 @@ export async function POST(request: Request) {
       mileage_miles: mileage.miles,
       mileage_fee_usd: mileage.fee,
       mileage_needs_review: mileage.needsReview,
+      drive_minutes: mileage.driveMinutes,
+      hotel_fee_usd: hotel.fee,
+      hotel_nights: hotel.nights,
+      hotel_return_at: hotel.returnLabel || null,
       ...dayOfContactColumns({ name: value.dayOfName, phone: value.dayOfPhone, role: value.dayOfRole }),
       ...weddingCelebrationColumns(value.occasion, celebrationInput),
     };
@@ -180,7 +194,7 @@ export async function POST(request: Request) {
               unit_amount: money.deposit * 100,
               product_data: {
                 name: `$${money.deposit} non-refundable deposit — ${service.car}`,
-                description: `${service.name}, ${value.date} ${formatClock(value.start)}–${rentalEndLabel(value.start, value.hours)}. Subtotal $${money.subtotal.toFixed(2)}. Sales tax (10.25%) $${money.tax.toFixed(2)}. Total $${money.total.toFixed(2)}. ${mileage.message} Balance $${money.balance.toFixed(2)} is billed separately. ${CARD_SAVE_TEXT}`,
+                description: `${service.name}, ${value.date} ${formatClock(value.start)}–${rentalEndLabel(value.start, value.hours)}. Subtotal $${money.subtotal.toFixed(2)}. Sales tax (10.25%) $${money.tax.toFixed(2)}. Total $${money.total.toFixed(2)}. ${mileage.message}${hotelNote ? ` ${hotelNote}` : ""} Balance $${money.balance.toFixed(2)} is billed separately. ${CARD_SAVE_TEXT}`,
               },
             },
           },

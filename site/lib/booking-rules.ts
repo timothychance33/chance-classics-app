@@ -1,3 +1,5 @@
+import { hotelLineLabel } from "@/lib/overnight-hotel";
+
 /** Booking rules taken from the captured listings and client agreements. */
 
 export const TIME_ZONE = "America/Chicago";
@@ -190,11 +192,12 @@ export function formatClock(value: string) {
   return `${hour12}:${mins} ${period}`;
 }
 
-export function quoteTotal(basePrice: number, hours: number, mileageFee = 0) {
+export function quoteTotal(basePrice: number, hours: number, mileageFee = 0, hotelFee = 0) {
   const extraHours = Math.max(0, hours - BASE_HOURS);
   const listing = basePrice + extraHours * EXTRA_HOUR_USD;
   const fee = Math.max(0, mileageFee);
-  const subtotal = roundMoney(listing + fee);
+  const hotel = Math.max(0, roundMoney(hotelFee));
+  const subtotal = roundMoney(listing + fee + hotel);
   const tax = salesTax(subtotal);
   const total = roundMoney(subtotal + tax);
   return {
@@ -202,6 +205,7 @@ export function quoteTotal(basePrice: number, hours: number, mileageFee = 0) {
     extraHours,
     listing,
     mileageFee: fee,
+    hotelFee: hotel,
     subtotal,
     tax,
     total,
@@ -331,6 +335,9 @@ export function quoteCheckoutLines(quote: {
   travel?: number | null;
   miles?: number | null;
   hotel_fee?: number | null;
+  hotel_nights?: number | null;
+  hotel_return_at?: string | null;
+  hotel_override?: boolean | null;
   tax?: number | null;
   taxExempt?: boolean | null;
   line_items?: unknown;
@@ -345,7 +352,16 @@ export function quoteCheckoutLines(quote: {
     label: Number(quote.miles) ? `Mileage fee (${quote.miles} mi from Benton)` : "Mileage fee",
     amount: Number(quote.travel) || 0,
   });
-  if (Number(quote.hotel_fee) > 0) add("Overnight hotel accommodation", Number(quote.hotel_fee));
+  if (Number(quote.hotel_fee) > 0) {
+    const nights = Number(quote.hotel_nights) || 1;
+    const showWhy = !quote.hotel_override && quote.hotel_return_at && quote.miles != null;
+    add(
+      showWhy
+        ? hotelLineLabel({ nights, miles: Number(quote.miles), returnLabel: String(quote.hotel_return_at) })
+        : hotelLineLabel({ nights }),
+      Number(quote.hotel_fee),
+    );
+  }
   if (Array.isArray(quote.line_items)) {
     for (const item of quote.line_items) {
       if (!item || typeof item !== "object") continue;

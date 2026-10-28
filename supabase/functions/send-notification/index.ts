@@ -216,7 +216,7 @@ Deno.serve(async (req) => {
       lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(q.car_name ?? "Classic car")} — base (up to 2 hours)</td><td style="padding:6px 0;text-align:right">${money(q.base_rate)}</td></tr>`);
       if (q.overage > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Additional hours (${esc(q.extra_hours)})</td><td style="padding:6px 0;text-align:right">${money(q.overage)}</td></tr>`);
       if (Number(q.travel) > 0 || lockedBook) lines.push(`<tr><td style="padding:6px 14px 6px 0">Mileage fee (${esc(q.miles)} mi from Benton)</td><td style="padding:6px 0;text-align:right">${money(q.travel)}</td></tr>`);
-      if (q.hotel_fee > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Overnight hotel accommodation</td><td style="padding:6px 0;text-align:right">${money(q.hotel_fee)}</td></tr>`);
+      if (Number(q.hotel_fee) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(q.hotel_label || "Overnight driver hotel")}</td><td style="padding:6px 0;text-align:right">${money(q.hotel_fee)}</td></tr>`);
       const customItems = Array.isArray(q.custom_items) ? q.custom_items : [];
       for (const item of customItems) {
         if (!item || typeof item !== "object") continue;
@@ -356,6 +356,7 @@ Deno.serve(async (req) => {
         pickup: body.pickup_location,
         dropoff: body.return_location,
         taxExempt: body.tax_exempt === true,
+        hotelLine: (String(body.notes || "").match(/^Overnight driver hotel:\s*(.+)$/im) || [])[1] || "",
       };
       const subject = balancePaySubject(body.event_date);
       result = await sendEmail(to, subject, balancePayHtml(payMail), balancePayText(payMail));

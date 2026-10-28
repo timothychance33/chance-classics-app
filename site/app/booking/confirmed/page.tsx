@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ClearBookingDraft } from "@/components/ClearBookingDraft";
+import { HotelConfirmNote } from "@/components/HotelConfirmNote";
 import { CARD_SAVE_TEXT } from "@/lib/booking-rules";
 import { PHONE_DISPLAY, PHONE_TEL, pageMeta } from "@/lib/content";
 
@@ -33,6 +34,7 @@ export default async function BookingConfirmedPage({
       <ClearBookingDraft />
       <h1>{title}</h1>
       <p>{lead}</p>
+      <HotelConfirmNote />
       <h2>What happens next</h2>
       {balance ? (
         <ol className="confirm-next">

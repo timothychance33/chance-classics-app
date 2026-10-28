@@ -287,6 +287,7 @@ async function sendBalancePayLink(
     pickupLocation: String(row.pickup_location || ""),
     returnLocation: String(row.return_location || ""),
     taxExempt: row.tax_exempt === true || /(?:^|\n)\s*Tax exempt\b/i.test(String(row.notes || "")),
+    notes: String(row.notes || ""),
   });
   let messageIdError = "";
   if (mailed.ok) {

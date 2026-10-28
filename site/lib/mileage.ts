@@ -6,6 +6,7 @@ export type MileageQuote = {
   needsReview: boolean;
   miles: number | null;
   fee: number | null;
+  driveMinutes: number | null;
   message: string;
 };
 
@@ -13,22 +14,48 @@ type MatrixElement = {
   originIndex?: number;
   destinationIndex?: number;
   distanceMeters?: number;
+  duration?: unknown;
   condition?: string;
 };
 
-/** Miles for the Benton-to-pickup element. Only a ROUTE_EXISTS result counts. */
-export function routeMatrixMiles(body: unknown): number | null {
+function routeMatrixElement(body: unknown): MatrixElement | null {
   const elements: unknown[] = Array.isArray(body) ? body : [];
   const element = elements.find((item) => {
     if (!item || typeof item !== "object") return false;
     const row = item as MatrixElement;
     return (row.originIndex ?? 0) === 0 && (row.destinationIndex ?? 0) === 0;
-  }) as MatrixElement | undefined;
+  });
+  return (element as MatrixElement | undefined) || null;
+}
+
+/** Miles for the Benton-to-pickup element. Only a ROUTE_EXISTS result counts. */
+export function routeMatrixMiles(body: unknown): number | null {
+  const element = routeMatrixElement(body);
   if (!element || element.condition !== "ROUTE_EXISTS") return null;
   if (typeof element.distanceMeters !== "number" || !Number.isFinite(element.distanceMeters) || element.distanceMeters < 0) {
     return null;
   }
   return element.distanceMeters / METERS_PER_MILE;
+}
+
+/** Whole minutes for that same drive, rounded up. Missing duration is null, not a failed route. */
+export function routeMatrixDriveMinutes(body: unknown): number | null {
+  const element = routeMatrixElement(body);
+  if (!element || element.condition !== "ROUTE_EXISTS") return null;
+  return durationMinutes(element.duration);
+}
+
+function durationMinutes(duration: unknown): number | null {
+  let seconds: number | null = null;
+  if (typeof duration === "string") {
+    const match = duration.match(/^(\d+(?:\.\d+)?)s$/);
+    if (match) seconds = Number(match[1]);
+  } else if (duration && typeof duration === "object" && "seconds" in duration) {
+    const raw = (duration as { seconds?: unknown }).seconds;
+    if (raw != null && raw !== "") seconds = Number(raw);
+  }
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
+  return Math.ceil(seconds / 60 - 1e-9);
 }
 
 export function mileageMessage(charge: { miles: number; fee: number }) {
@@ -38,7 +65,7 @@ export function mileageMessage(charge: { miles: number; fee: number }) {
 }
 
 export function reviewMileage(): MileageQuote {
-  return { needsReview: true, miles: null, fee: null, message: MILEAGE_REVIEW_TEXT };
+  return { needsReview: true, miles: null, fee: null, driveMinutes: null, message: MILEAGE_REVIEW_TEXT };
 }
 
 function destinationWaypoint(pickupPlaceId: string | undefined, pickup: string | undefined) {
@@ -65,7 +92,7 @@ export async function quoteDrivingMileage(input: {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": "originIndex,destinationIndex,distanceMeters,status,condition",
+        "X-Goog-FieldMask": "originIndex,destinationIndex,distanceMeters,duration,status,condition",
       },
       body: JSON.stringify({
         origins: [{ waypoint: { address: SHOP_ADDRESS } }],
@@ -74,13 +101,15 @@ export async function quoteDrivingMileage(input: {
       }),
     });
     if (!response.ok) return reviewMileage();
-    const miles = routeMatrixMiles(await response.json());
+    const body = await response.json();
+    const miles = routeMatrixMiles(body);
     if (miles == null) return reviewMileage();
     const charge = mileageCharge(miles);
     return {
       needsReview: false,
       miles: charge.miles,
       fee: charge.fee,
+      driveMinutes: routeMatrixDriveMinutes(body),
       message: mileageMessage(charge),
     };
   } catch {

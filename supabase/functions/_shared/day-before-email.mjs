@@ -272,8 +272,14 @@ function paymentCopy(balance, taxExempt) {
   return line;
 }
 
-function detailPairs(details) {
-  return [
+export function overnightHotelDetail(booking) {
+  const notes = String(booking?.notes || "");
+  const match = notes.match(/^Overnight driver hotel:\s*(.+)$/im);
+  return match ? match[1].trim() : "";
+}
+
+function detailPairs(details, booking) {
+  const pairs = [
     ["Status", "Confirmed"],
     ["Car", details.car],
     ["Date", details.date],
@@ -282,7 +288,10 @@ function detailPairs(details) {
     ["Stops / destination", details.stops],
     ["Hours", details.hours],
     ["Occasion", details.occasion],
-  ].filter(([, value]) => clean(value));
+  ];
+  const hotel = overnightHotelDetail(booking);
+  if (hotel) pairs.push(["Overnight driver hotel", hotel]);
+  return pairs.filter(([, value]) => clean(value));
 }
 
 function detailHtml(pairs) {
@@ -320,7 +329,7 @@ export function renderDayBeforeEmail(input) {
   const who = balanceFirstName(booking.customer_name);
   const payment = paymentCopy(balance, bookingTaxExempt(booking));
   const driver = driverBlock(input?.driver);
-  const pairs = detailPairs(details);
+  const pairs = detailPairs(details, booking);
   const button = payUrl
     ? `<p style="margin:16px 0"><a href="${esc(payUrl)}" style="background:#6e1d1a;color:#ffffff;padding:14px 18px;border-radius:8px;text-decoration:none;display:block;text-align:center;font-weight:700;font-size:16px">Pay the balance</a></p><p style="font-size:14px;line-height:1.45;word-break:break-all;margin:0 0 16px">${esc(payUrl)}</p>`
     : "";

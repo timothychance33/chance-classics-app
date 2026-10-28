@@ -138,6 +138,8 @@ export function ownerBookingCreatedRows(booking) {
     }
   }
   rows.push(["Price", bookingPriceText(booking)]);
+  const hotelNote = String(booking?.notes || "").match(/^Overnight driver hotel:\s*(.+)$/im);
+  if (hotelNote) rows.push(["Overnight driver hotel", hotelNote[1].trim()]);
   rows.push(["Planner", bookingPlannerText(booking)]);
   rows.push(["Bride / partner 1", weddingLine(booking?.wedding_partner_1_name, booking?.wedding_partner_1_social)]);
   rows.push(["Groom / partner 2", weddingLine(booking?.wedding_partner_2_name, booking?.wedding_partner_2_social)]);
