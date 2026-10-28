@@ -44,6 +44,10 @@ export type QuoteRow = {
   overage: number | null;
   travel: number | null;
   hotel_fee: number | null;
+  hotel_nights?: number | null;
+  hotel_return_at?: string | null;
+  hotel_override?: boolean | null;
+  drive_minutes?: number | null;
   subtotal?: number | null;
   tax: number | null;
   total: number | null;
@@ -89,6 +93,9 @@ export function publicQuoteView(quote: QuoteRow, carName: string) {
     travel: quote.travel,
     miles: quote.miles,
     hotel_fee: quote.hotel_fee,
+    hotel_nights: quote.hotel_nights,
+    hotel_return_at: quote.hotel_return_at,
+    hotel_override: quote.hotel_override,
     tax: quote.tax,
     taxExempt: quoteIsTaxExempt(quote),
     line_items: quote.line_items,
@@ -202,6 +209,11 @@ export async function confirmPaidQuote(
       : (Number(quote.tax) ? `Sales tax (10.25%): $${Number(quote.tax).toFixed(2)}` : ""),
     `Quote total: $${Number(money.total).toFixed(2)}`,
     `Mileage fee: $${Number(quote.travel || 0).toFixed(2)}`,
+    Number(quote.hotel_fee) > 0
+      ? (quote.hotel_return_at
+        ? `Overnight driver hotel: $${Number(quote.hotel_fee).toFixed(2)} (${quote.miles != null ? `${quote.miles} miles from Benton, ` : ""}driver back about ${quote.hotel_return_at}).`
+        : `Overnight driver hotel: $${Number(quote.hotel_fee).toFixed(2)}.`)
+      : "",
     `Deposit paid: $${Number(money.deposit).toFixed(2)}`,
     `Balance billed separately: $${Number(money.balance).toFixed(2)}`,
     "Waiver accepted: Yes",
@@ -233,6 +245,10 @@ export async function confirmPaidQuote(
     mileage_miles: quote.miles,
     mileage_fee_usd: quote.travel,
     mileage_needs_review: false,
+    drive_minutes: quote.drive_minutes ?? null,
+    hotel_fee_usd: Number(quote.hotel_fee) || 0,
+    hotel_nights: Number(quote.hotel_nights) || (Number(quote.hotel_fee) > 0 ? 1 : 0),
+    hotel_return_at: quote.hotel_return_at || null,
     ...(dayOf ? dayOfContactColumns(dayOf) : {}),
   };
   const inserted = await insertBooking(db, row);

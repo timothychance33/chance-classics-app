@@ -86,6 +86,7 @@ function detailPairs(input) {
     ["Pickup", String(input?.pickup ?? input?.pickupLocation ?? input?.pickup_location ?? "").trim()],
     ["Drop-off", String(input?.dropoff ?? input?.returnLocation ?? input?.return_location ?? "").trim()],
     ["Balance", money(input?.amount)],
+    ["Overnight driver hotel", String(input?.hotelLine || "").trim()],
   ];
   return pairs.filter(([, value]) => value);
 }

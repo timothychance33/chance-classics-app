@@ -96,6 +96,17 @@ export function QuoteCheckout({ token }: { token: string }) {
       });
       const data = await response.json();
       if (data.url) {
+        try {
+          const hotel = quote?.lines.find((line) => line.label.startsWith("Overnight driver hotel") && line.amount > 0);
+          if (hotel) {
+            sessionStorage.setItem(
+              "chance-classics-hotel-line",
+              `${hotel.label}: $${hotel.amount.toFixed(2)}. It is included in the total.`,
+            );
+          } else sessionStorage.removeItem("chance-classics-hotel-line");
+        } catch {
+          /* The checkout page still names the charge. */
+        }
         window.location.assign(data.url);
         return;
       }

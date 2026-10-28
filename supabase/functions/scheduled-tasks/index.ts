@@ -724,6 +724,7 @@ Deno.serve(async (req) => {
               dropoff: b.return_location,
               mondayReminder: true,
               taxExempt: bookingTaxExempt(b),
+              hotelLine: (String(b.notes || "").match(/^Overnight driver hotel:\s*(.+)$/im) || [])[1] || "",
             };
             await sendEmail(
               email,

@@ -67,7 +67,8 @@ export async function openTimesForCar(db: Db, carId: string, date: string, hours
 }
 
 function optionalBookingColumn(name: string) {
-  return /^(mileage_|day_of_contact_|wedding_)/.test(name)
+  return /^(mileage_|day_of_contact_|wedding_|hotel_)/.test(name)
+    || name === "drive_minutes"
     || name === "stripe_deposit_session_id"
     || name === "stripe_balance_session_id"
     || name === "stripe_customer_id"

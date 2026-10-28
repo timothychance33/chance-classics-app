@@ -16,6 +16,7 @@ import {
   mileageMessage,
   quoteDrivingMileage,
   reviewMileage,
+  routeMatrixDriveMinutes,
   routeMatrixMiles,
 } from '../supabase/functions/_shared/mileage.mjs';
 
@@ -45,6 +46,7 @@ assert.deepEqual(reviewMileage(), {
   needsReview: true,
   miles: null,
   fee: null,
+  driveMinutes: null,
   message: "We'll confirm mileage.",
 });
 
@@ -85,9 +87,11 @@ const far = await fakeFetch([{ originIndex: 0, destinationIndex: 0, condition: '
 assert.equal(far.needsReview, false);
 assert.equal(far.miles, 31);
 assert.equal(far.fee, 93);
+assert.equal(far.driveMinutes, null);
 assert.match(far.message, /Mileage fee \$93/);
 assert.equal(calls[0].url, 'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix');
 assert.equal(calls[0].init.headers['X-Goog-Api-Key'], 'test-key');
+assert.equal(calls[0].init.headers['X-Goog-FieldMask'], 'originIndex,destinationIndex,distanceMeters,duration,status,condition');
 assert.equal(calls[0].init.method, 'POST');
 const sent = JSON.parse(calls[0].init.body);
 assert.equal(sent.origins[0].waypoint.address, SHOP_ADDRESS);
@@ -120,6 +124,26 @@ const byPlace = await quoteDrivingMileage(
 );
 assert.equal(byPlace.miles, 60);
 assert.equal(byPlace.fee, 180);
+
+const withDuration = [{
+  originIndex: 0,
+  destinationIndex: 0,
+  condition: 'ROUTE_EXISTS',
+  distanceMeters: 75 * METERS_PER_MILE,
+  duration: '4500s',
+}];
+assert.equal(routeMatrixDriveMinutes(withDuration), 75);
+assert.equal(routeMatrixDriveMinutes([{
+  originIndex: 0,
+  destinationIndex: 0,
+  condition: 'ROUTE_EXISTS',
+  distanceMeters: 1000,
+  duration: { seconds: '119' },
+}]), 2);
+assert.equal(routeMatrixDriveMinutes([{ condition: 'ROUTE_NOT_FOUND', duration: '600s' }]), null);
+const timed = await fakeFetch(withDuration);
+assert.equal(timed.miles, 75);
+assert.equal(timed.driveMinutes, 75);
 
 let fetched = false;
 const noKey = await quoteDrivingMileage(

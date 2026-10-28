@@ -28,21 +28,44 @@ export function mileageMessage(charge) {
 }
 
 export function reviewMileage() {
-  return { needsReview: true, miles: null, fee: null, message: MILEAGE_REVIEW_TEXT };
+  return { needsReview: true, miles: null, fee: null, driveMinutes: null, message: MILEAGE_REVIEW_TEXT };
+}
+
+function routeMatrixElement(body) {
+  const elements = Array.isArray(body) ? body : [];
+  return elements.find((item) => {
+    if (!item || typeof item !== "object") return false;
+    return (item.originIndex ?? 0) === 0 && (item.destinationIndex ?? 0) === 0;
+  }) || null;
 }
 
 /** Miles for the Benton-to-pickup element. Only a ROUTE_EXISTS result counts. */
 export function routeMatrixMiles(body) {
-  const elements = Array.isArray(body) ? body : [];
-  const element = elements.find((item) => {
-    if (!item || typeof item !== "object") return false;
-    return (item.originIndex ?? 0) === 0 && (item.destinationIndex ?? 0) === 0;
-  });
+  const element = routeMatrixElement(body);
   if (!element || element.condition !== "ROUTE_EXISTS") return null;
   if (typeof element.distanceMeters !== "number" || !Number.isFinite(element.distanceMeters) || element.distanceMeters < 0) {
     return null;
   }
   return element.distanceMeters / METERS_PER_MILE;
+}
+
+/** Whole minutes for that same drive, rounded up. Missing duration is null, not a failed route. */
+export function routeMatrixDriveMinutes(body) {
+  const element = routeMatrixElement(body);
+  if (!element || element.condition !== "ROUTE_EXISTS") return null;
+  return durationMinutes(element.duration);
+}
+
+function durationMinutes(duration) {
+  let seconds = null;
+  if (typeof duration === "string") {
+    const match = duration.match(/^(\d+(?:\.\d+)?)s$/);
+    if (match) seconds = Number(match[1]);
+  } else if (duration && typeof duration === "object" && duration.seconds != null && duration.seconds !== "") {
+    seconds = Number(duration.seconds);
+  }
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return null;
+  return Math.ceil(seconds / 60 - 1e-9);
 }
 
 export function destinationWaypoint(pickupPlaceId, pickup) {
@@ -80,18 +103,20 @@ export async function quoteDrivingMileage(input, options = {}) {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": "originIndex,destinationIndex,distanceMeters,status,condition",
+        "X-Goog-FieldMask": "originIndex,destinationIndex,distanceMeters,duration,status,condition",
       },
       body: JSON.stringify(distanceMatrixBody(waypoint)),
     });
     if (!response.ok) return reviewMileage();
-    const miles = routeMatrixMiles(await response.json());
+    const body = await response.json();
+    const miles = routeMatrixMiles(body);
     if (miles == null) return reviewMileage();
     const charge = mileageCharge(miles);
     return {
       needsReview: false,
       miles: charge.miles,
       fee: charge.fee,
+      driveMinutes: routeMatrixDriveMinutes(body),
       message: mileageMessage(charge),
     };
   } catch {

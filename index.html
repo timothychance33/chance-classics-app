@@ -1845,7 +1845,11 @@ function renderEarnings(){
 }
 
 // ---------- QUOTES ----------
-const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.1025, HOTEL_FEE=200;
+const OVERAGE_RATE=100, INCLUDED_HOURS=2, FREE_MILES=30, PER_MILE=3, TAX_RATE=0.1025;
+// Overnight driver hotel. Change these three numbers to retune Tim's rule.
+const HOTEL_MILES_OVER=60, HOTEL_RETURN_CUTOFF_MINUTES=2*60, HOTEL_NIGHT_USD=200;
+const HOTEL_LINE_LABEL='Overnight driver hotel';
+const HOTEL_FEE=HOTEL_NIGHT_USD;
 const FOLLOWUP_DAYS=3, QUOTE_VALID_DAYS=7;
 // Prep, travel, and trailer time kept clear before AND after each booking of the same car.
 // Change this one number to adjust the gap. The database exclusion constraint does not include it.
@@ -1938,6 +1942,81 @@ function mileageFeeNote(miles){
   if(whole<=FREE_MILES) return whole+' miles from Benton to pickup. No mileage fee.';
   return whole+' miles from Benton to pickup. Mileage fee $'+(whole*PER_MILE)+', billed with the balance.';
 }
+function hotelCutoffLabel(){
+  let h=Math.floor(HOTEL_RETURN_CUTOFF_MINUTES/60);
+  const m=String(HOTEL_RETURN_CUTOFF_MINUTES%60).padStart(2,'0');
+  const ap=h>=12?'PM':'AM';
+  h=h%12||12;
+  return h+':'+m+' '+ap;
+}
+function hotelNightsBetween(startAbs, returnAbs){
+  if(startAbs==null||returnAbs==null||returnAbs<startAbs) return 0;
+  const startDay=Math.floor(startAbs/1440);
+  const lastDay=Math.floor(returnAbs/1440)+1;
+  let nights=0;
+  for(let day=startDay; day<=lastDay; day++){
+    const cutoff=day*1440+HOTEL_RETURN_CUTOFF_MINUTES;
+    if(cutoff>startAbs && cutoff<=returnAbs) nights++;
+  }
+  return nights;
+}
+function hotelReturnLabel(startAbs, returnAbs){
+  const clockMin=((returnAbs%1440)+1440)%1440;
+  let h=Math.floor(clockMin/60);
+  const m=String(clockMin%60).padStart(2,'0');
+  const ap=h>=12?'PM':'AM';
+  h=h%12||12;
+  const clock=h+':'+m+' '+ap;
+  const delta=Math.floor(returnAbs/1440)-Math.floor(startAbs/1440);
+  if(delta<=0) return clock;
+  if(delta===1) return clock+' the next day';
+  return clock+', '+delta+' days later';
+}
+function hotelLineLabel(result){
+  const nights=Number(result&&result.nights)||0;
+  const nightBit=nights>1?' ('+nights+' nights)':'';
+  if(nights>0 && result.miles!=null && result.returnLabel){
+    return HOTEL_LINE_LABEL+nightBit+' — '+result.miles+' mi from Benton, driver back about '+result.returnLabel;
+  }
+  return HOTEL_LINE_LABEL+nightBit;
+}
+function overnightDriverHotel(input){
+  const rawMiles=input?input.miles:null;
+  const milesMissing=rawMiles==null||rawMiles===''||!Number.isFinite(Number(rawMiles));
+  const miles=milesMissing?null:wholeQuoteMiles(rawMiles);
+  const driveRaw=input?input.driveMinutes:null;
+  const driveMissing=driveRaw==null||driveRaw===''||!Number.isFinite(Number(driveRaw))||Number(driveRaw)<0;
+  const driveMinutes=driveMissing?null:Math.round(Number(driveRaw));
+  const day=dayNumber(input&&input.eventDate);
+  const start=clockMinutes(input&&input.startTime);
+  const startAbs=day==null||start==null?null:day*1440+start;
+  let endAbs=null;
+  if(startAbs!=null){
+    const hours=Number(input&&input.hours);
+    if(Number.isFinite(hours)&&hours>0) endAbs=startAbs+Math.round(hours*60);
+    else {
+      const end=clockMinutes(input&&input.endTime);
+      if(end!=null&&start!=null){
+        endAbs=Math.floor(startAbs/1440)*1440+end;
+        if(end<=start) endAbs+=1440;
+      }
+    }
+  }
+  const known=!milesMissing && !driveMissing && endAbs!=null;
+  const distanceQualifies=miles!=null && miles>HOTEL_MILES_OVER;
+  const returnAbs=known?endAbs+driveMinutes:null;
+  const nights=known&&distanceQualifies?hotelNightsBetween(startAbs, returnAbs):0;
+  const fee=nights*HOTEL_NIGHT_USD;
+  const back=returnAbs!=null&&startAbs!=null?hotelReturnLabel(startAbs, returnAbs):'';
+  const result={miles, driveMinutes, distanceQualifies, known, applies:nights>0, nights, fee, returnLabel:back, reason:'', lineLabel:HOTEL_LINE_LABEL};
+  result.lineLabel=hotelLineLabel(result);
+  if(result.miles==null) result.reason='Look up miles and drive time from the shop to see whether an overnight driver hotel applies.';
+  else if(!result.distanceQualifies) result.reason=result.miles+' '+(result.miles===1?'mile':'miles')+' from Benton. '+HOTEL_MILES_OVER+' miles or less does not add an overnight driver hotel.';
+  else if(!result.known||!result.returnLabel) result.reason=result.miles+' miles from Benton. Look up drive time. The hotel applies when the driver gets back to the shop at '+hotelCutoffLabel()+' or later.';
+  else if(result.applies) result.reason=result.miles+' miles from Benton. Estimated return to the shop: '+result.returnLabel+'. Overnight driver hotel applies ('+(result.nights===1?'1 night':result.nights+' nights')+', $'+result.fee+').';
+  else result.reason=result.miles+' miles from Benton. Estimated return to the shop: '+result.returnLabel+'. That is before '+hotelCutoffLabel()+', so there is no overnight driver hotel.';
+  return result;
+}
 function calcQuote(carId, hours, miles, hotelFee, taxExempt){
   const car=carById(carId);
   const base=car?Number(car.base_rate||0):0;
@@ -1945,7 +2024,7 @@ function calcQuote(carId, hours, miles, hotelFee, taxExempt){
   const overage=extraH*OVERAGE_RATE;
   const mi=wholeQuoteMiles(miles);
   const travel=mi>FREE_MILES?mi*PER_MILE:0;
-  const hotel=(Number(hotelFee)||0)>0?HOTEL_FEE:0;
+  const hotel=Math.max(0, Math.round((Number(hotelFee)||0)*100)/100);
   const subtotal=base+overage+travel+hotel;
   const tax=taxExempt?0:Math.round(Math.round(subtotal*100)*TAX_RATE)/100;
   const total=Math.round((subtotal+tax)*100)/100;
@@ -2105,9 +2184,10 @@ function choosePricedAlternates(alts, chosenCarId){
   return list.filter(a=>a.id===chosenCarId);
 }
 function alternateEmailFields(a){
+  const trip=window._quoteTrip||{};
   return {name:a.name, total:a.total, book_url:a.book_url,
     base_rate:a.base_rate, extra_hours:a.extra_hours, overage:a.overage,
-    miles:a.miles, travel:a.travel, hotel_fee:a.hotel_fee, subtotal:a.subtotal, tax:a.tax,
+    miles:a.miles, travel:a.travel, hotel_fee:a.hotel_fee, hotel_label:a.hotel_fee>0?(trip.hotelLabel||HOTEL_LINE_LABEL):'', subtotal:a.subtotal, tax:a.tax,
     tax_exempt:!!a.taxExempt};
 }
 function alternateOfferRowHtml(qid, requestedCarId, a, hasEmail){
@@ -2220,6 +2300,8 @@ async function sendAlternateQuotes(qid, requestedCarId, chosenCarId){
   const expiresStr=new Date(Date.now()+QUOTE_VALID_DAYS*86400000).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   const patch={
     hours:trip.hours, miles:trip.miles, hotel_fee:trip.hotel,
+    drive_minutes:trip.driveMinutes!=null?trip.driveMinutes:null,
+    hotel_nights:trip.hotelNights||0, hotel_return_at:trip.hotelReturn||null, hotel_override:!!trip.hotelManual,
     quote_notes:note||null, status:'sent', sent_at:nowIso,
     tax_exempt:!!trip.taxExempt, tax_exempt_note:trip.taxExempt?trip.taxNote||null:null
   };
@@ -2234,6 +2316,7 @@ async function sendAlternateQuotes(qid, requestedCarId, chosenCarId){
   }
   const saved=await updateQuoteRow(qid, patch);
   if(saved.error){ toast(saved.error.message); return; }
+  if(saved.droppedHotel) toast('Apply the overnight hotel migration so the return-time note is saved.');
   try{
     const r=await postNotification({
       type:'quote_alternatives', to:q.customer_email,
@@ -2318,6 +2401,8 @@ function quoteBuilder(qid){
   const milesAuto=stashed?!!stashed.milesAuto:!milesSaved;
   const initMiles=stashed?stashed.miles:(milesSaved?q.miles:'');
   const initHotel=stashed?stashed.hotel>0:Number(q.hotel_fee)>0;
+  const initManual=stashed?!!stashed.hotelManual:!!q.hotel_override;
+  const initDrive=stashed&&stashed.driveMinutes!=null&&stashed.driveMinutes!==''?stashed.driveMinutes:(q.drive_minutes!=null&&q.drive_minutes!==''?q.drive_minutes:'');
   const initTax=stashed&&stashed.taxExempt!=null?!!stashed.taxExempt:!!q.tax_exempt;
   const initTaxNote=stashed&&stashed.taxNote!=null?stashed.taxNote:(q.tax_exempt_note||'');
   const initDate=/^\d{4}-\d{2}-\d{2}/.test(String(q.event_date||''))?String(q.event_date).slice(0,10):'';
@@ -2330,7 +2415,7 @@ function quoteBuilder(qid){
   window._quoteEventDate=initDate||q.event_date||null;
   window._quoteEventTime=q.event_time||null;
   window._quoteId=q.id;
-  if(!stashed) window._quoteTrip={hours:initHours,miles:initMiles===''?0:Number(initMiles)||0,hotel:initHotel?HOTEL_FEE:0,note:q.quote_notes||null,milesAuto,taxExempt:initTax,taxNote:initTaxNote||null};
+  if(!stashed) window._quoteTrip={hours:initHours,miles:initMiles===''?0:Number(initMiles)||0,hotel:initHotel?Number(q.hotel_fee)||HOTEL_FEE:0,hotelNights:Number(q.hotel_nights)||(initHotel?1:0),hotelLabel:'',hotelReturn:q.hotel_return_at||'',note:q.quote_notes||null,milesAuto,taxExempt:initTax,taxNote:initTaxNote||null,driveMinutes:initDrive===''?null:Number(initDrive),hotelManual:initManual};
   const carOpts=quoteCarOptions(q.car_id, q.event_date, quoteSlot(initHours));
   let statusLine='';
   if(q.status==='sent'){
@@ -2379,7 +2464,7 @@ function quoteBuilder(qid){
     <div id="q_avail"></div>
     <div style="margin-top:10px">
       <label>One-way miles from Benton</label>
-      <input id="q_miles" type="number" step="1" min="0" data-auto="${milesAuto?'1':'0'}" value="${initMiles===''||initMiles==null?'':esc(initMiles)}" oninput="quoteMilesTouched()">
+      <input id="q_miles" type="number" step="1" min="0" data-auto="${milesAuto?'1':'0'}" data-drive-minutes="${esc(initDrive)}" value="${initMiles===''||initMiles==null?'':esc(initMiles)}" oninput="quoteMilesTouched()">
       <div class="meta" style="margin-top:4px">Same rule as Book Online. Base is 118 5th St E, Benton, LA. 30 miles or less is $0. Over 30, the car is trailered at $3 per mile for the full distance, from mile one.</div>
       <div class="meta" id="q_mileage_note" style="margin-top:4px"></div>
       <button type="button" class="ghost tinybtn" id="q_mileage_lookup" style="margin-top:6px" onclick="lookupQuoteMiles()">Look up from pickup</button>
@@ -2388,7 +2473,9 @@ function quoteBuilder(qid){
       <div><label>Price (base, up to ${INCLUDED_HOURS} hrs)</label><input id="q_price" type="number" step="0.01" min="0" data-auto="${priceAuto?'1':'0'}" value="${priceAuto?'':esc(Number(q.base_rate).toFixed(2))}" oninput="quotePriceTouched()"></div>
       <div><label>Mileage fee</label><input id="q_mileage_fee" type="number" step="0.01" min="0" data-auto="${feeAuto?'1':'0'}" value="${feeAuto?'':esc(Number(q.travel).toFixed(2))}" oninput="quoteFeeTouched()"></div>
     </div>
-    <label class="toggle" style="margin-top:10px"><input type="checkbox" id="q_hotel" ${initHotel?'checked':''} onchange="quoteRecalc()"><span class="toggleslide"></span><span>Overnight hotel accommodation — $${HOTEL_FEE}</span></label>
+    <label class="toggle" style="margin-top:10px"><input type="checkbox" id="q_hotel" ${initHotel?'checked':''} data-manual="${initManual?'1':'0'}" onchange="quoteHotelTouched()"><span class="toggleslide"></span><span>Include overnight driver hotel</span></label>
+    <div class="meta" id="q_hotel_reason" style="margin-top:4px"></div>
+    <button type="button" class="ghost tinybtn" id="q_hotel_reset" style="margin-top:6px;display:none" onclick="quoteHotelUseAutomatic()">Use the automatic hotel</button>
     <label class="toggle" style="margin-top:10px"><input type="checkbox" id="q_tax_exempt" ${initTax?'checked':''} onchange="quoteRecalc()"><span class="toggleslide"></span><span>Tax exempt</span></label>
     <div id="q_tax_note_wrap" style="margin-top:8px;${initTax?'':'display:none'}">
       <label>Exemption note or certificate # (optional)</label>
@@ -2477,6 +2564,65 @@ function quoteHotelOn(){
   if(hidden) return Number(hidden.value)>0;
   return !!(window._quoteTrip&&window._quoteTrip.hotel);
 }
+function quoteHotelManual(){
+  const el=document.getElementById('q_hotel');
+  if(el) return el.dataset.manual==='1';
+  return !!(window._quoteTrip&&window._quoteTrip.hotelManual);
+}
+function quoteDriveMinutes(){
+  const el=document.getElementById('q_miles');
+  if(el){
+    if(el.dataset.driveMinutes==null||el.dataset.driveMinutes==='') return null;
+    const n=Number(el.dataset.driveMinutes);
+    return Number.isFinite(n)&&n>=0?n:null;
+  }
+  if(window._quoteTrip && window._quoteTrip.driveMinutes!=null && window._quoteTrip.driveMinutes!=='') return Number(window._quoteTrip.driveMinutes);
+  return null;
+}
+function quoteHotelRule(){
+  const milesEl=document.getElementById('q_miles');
+  const hoursEl=document.getElementById('q_hours');
+  const timeEl=document.getElementById('q_time');
+  const dateEl=document.getElementById('q_date');
+  const raw=milesEl?String(milesEl.value||'').trim():'';
+  return overnightDriverHotel({
+    miles:raw===''?null:wholeQuoteMiles(raw),
+    driveMinutes:quoteDriveMinutes(),
+    eventDate:(dateEl&&dateEl.value)||window._quoteEventDate,
+    startTime:(timeEl&&timeEl.value)||window._quoteEventTime,
+    hours:hoursEl?hoursEl.value:(window._quoteTrip&&window._quoteTrip.hours)
+  });
+}
+function quoteHotelCharge(rule){
+  const on=quoteHotelOn();
+  if(!on) return {nights:0, fee:0, label:HOTEL_LINE_LABEL, returnLabel:''};
+  if(rule && rule.nights>0) return {nights:rule.nights, fee:rule.fee, label:rule.lineLabel, returnLabel:rule.returnLabel||''};
+  if(rule && rule.known) return {nights:1, fee:HOTEL_NIGHT_USD, label:HOTEL_LINE_LABEL, returnLabel:''};
+  const saved=window._quoteTrip&&Number(window._quoteTrip.hotel);
+  if(saved>0) return {nights:Number(window._quoteTrip.hotelNights)||1, fee:saved, label:window._quoteTrip.hotelLabel||HOTEL_LINE_LABEL, returnLabel:window._quoteTrip.hotelReturn||''};
+  return {nights:1, fee:HOTEL_NIGHT_USD, label:HOTEL_LINE_LABEL, returnLabel:''};
+}
+function quoteHotelTouched(){
+  const el=document.getElementById('q_hotel');
+  if(el) el.dataset.manual='1';
+  quoteRecalc();
+}
+function quoteHotelUseAutomatic(){
+  const el=document.getElementById('q_hotel');
+  if(el) el.dataset.manual='0';
+  quoteRecalc();
+}
+function rememberQuoteHotel(hotel, rule){
+  window._quoteTrip=Object.assign(window._quoteTrip||{}, {
+    hotel:hotel.fee,
+    hotelNights:hotel.nights,
+    hotelLabel:hotel.label,
+    hotelReturn:hotel.returnLabel,
+    hotelManual:quoteHotelManual(),
+    driveMinutes:quoteDriveMinutes(),
+    hotelKnown:!!(rule&&rule.known)
+  });
+}
 function quoteTaxExempt(){
   const el=document.getElementById('q_tax_exempt');
   if(el) return !!el.checked;
@@ -2504,10 +2650,15 @@ function quoteTripInputs(){
   }
   const hours=hoursEl?parseFloat(hoursEl.value)||INCLUDED_HOURS:INCLUDED_HOURS;
   const miles=wholeQuoteMiles(milesEl?milesEl.value:0);
-  const hotel=quoteHotelOn()?HOTEL_FEE:0;
+  const rule=quoteHotelRule();
+  const hotelEl=document.getElementById('q_hotel');
+  if(hotelEl && hotelEl.dataset.manual!=='1' && rule.known) hotelEl.checked=!!rule.applies;
+  const hotelCharge=quoteHotelCharge(rule);
+  const hotel=hotelCharge.fee;
   const note=noteEl?noteEl.value||null:null;
   const milesAuto=!!(milesEl&&milesEl.dataset.auto==='1');
-  const trip={hours, miles, hotel, note, milesAuto, taxExempt, taxNote};
+  const trip={hours, miles, hotel, hotelNights:hotelCharge.nights, hotelLabel:hotelCharge.label, hotelReturn:hotelCharge.returnLabel, hotelManual:quoteHotelManual(), driveMinutes:quoteDriveMinutes(), note, milesAuto, taxExempt, taxNote};
+  rememberQuoteHotel(hotelCharge, rule);
   window._quoteTrip=trip;
   return trip;
 }
@@ -2541,8 +2692,7 @@ function quoteRecalc(){
   const hours=hoursEl.value;
   const milesEl=document.getElementById('q_miles');
   const miles=milesEl?milesEl.value:0;
-  const hotelOn=quoteHotelOn();
-  const c=quoteMoneyParts()||calcQuote(carId,hours,miles,hotelOn?HOTEL_FEE:0,quoteTaxExempt());
+  const c=quoteMoneyParts()||calcQuote(carId,hours,miles,0,quoteTaxExempt());
   const m=n=>`$${n.toFixed(2)}`;
   const qid=window._quoteId;
   const q=qid?(DATA.quotes||[]).find(x=>x.id===qid):null;
@@ -2587,7 +2737,7 @@ function quoteRecalc(){
         </div>`;
         if(altsEl){
           if(others.length){
-            const priced=pricedAlternateQuotes(carId, hours, miles, hotelOn?HOTEL_FEE:0, evDate, quoteTaxExempt());
+            const priced=pricedAlternateQuotes(carId, hours, miles, c.hotel, evDate, quoteTaxExempt());
             altsEl.innerHTML=`<div class="qalts"><div class="qahd">Open for this time — tap Send this option on one car, or send all prices</div>${
               priced.map(a=>alternateOfferRowHtml(qid, carId, a, hasEmail)).join('')
             }</div>`;
@@ -2632,6 +2782,15 @@ function quoteRecalc(){
   }
   const taxWrap=document.getElementById('q_tax_note_wrap');
   if(taxWrap) taxWrap.style.display=c.taxExempt?'block':'none';
+  const hotelReason=document.getElementById('q_hotel_reason');
+  if(hotelReason){
+    let text=c.hotelReason||'';
+    if(c.hotelManual && !quoteHotelOn() && c.hotelRule && c.hotelRule.applies) text+=' Removed on this quote.';
+    else if(c.hotelManual && quoteHotelOn() && c.hotelRule && c.hotelRule.known && !c.hotelRule.applies) text+=' Added on this quote.';
+    hotelReason.textContent=text;
+  }
+  const hotelReset=document.getElementById('q_hotel_reset');
+  if(hotelReset) hotelReset.style.display=c.hotelManual?'inline-block':'none';
   const deposit=Math.min(250, Math.max(0, c.total));
   const balance=Math.round((Math.max(0, c.total)-deposit)*100)/100;
   const customLines=(c.custom||[]).map(line=>`<div class="qline"><span>${esc(line.label)}</span><span>${m(Number(line.amount)||0)}</span></div>`).join('');
@@ -2643,7 +2802,7 @@ function quoteRecalc(){
     <div class="qline"><span>Base (up to ${INCLUDED_HOURS} hrs)</span><span>${m(c.base)}</span></div>
     ${c.overage>0?`<div class="qline"><span>+${c.extraH} extra hr × $${OVERAGE_RATE}</span><span>${m(c.overage)}</span></div>`:''}
     <div class="qline${c.travel>0?'':' muted'}"><span>Mileage fee (${c.mi} mi from Benton)</span><span>${m(c.travel)}</span></div>
-    ${c.hotel>0?`<div class="qline"><span>Overnight hotel accommodation</span><span>${m(c.hotel)}</span></div>`:`<div class="qline muted"><span>Overnight hotel (not included)</span><span>$0.00</span></div>`}
+    ${c.hotel>0?`<div class="qline" data-hotel-line><span>${esc(c.hotelLabel||HOTEL_LINE_LABEL)}</span><span>${m(c.hotel)}</span></div>`:`<div class="qline muted"><span>Overnight driver hotel (not included)</span><span>$0.00</span></div>`}
     ${customLines}
     <div class="qline"><span>Subtotal</span><span>${m(c.subtotal)}</span></div>
     ${taxLine}
@@ -2675,7 +2834,10 @@ function quoteMilesTouched(){
   if(el){
     el.dataset.auto='0';
     delete el.dataset.lookupSeq;
+    delete el.dataset.driveMinutes;
   }
+  const hotel=document.getElementById('q_hotel');
+  if(hotel && hotel.dataset.manual!=='1') hotel.checked=false;
   const note=document.getElementById('q_mileage_note');
   if(note) delete note.dataset.state;
   quoteRecalc();
@@ -2737,6 +2899,8 @@ async function autofillQuoteMileage(qid, opts){
     }
     milesEl.value=String(data.miles);
     milesEl.dataset.auto='0';
+    if(data.driveMinutes==null||data.driveMinutes==='') delete milesEl.dataset.driveMinutes;
+    else milesEl.dataset.driveMinutes=String(Math.round(Number(data.driveMinutes)));
     if(force){
       const feeEl=document.getElementById('q_mileage_fee');
       if(feeEl) feeEl.dataset.auto='1';
@@ -2779,9 +2943,12 @@ function quoteMoneyParts(){
   if(!carEl||!hoursEl) return null;
   const milesEl=document.getElementById('q_miles');
   const miles=milesEl?milesEl.value:0;
-  const hotelOn=quoteHotelOn();
   const taxExempt=quoteTaxExempt();
-  const auto=calcQuote(carEl.value,hoursEl.value,miles,hotelOn?HOTEL_FEE:0,taxExempt);
+  const rule=quoteHotelRule();
+  const hotelEl=document.getElementById('q_hotel');
+  if(hotelEl && hotelEl.dataset.manual!=='1' && rule.known) hotelEl.checked=!!rule.applies;
+  const hotelCharge=quoteHotelCharge(rule);
+  const auto=calcQuote(carEl.value,hoursEl.value,miles,hotelCharge.fee,taxExempt);
   const feeEl=document.getElementById('q_mileage_fee');
   const priceEl=document.getElementById('q_price');
   if(priceEl&&priceEl.dataset.auto==='1') priceEl.value=Number(auto.base).toFixed(2);
@@ -2790,10 +2957,11 @@ function quoteMoneyParts(){
   const travel=feeEl&&feeEl.value!==''?Number(feeEl.value)||0:auto.travel;
   const custom=(window._quoteLines||[]).filter(l=>l&&String(l.label||'').trim()).map(l=>({label:String(l.label).trim(),amount:Number(l.amount)||0}));
   const customSum=custom.reduce((sum,line)=>sum+line.amount,0);
-  const subtotal=base+auto.overage+travel+(hotelOn?HOTEL_FEE:0)+customSum;
+  const subtotal=base+auto.overage+travel+hotelCharge.fee+customSum;
   const tax=taxExempt?0:Math.round(Math.round(subtotal*100)*TAX_RATE)/100;
   const total=Math.round((subtotal+tax)*100)/100;
-  return {base,extraH:auto.extraH,overage:auto.overage,mi:auto.mi,travel,hotel:hotelOn?HOTEL_FEE:0,subtotal,tax,total,custom,taxExempt,taxNote:quoteTaxNote()};
+  rememberQuoteHotel(hotelCharge, rule);
+  return {base,extraH:auto.extraH,overage:auto.overage,mi:auto.mi,travel,hotel:hotelCharge.fee,hotelNights:hotelCharge.nights,hotelLabel:hotelCharge.label,hotelReturn:hotelCharge.returnLabel,hotelManual:quoteHotelManual(),hotelReason:rule.reason,hotelRule:rule,driveMinutes:quoteDriveMinutes(),subtotal,tax,total,custom,taxExempt,taxNote:quoteTaxNote()};
 }
 function renderQuoteLines(){
   const el=document.getElementById('q_items');
@@ -2825,17 +2993,23 @@ function quoteSavePatch(f){
     travel:f.travel,hotel_fee:f.hotel_fee,subtotal:f.subtotal,tax:f.tax,total:f.total,quote_notes:f.quote_notes,
     line_items:f.line_items,event_date:f.event_date,event_time:f.event_time,
     book_token:f.book_token,book_expires_at:f.book_expires_at,
-    tax_exempt:!!f.tax_exempt,tax_exempt_note:f.tax_exempt?f.tax_exempt_note||null:null};
+    tax_exempt:!!f.tax_exempt,tax_exempt_note:f.tax_exempt?f.tax_exempt_note||null:null,
+    drive_minutes:f.drive_minutes,hotel_nights:f.hotel_nights,hotel_return_at:f.hotel_return_at,hotel_override:!!f.hotel_override};
 }
 async function updateQuoteRow(qid, patch){
-  const first=await SB.from('quote_requests').update(patch).eq('id',qid);
-  if(!first.error) return {error:null, droppedTax:false};
-  if(!/tax_exempt/i.test(first.error.message||'')) return {error:first.error, droppedTax:false};
-  const next={...patch};
-  delete next.tax_exempt;
-  delete next.tax_exempt_note;
-  const second=await SB.from('quote_requests').update(next).eq('id',qid);
-  return {error:second.error, droppedTax:!second.error};
+  let next={...patch};
+  const dropped=[];
+  const optional=['tax_exempt','tax_exempt_note','drive_minutes','hotel_nights','hotel_return_at','hotel_override'];
+  for(let i=0;i<8;i++){
+    const res=await SB.from('quote_requests').update(next).eq('id',qid);
+    if(!res.error) return {error:null, droppedTax:dropped.indexOf('tax_exempt')>=0, droppedHotel:dropped.some(name=>name.indexOf('hotel_')===0||name==='drive_minutes')};
+    const msg=res.error.message||'';
+    const named=(msg.match(/'([a-z0-9_]+)' column/i)||[])[1]||(msg.match(/column "([a-z0-9_]+)"/i)||[])[1]||'';
+    if(!named||optional.indexOf(named)<0||!(named in next)) return {error:res.error, droppedTax:false, droppedHotel:false};
+    delete next[named];
+    dropped.push(named);
+  }
+  return {error:{message:'Could not save the quote'}, droppedTax:false, droppedHotel:false};
 }
 async function copyBookLink(qid){
   if(!SB){ toast('Sign in before copying the link'); return; }
@@ -2843,6 +3017,7 @@ async function copyBookLink(qid){
   const saved=await updateQuoteRow(qid, quoteSavePatch(f));
   if(saved.error){toast(saved.error.message);return}
   if(saved.droppedTax&&f.tax_exempt) toast('Apply the tax exempt migration so the switch is saved.');
+  if(saved.droppedHotel) toast('Apply the overnight hotel migration so the return-time note is saved.');
   const url=f.book_url;
   try{ await navigator.clipboard.writeText(url); }
   catch(e){
@@ -2866,6 +3041,8 @@ function quoteFields(qid){
   const dateEl=document.getElementById('q_date');
   const timeEl=document.getElementById('q_time');
   return {car_id:carId,hours,miles:c.mi,base_rate:c.base,overage:c.overage,travel:c.travel,hotel_fee:c.hotel,
+    hotel_nights:c.hotelNights||0, hotel_return_at:c.hotelReturn||null, hotel_override:!!c.hotelManual,
+    drive_minutes:c.driveMinutes, hotel_label:c.hotel>0?c.hotelLabel:'',
     subtotal:c.subtotal,tax:c.tax,total:c.total,quote_notes:note,extra_hours:c.extraH,
     line_items:c.custom||[], event_date:(dateEl&&dateEl.value)||(q&&q.event_date)||null,
     event_time:(timeEl&&timeEl.value)||(q&&q.event_time)||null,
@@ -2878,6 +3055,7 @@ async function saveQuoteDraft(qid){
   const saved=await updateQuoteRow(qid, {...quoteSavePatch(f), status:'quoted'});
   if(saved.error){toast(saved.error.message);return}
   if(saved.droppedTax&&f.tax_exempt) toast('Apply the tax exempt migration so the switch is saved.');
+  if(saved.droppedHotel) toast('Apply the overnight hotel migration so the return-time note is saved.');
   toast('Draft saved');closeModal();await loadAll();
 }
 
@@ -2901,6 +3079,7 @@ async function sendQuote(qid){
   // save first
   const saved=await updateQuoteRow(qid, {...quoteSavePatch(f), status:'sent', sent_at:nowIso});
   if(saved.error){toast(saved.error.message);return}
+  if(saved.droppedHotel) toast('Apply the overnight hotel migration so the return-time note is saved.');
   // send email
   try{
     await postNotification({
@@ -2908,7 +3087,7 @@ async function sendQuote(qid){
       book_url:f.book_url,
       quote:{customer_name:q.customer_name, car_name:car?car.name:'', event_date:f.event_date||q.event_date,
         event_location:q.event_location, base_rate:f.base_rate, overage:f.overage, extra_hours:f.extra_hours,
-        travel:f.travel, miles:f.miles, hotel_fee:f.hotel_fee, subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes,
+        travel:f.travel, miles:f.miles, hotel_fee:f.hotel_fee, hotel_label:f.hotel_label||'', subtotal:f.subtotal, tax:f.tax, total:f.total, quote_notes:f.quote_notes,
         tax_exempt:!!f.tax_exempt, tax_exempt_note:f.tax_exempt_note||'',
         custom_items:f.line_items, expires:expiresStr}
     });
@@ -3904,6 +4083,18 @@ function dayBeforeEmailLine(b){
   const text=dayBeforeSentNote(b&&b.day_before_email_sent_at);
   return text?`<div class="meta">${esc(text)}</div>`:'';
 }
+function overnightHotelDetail(b){
+  if(!b) return '';
+  const notes=String(b.notes||'');
+  const line=notes.match(/^Overnight driver hotel:\s*(.+)$/im);
+  if(line) return line[1].trim();
+  if(Number(b.hotel_fee_usd)>0){
+    const miles=b.mileage_miles!=null?b.mileage_miles+' miles from Benton':'';
+    const back=b.hotel_return_at?'estimated return '+b.hotel_return_at:'';
+    return ['$'+Number(b.hotel_fee_usd).toFixed(2), miles, back].filter(Boolean).join('. ');
+  }
+  return '';
+}
 function bookingShowsTaxExempt(b){
   if(!b) return false;
   if(b.tax_exempt) return true;
@@ -3928,6 +4119,7 @@ function bookingDetail(bid){
     ${showOwnerCustomerAmount()?ownerCustomerAmountEditorHtml(b,'detail'):''}
     ${isOwnerView()?row('Payment', b.payment_status==='paid'?'Paid in full':b.payment_status==='deposit'?'Deposit':'Unpaid'):''}
     ${bookingShowsTaxExempt(b)?row('Tax', 'Tax exempt'+(b.tax_exempt_note?' — '+b.tax_exempt_note:'')):''}
+    ${isOwnerView()?row('Overnight driver hotel', overnightHotelDetail(b)):''}
     ${isOwnerView()?chargeSavedCardHtml(b):''}
     ${row('Customer', b.customer_name)}
     ${row('Event', b.event_type)}

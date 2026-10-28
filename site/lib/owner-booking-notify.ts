@@ -147,6 +147,7 @@ export async function emailCustomerBalancePay(input: {
   pickupLocation?: string;
   returnLocation?: string;
   taxExempt?: boolean;
+  notes?: string;
 }) {
   const to = String(input.to || "").trim();
   if (!to) return { ok: false as const, error: "This booking has no customer email." };
@@ -167,6 +168,7 @@ export async function emailCustomerBalancePay(input: {
     pickup_location: input.pickupLocation || "",
     return_location: input.returnLocation || "",
     tax_exempt: input.taxExempt === true,
+    notes: input.notes || "",
   });
 }
 

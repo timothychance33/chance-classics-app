@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { overnightDriverHotel } from "../lib/overnight-hotel.ts";
 import { withSecondCarNote } from "../data/packages.ts";
 import { FREE_MILE_RADIUS, freeMileageRadiusMeters, mountShopMap, SHOP_ADDRESS_LABEL, SHOP_POINT } from "../lib/shop-map.ts";
 import {
@@ -95,6 +96,21 @@ const money = quoteTotal(500, 4);
 assert(money.listing === 700 && money.subtotal === 700 && money.tax === 71.75 && money.total === 771.75 && money.deposit === 250 && money.balance === 521.75, "listing price includes tax");
 const withMileage = quoteTotal(500, 2, 180);
 assert(withMileage.subtotal === 680 && withMileage.tax === 69.7 && withMileage.total === 749.7 && withMileage.deposit === 250 && withMileage.balance === 499.7, "mileage is taxed with the rental");
+const lateReturn = overnightDriverHotel({ miles: 61, driveMinutes: 120, eventDate: "2026-06-06", startTime: "18:00", hours: 6 });
+const earlyReturn = overnightDriverHotel({ miles: 61, driveMinutes: 119, eventDate: "2026-06-06", startTime: "18:00", hours: 6 });
+const sixtyMiles = overnightDriverHotel({ miles: 60, driveMinutes: 120, eventDate: "2026-06-06", startTime: "18:00", hours: 6 });
+const fiftyNine = overnightDriverHotel({ miles: 59, driveMinutes: 120, eventDate: "2026-06-06", startTime: "18:00", hours: 6 });
+const midnight = overnightDriverHotel({ miles: 75, driveMinutes: 150, eventDate: "2026-06-06", startTime: "22:00", hours: 1.5 });
+const midnightEarly = overnightDriverHotel({ miles: 75, driveMinutes: 149, eventDate: "2026-06-06", startTime: "22:00", hours: 1.5 });
+assert(lateReturn.fee === 200 && lateReturn.returnLabel === "2:00 AM the next day", "61 miles back at 2:00 AM is one hotel night");
+assert(earlyReturn.fee === 0 && earlyReturn.returnLabel === "1:59 AM the next day", "a 1:59 AM return is before the cutoff");
+assert(sixtyMiles.fee === 0 && fiftyNine.fee === 0, "60 miles and 59 miles do not add a hotel");
+assert(midnight.fee === 200 && midnightEarly.fee === 0, "a drive that crosses midnight uses the 2:00 AM cutoff");
+const withHotel = quoteTotal(500, 2, 180, 200);
+assert(
+  withHotel.hotelFee === 200 && withHotel.subtotal === 880 && withHotel.tax === 90.2 && withHotel.total === 970.2 && withHotel.deposit === 250 && withHotel.balance === 720.2,
+  "overnight driver hotel is taxed with the rental and raises the balance",
+);
 
 assert(mileageCharge(25).miles === 25 && mileageCharge(25).fee === 0, "25 has no fee");
 assert(mileageCharge(30).miles === 30 && mileageCharge(30).fee === 0, "30 has no fee");
@@ -326,6 +342,23 @@ assert(totalDollarsFromCheckout({
   mileageFeeUsd: 0,
 }) === 500, "a tax-exempt listing note is not taxed again");
 assert(lines.some((line) => line.label.includes("60 mi") && line.amount === 180), "mileage fee is the pickup distance");
+const hotelLines = quoteCheckoutLines({
+  car_name: "Patsy",
+  base_rate: 500,
+  travel: 225,
+  miles: 75,
+  hotel_fee: 200,
+  hotel_nights: 1,
+  hotel_return_at: "2:15 AM the next day",
+  tax: 94.81,
+});
+assert(
+  hotelLines.some((line) => line.label.startsWith("Overnight driver hotel") && line.label.includes("75 mi from Benton") && line.label.includes("2:15 AM the next day") && line.amount === 200),
+  "quote checkout shows why the overnight driver hotel is there",
+);
+assert(totalDollarsFromCheckout({
+  notes: "Listing total: $500.00\nMileage: 75 miles from Benton to pickup, fee $225.00, billed with the balance.\nOvernight driver hotel: $200.00 (75 miles from Benton, driver back about 2:15 AM the next day).",
+}) === 1019.81, "a listing note adds the hotel before tax");
 assert(lines.some((line) => line.label === "Flowers" && line.amount === 40), "custom line item");
 assert(!lines.some((line) => /drop-off/i.test(line.label)), "drop-off is not a price line");
 

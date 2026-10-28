@@ -31,13 +31,17 @@ import {
   type BookingInput,
   type WeddingCelebrationInput,
 } from "@/lib/booking-rules";
+import { overnightDriverHotel } from "@/lib/overnight-hotel";
 
 type MileagePreview = {
   needsReview: boolean;
   miles: number | null;
   fee: number | null;
+  driveMinutes?: number | null;
   message: string;
 };
+
+const HOTEL_CONFIRM_KEY = "chance-classics-hotel-line";
 
 type Props = { car: string; carName: string; basePrice: number };
 
@@ -284,7 +288,17 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const input = useMemo(() => bookingInput(draft, car), [draft, car]);
   const wedding = useMemo(() => weddingInput(draft), [draft]);
   const errors = useMemo(() => collectErrors(input, slots, slotsReady, wedding), [input, slots, slotsReady, wedding]);
-  const money = quoteTotal(basePrice, draft.hours, mileage?.fee ?? 0);
+  const hotel = useMemo(
+    () => overnightDriverHotel({
+      miles: mileage?.miles,
+      driveMinutes: mileage?.driveMinutes,
+      eventDate: draft.date,
+      startTime: draft.start,
+      hours: draft.hours,
+    }),
+    [draft.date, draft.hours, draft.start, mileage?.driveMinutes, mileage?.miles],
+  );
+  const money = quoteTotal(basePrice, draft.hours, mileage?.fee ?? 0, hotel.fee);
   const returnToReview = furthest >= STEPS.length - 1 && step !== "review";
 
   function patch(partial: Partial<Draft>) {
@@ -418,6 +432,12 @@ export function BookingForm({ car, carName, basePrice }: Props) {
       });
       const data = await response.json();
       if (data.url) {
+        try {
+          if (hotel.fee > 0) sessionStorage.setItem(HOTEL_CONFIRM_KEY, `${hotel.lineLabel}: $${hotel.fee.toFixed(2)}. It is included in the total.`);
+          else sessionStorage.removeItem(HOTEL_CONFIRM_KEY);
+        } catch {
+          /* The checkout page still names the charge. */
+        }
         window.location.assign(data.url);
         return;
       }
@@ -724,6 +744,11 @@ export function BookingForm({ car, carName, basePrice }: Props) {
             <FieldError id="book-pickup-error" message={shown("pickup")} />
           </label>
           <p className="note">{MILEAGE_RULE_TEXT}</p>
+          {hotel.fee > 0 && (
+            <p className="mileage-status" data-hotel-line>
+              {hotel.lineLabel}: {usd(hotel.fee)}. The drive back gets the driver to the shop at {hotel.returnLabel}.
+            </p>
+          )}
           <p className="mileage-status" aria-live="polite">
             {draft.pickup.trim().length < 4
               ? "Mileage is calculated from the pickup address."
@@ -838,6 +863,9 @@ export function BookingForm({ car, carName, basePrice }: Props) {
             <div className="book-price" data-price-breakdown>
               <p>Listing {usd(money.listing)}.</p>
               <p>Mileage {mileage?.fee == null ? "to be confirmed" : usd(mileage.fee)}.</p>
+              {hotel.fee > 0 && (
+                <p data-hotel-line>{hotel.lineLabel}: {usd(hotel.fee)}.</p>
+              )}
               <p>Subtotal {usd(money.subtotal)}{mileage?.fee == null ? " before mileage" : ""}.</p>
               <p>Sales tax (10.25%) {usd(money.tax)}.</p>
               <p className="price">Total {usd(money.total)}{mileage?.fee == null ? " before mileage" : ""}.</p>
