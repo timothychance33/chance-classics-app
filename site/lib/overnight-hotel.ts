@@ -140,9 +140,9 @@ export function overnightDriverHotel(input: OvernightHotelInput): OvernightHotel
   const driveMinutes = driveMissing ? null : Math.round(Number(driveRaw));
   const startAbs = eventStartAbsolute(input || {});
   const endAbs = eventEndAbsolute(input || {}, startAbs);
-  const known = !milesMissing && !driveMissing && endAbs != null;
   const distanceQualifies = miles != null && miles > HOTEL_MILES_OVER;
-  const returnAbs = known ? endAbs + driveMinutes : null;
+  const returnAbs = !milesMissing && endAbs != null && driveMinutes != null ? endAbs + driveMinutes : null;
+  const known = returnAbs != null;
   const nights = known && distanceQualifies ? hotelNightsBetween(startAbs, returnAbs) : 0;
   const fee = nights * HOTEL_NIGHT_USD;
   const back = returnAbs != null && startAbs != null ? returnLabel(startAbs, returnAbs) : "";
