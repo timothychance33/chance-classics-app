@@ -13,6 +13,10 @@
 //      payment is already recorded. The hourly job sends it on the 10:00 run.
 //      A later run the same day retries only bookings that are still unstamped.
 //      day_before_email_sent_at stops a second send.
+//   6) Car check-in: owner email if a check-in was saved but not mailed, then
+//      driver nudges starting 1 hour after the booking end (every 3 hours, 4 max)
+//      and one owner alert if the check-in is still missing after 4 hours.
+//      End <= start is the next day, America/Chicago. Email only — no SMS sender.
 //
 // Weekly digest also accepts a Vercel cron POST { weekly_only: true }.
 // Idempotent per driver + week via rental.driver_weekly_digest_sends.
@@ -39,6 +43,14 @@ import {
   isPaidNewBooking,
   renderDayBeforeEmail,
 } from "../_shared/day-before-email.mjs";
+import {
+  CHECKIN_LOOKBACK_DAYS,
+  addDays as addCheckinDays,
+  checkinDriverNudgeMail,
+  checkinNoticePlan,
+  checkinOwnerMail,
+  checkinOwnerMissingMail,
+} from "../_shared/car-checkin.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -318,6 +330,193 @@ function bookingCardHtml(b: Booking, carName: string | null, pay: number | null)
     ${b.needs_trailer ? `<p style="margin:8px 0 0;font-size:13px;font-weight:700">🚛 Car must be trailered</p>` : ""}
     ${pay != null ? `<p style="margin:8px 0 0;font-size:16px;font-weight:700;color:#3c6b4f">You earn $${pay}</p>` : ""}
   </div>`;
+}
+
+async function runCarCheckinMail(
+  sb: ReturnType<typeof createClient>,
+  staff: Staff[],
+  now: Date,
+  dryRun: boolean,
+  summary: Record<string, unknown>,
+) {
+  const report = {
+    driver_nudges: 0,
+    owner_alerts: 0,
+    owner_checkin_emails: 0,
+    skipped: 0,
+    errors: [] as string[],
+  };
+  summary.checkin = report;
+  if (!RESEND_API_KEY) {
+    report.errors.push("RESEND_API_KEY is not set");
+    return;
+  }
+
+  const quietBefore = new Date(now.getTime() - 3 * 60 * 1000).toISOString();
+  const pending = await sb.from("car_checkins").select("*").is("owner_notified_at", null).lt("created_at", quietBefore);
+  if (pending.error) {
+    const missing = pending.error.code === "42P01"
+      || pending.error.code === "PGRST205"
+      || /car_checkin/i.test(pending.error.message || "");
+    report.errors.push(missing
+      ? "Apply the car check-in migration before these emails can send."
+      : `check-in query failed: ${pending.error.message}`);
+    return;
+  }
+
+  const staffById = new Map(staff.map((person) => [person.id, person]));
+  const carIds = new Set<string>();
+  for (const row of pending.data ?? []) if (row.car_id) carIds.add(row.car_id);
+  const names = new Map<string, string>();
+  const loadCars = async (ids: string[]) => {
+    const fresh = ids.filter((id) => !names.has(id));
+    if (!fresh.length) return;
+    const loaded = await sb.from("cars").select("id,name").in("id", fresh);
+    if (loaded.error) report.errors.push(`check-in cars: ${loaded.error.message}`);
+    for (const car of loaded.data ?? []) names.set(car.id, car.name || "");
+  };
+  await loadCars([...carIds]);
+
+  for (const checkin of pending.data ?? []) {
+    if (dryRun) {
+      report.owner_checkin_emails += 1;
+      continue;
+    }
+    const claimed = await sb.from("car_checkins")
+      .update({ owner_notified_at: now.toISOString() })
+      .eq("id", checkin.id)
+      .is("owner_notified_at", null)
+      .select("id");
+    if (claimed.error || !claimed.data?.length) {
+      report.skipped += 1;
+      continue;
+    }
+    try {
+      const { data: booking, error: bookingErr } = await sb.from("bookings")
+        .select("id,customer_name,event_type,event_date,start_time,end_time,driver_id,car_id,status")
+        .eq("id", checkin.booking_id)
+        .maybeSingle();
+      if (bookingErr) throw new Error(bookingErr.message);
+      const driver = checkin.driver_id ? staffById.get(checkin.driver_id) : undefined;
+      const { data: photos, error: photoErr } = await sb.from("car_checkin_photos")
+        .select("storage_path")
+        .eq("checkin_id", checkin.id);
+      if (photoErr) throw new Error(photoErr.message);
+      const paths = (photos ?? []).map((row) => row.storage_path).filter(Boolean) as string[];
+      let urls: string[] = [];
+      if (paths.length) {
+        const signed = await sb.storage.from("car-checkins").createSignedUrls(paths, 60 * 60 * 24 * 7);
+        urls = (signed.data ?? []).map((row) => row.signedUrl).filter(Boolean) as string[];
+      }
+      const mail = checkinOwnerMail({
+        appUrl: APP_URL,
+        carName: checkin.car_id ? names.get(checkin.car_id) : "",
+        driverName: driver ? staffName(driver) : "",
+        booking: booking || { customer_name: "" },
+        checkin,
+        photoUrls: urls,
+        photoCount: paths.length,
+      });
+      await sendEmail(OWNER_EMAIL, mail.subject, mail.html, mail.text);
+      report.owner_checkin_emails += 1;
+    } catch (err) {
+      await sb.from("car_checkins").update({ owner_notified_at: null }).eq("id", checkin.id);
+      report.errors.push(`${checkin.booking_id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const today = chicagoParts(now).date;
+  const from = addCheckinDays(today, -CHECKIN_LOOKBACK_DAYS);
+  const due = await sb.from("bookings")
+    .select("id,driver_id,car_id,event_date,start_time,end_time,status,customer_name")
+    .not("driver_id", "is", null)
+    .neq("status", "cancelled")
+    .gte("event_date", from)
+    .lte("event_date", today);
+  if (due.error) {
+    report.errors.push(`check-in nudge query failed: ${due.error.message}`);
+    return;
+  }
+  const ids = (due.data ?? []).map((row) => row.id);
+  const checked = new Set<string>();
+  if (ids.length) {
+    const have = await sb.from("car_checkins").select("booking_id").in("booking_id", ids);
+    if (have.error) {
+      report.errors.push(`check-in nudge lookup failed: ${have.error.message}`);
+      return;
+    }
+    for (const row of have.data ?? []) checked.add(row.booking_id);
+  }
+  await loadCars((due.data ?? []).map((row) => row.car_id).filter(Boolean) as string[]);
+
+  for (const booking of due.data ?? []) {
+    const plan = checkinNoticePlan(booking, checked.has(booking.id), now.getTime());
+    if (!plan.driverSlot && !plan.owner) continue;
+    const driver = booking.driver_id ? staffById.get(booking.driver_id) : undefined;
+    const carName = booking.car_id ? names.get(booking.car_id) || "" : "";
+    if (plan.driverSlot) {
+      if (!driver?.email) {
+        report.skipped += 1;
+      } else if (dryRun) {
+        report.driver_nudges += 1;
+      } else {
+        const claim = await sb.from("car_checkin_nudges")
+          .insert({ booking_id: booking.id, kind: "driver", slot: plan.driverSlot })
+          .select("booking_id");
+        if (claim.error?.code === "23505") {
+          report.skipped += 1;
+        } else if (claim.error) {
+          report.errors.push(`${booking.id}: driver nudge ${claim.error.message}`);
+        } else {
+          try {
+            const mail = checkinDriverNudgeMail({
+              appUrl: APP_URL,
+              carName,
+              driverName: driver ? staffName(driver) : "",
+              booking,
+              bookingId: booking.id,
+              slot: plan.driverSlot,
+            });
+            await sendEmail(driver.email, mail.subject, mail.html, mail.text);
+            report.driver_nudges += 1;
+          } catch (err) {
+            await sb.from("car_checkin_nudges").delete().eq("booking_id", booking.id).eq("kind", "driver").eq("slot", plan.driverSlot);
+            report.errors.push(`${booking.id}: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      }
+    }
+    if (!plan.owner) continue;
+    if (dryRun) {
+      report.owner_alerts += 1;
+      continue;
+    }
+    const claim = await sb.from("car_checkin_nudges")
+      .insert({ booking_id: booking.id, kind: "owner", slot: 1 })
+      .select("booking_id");
+    if (claim.error?.code === "23505") {
+      report.skipped += 1;
+      continue;
+    }
+    if (claim.error) {
+      report.errors.push(`${booking.id}: owner alert ${claim.error.message}`);
+      continue;
+    }
+    try {
+      const mail = checkinOwnerMissingMail({
+        appUrl: APP_URL,
+        carName,
+        driverName: driver ? staffName(driver) : "",
+        booking,
+        bookingId: booking.id,
+      });
+      await sendEmail(OWNER_EMAIL, mail.subject, mail.html, mail.text);
+      report.owner_alerts += 1;
+    } catch (err) {
+      await sb.from("car_checkin_nudges").delete().eq("booking_id", booking.id).eq("kind", "owner").eq("slot", 1);
+      report.errors.push(`${booking.id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 }
 
 Deno.serve(async (req) => {
@@ -874,6 +1073,10 @@ Deno.serve(async (req) => {
         }
       }
     }
+  }
+
+  if (!weeklyOnly) {
+    await runCarCheckinMail(sb, (staff ?? []) as Staff[], now, dryRun, summary);
   }
 
   return new Response(JSON.stringify({ ok: true, ...summary }), {

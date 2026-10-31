@@ -235,6 +235,11 @@ nav.tabs button.active{background:var(--ink);color:var(--paper)}
 .paypill{display:inline-block;margin-top:8px;font:800 13px/1 "Inter",sans-serif;
   background:var(--green);color:#fff;padding:7px 12px;border-radius:8px}
 .paypill.muted{background:var(--paper-2);color:#5a6b7d}
+.fixbadge{display:inline-block;margin-left:8px;font:800 10px/1 "Inter",sans-serif;letter-spacing:.04em;text-transform:uppercase;background:var(--oxblood);color:#fff;padding:4px 8px;border-radius:20px;vertical-align:middle}
+.fixwarn{margin-top:8px;background:#fcf0ef;border:1px solid var(--oxblood);color:var(--oxblood);border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700}
+.payblock{margin-top:8px;background:#fff8ec;border:1px solid var(--amber);color:#6b5010;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700}
+.checkinbox{margin:14px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.checkinbox label{display:block;margin-top:10px}
 .act.tinybtn{font-size:11px;padding:6px 11px}
 .lactions{display:flex;gap:6px;flex:none}
 @media(max-width:600px){
@@ -515,7 +520,7 @@ let SB=null;
 let ROLE='driver';        // set from the logged-in user's profile
 let MYROLE='driver';      // the user's real role (ROLE may change via admin preview)
 let ME=null;              // {id, email, full_name, role}
-let DATA={cars:[],staff:[],bookings:[],prep:[],templates:[],quotes:[]};
+let DATA={cars:[],staff:[],bookings:[],prep:[],templates:[],quotes:[],checkins:[],issues:[],checkinPhotos:[],checkinReady:false};
 let releasingOffers=false;
 const DRIVER_BUSY_MESSAGE='You already have a booking at that time';
 
@@ -674,16 +679,24 @@ function setupRoleUI(){
 
 async function loadAll(){
   try{
-    const [c,s,b,p,t,q]=await Promise.all([
+    const [c,s,b,p,t,q,ci,iss,ph]=await Promise.all([
       SB.from('cars').select('*').order('name'),
       SB.from('staff').select('*').order('name'),
       SB.from('bookings').select('*').order('event_date'),
       SB.from('booking_prep_tasks').select('*').order('sort_order'),
       SB.from('car_prep_templates').select('*').order('sort_order'),
       SB.from('quote_requests').select('*').order('created_at',{ascending:false}),
+      SB.from('car_checkins').select('*').order('created_at',{ascending:false}),
+      SB.from('car_issues').select('*').order('opened_at',{ascending:false}),
+      SB.from('car_checkin_photos').select('*').order('created_at'),
     ]);
     for(const r of [c,s,b,p,t]) if(r.error) throw r.error;
-    DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data,quotes:(q&&!q.error)?q.data:[]};
+    const checkinReady=!ci.error && !iss.error;
+    DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data,quotes:(q&&!q.error)?q.data:[],
+      checkins:checkinReady?(ci.data||[]):[],
+      issues:checkinReady?(iss.data||[]):[],
+      checkinPhotos:(ph&&!ph.error&&ph.data)?ph.data:[],
+      checkinReady};
     if(isAdmin()) await autoMatchQuotes();
     let movedOffers=0;
     if(!releasingOffers){
@@ -697,6 +710,7 @@ async function loadAll(){
       toast(DRIVER_BUSY_MESSAGE);
     }
     renderAll();
+    openCheckinFromHash();
   }catch(e){const msg=e?.message||e?.error_description||e?.hint||JSON.stringify(e);toast('Load error: '+msg);console.error('Load error detail:',e)}
 }
 
@@ -1458,13 +1472,135 @@ function ownerPayPillHtml(b, extraStyle){
   }
   return `<div class="paypill muted"${st}>Payout pending — set pay scale</div>`;
 }
-async function persistDriverPaid(bid, paid){
-  const when=paid?new Date().toISOString():null;
+// Car's back timing matches supabase/functions/_shared/car-checkin.mjs.
+// End <= start is the next day in America/Chicago. Fuel is collected. Mileage is not.
+const CHECKIN_UI_MS=14*86400000;
+function checkinAddDays(isoDate, days){
+  const [y,m,d]=String(isoDate).slice(0,10).split('-').map(Number);
+  const dt=new Date(Date.UTC(y, m-1, d));
+  dt.setUTCDate(dt.getUTCDate()+days);
+  return dt.toISOString().slice(0,10);
+}
+function checkinClockMinutes(value){
+  const match=String(value??'').trim().match(/^(\d{1,2}):(\d{2})/);
+  if(!match) return null;
+  const hours=Number(match[1]), minutes=Number(match[2]);
+  if(hours>23 || minutes>59) return null;
+  return hours*60+minutes;
+}
+function checkinOffsetMs(utcMs){
+  const fmt=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+  const parts=Object.fromEntries(fmt.formatToParts(new Date(utcMs)).map(p=>[p.type,p.value]));
+  let hour=Number(parts.hour);
+  if(hour===24) hour=0;
+  const asUtc=Date.UTC(Number(parts.year), Number(parts.month)-1, Number(parts.day), hour, Number(parts.minute), Number(parts.second));
+  return asUtc-utcMs;
+}
+function chicagoWallTimeMs(dateStr, timeStr){
+  const date=String(dateStr||'').slice(0,10);
+  const mins=checkinClockMinutes(timeStr);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || mins==null) return null;
+  const [y,mo,d]=date.split('-').map(Number);
+  const hh=Math.floor(mins/60), mm=mins%60;
+  const utcGuess=Date.UTC(y, mo-1, d, hh, mm, 0);
+  const offset=checkinOffsetMs(utcGuess);
+  let instant=utcGuess-offset;
+  const offset2=checkinOffsetMs(instant);
+  if(offset2!==offset) instant=utcGuess-offset2;
+  return instant;
+}
+function bookingEndMs(eventDate, startTime, endTime){
+  const date=String(eventDate||'').slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const endMin=checkinClockMinutes(endTime);
+  const startMin=checkinClockMinutes(startTime);
+  if(endMin==null) return chicagoWallTimeMs(date, '23:59');
+  const nextDay=startMin!=null && endMin<=startMin;
+  const hh=String(Math.floor(endMin/60)).padStart(2,'0');
+  const mm=String(endMin%60).padStart(2,'0');
+  return chicagoWallTimeMs(nextDay?checkinAddDays(date,1):date, hh+':'+mm);
+}
+function bookingHasEnded(b, now){
+  const end=bookingEndMs(b&&b.event_date, b&&b.start_time, b&&b.end_time);
+  if(end==null) return false;
+  return (now||Date.now())>=end;
+}
+function checkinFor(bid){
+  return (DATA.checkins||[]).find(c=>c.booking_id===bid)||null;
+}
+function openIssuesForCar(carId){
+  return (DATA.issues||[]).filter(i=>i.car_id===carId && i.status==='open');
+}
+function missingCheckin(b){
+  if(!DATA.checkinReady || !b || b.status==='cancelled' || !b.driver_id) return false;
+  if(checkinFor(b.id)) return false;
+  if(!bookingHasEnded(b)) return false;
+  const end=bookingEndMs(b.event_date, b.start_time, b.end_time);
+  return end!=null && Date.now()-end<=CHECKIN_UI_MS;
+}
+function needsDriverCheckin(b){
+  const mine=myStaffId();
+  return !!(mine && b && b.driver_id===mine && missingCheckin(b));
+}
+function canSubmitCheckin(b){
+  if(!DATA.checkinReady || isOwnerView() || !b) return false;
+  const mine=myStaffId();
+  if(!mine || b.driver_id!==mine || b.status==='cancelled' || !b.car_id) return false;
+  if(checkinFor(b.id)) return false;
+  return bookingHasEnded(b);
+}
+function payBlockedReason(b){
+  if(!DATA.checkinReady || !b || b.driver_paid_at || checkinFor(b.id)) return '';
+  if(!bookingHasEnded(b)) return 'Driver pay waits for the car check-in, which opens after the booking ends.';
+  return 'Car check-in is required before this driver can be marked paid.';
+}
+function fuelLabel(level){
+  return ({empty:'Empty','1/4':'1/4','1/2':'1/2','3/4':'3/4',full:'Full'})[level]||(level||'—');
+}
+function fmtChicagoStamp(iso){
+  if(!iso) return '';
+  const dt=new Date(iso);
+  if(Number.isNaN(dt.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(dt);
+}
+function carFixWarningHtml(b){
+  if(!DATA.checkinReady || !b || !b.car_id || bookingHasEnded(b)) return '';
+  const open=openIssuesForCar(b.car_id);
+  if(!open.length) return '';
+  const first=esc(open[0].notes||'Open issue');
+  const more=open.length>1?` · ${open.length} open issues`:'';
+  return `<div class="fixwarn">This car needs a fix before the next booking — ${first}${more}</div>`;
+}
+function openCheckinFromHash(){
+  const m=String(location.hash||'').match(/^#checkin=([0-9a-f-]{36})$/i);
+  if(!m) return;
+  if((DATA.bookings||[]).some(b=>b.id===m[1])) bookingDetail(m[1]);
+}
+async function persistDriverPaid(bid, paid, overrideReason){
   const local=DATA.bookings.find(x=>x.id===bid);
-  if(local) local.driver_paid_at=when;
+  if(paid){
+    const why=payBlockedReason(local);
+    if(why && !overrideReason){ toast(why); return false; }
+  }
+  const when=paid?new Date().toISOString():null;
+  const patch={driver_paid_at:when};
+  if(DATA.checkinReady){
+    if(!paid) patch.driver_paid_override_reason=null;
+    else if(overrideReason) patch.driver_paid_override_reason=String(overrideReason).trim();
+  }
+  const prevPaid=local?local.driver_paid_at:null;
+  const prevReason=local?local.driver_paid_override_reason:null;
+  if(local){
+    local.driver_paid_at=when;
+    if(Object.prototype.hasOwnProperty.call(patch,'driver_paid_override_reason')) local.driver_paid_override_reason=patch.driver_paid_override_reason;
+  }
   if(typeof SB!=='undefined' && SB){
-    const {error}=await SB.from('bookings').update({driver_paid_at:when}).eq('id',bid);
-    if(error){toast(error.message);return false}
+    const {error}=await SB.from('bookings').update(patch).eq('id',bid);
+    if(error){
+      if(local){ local.driver_paid_at=prevPaid; local.driver_paid_override_reason=prevReason; }
+      toast(error.message);
+      return false;
+    }
   }
   return true;
 }
@@ -1497,7 +1633,15 @@ function followupFlagsHtml(b){
   return `<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6b6052;margin-bottom:6px">Follow-up</div>${box('reviewed_at','Reviewed')}${box('photos_received_at','Photos received')}</div>`;
 }
 async function markDriverPaid(bid){
-  if(!await persistDriverPaid(bid,true)) return;
+  if(!await persistDriverPaid(bid,true)){ renderAll(); return; }
+  toast('Marked as paid ✓');
+  if(typeof SB!=='undefined' && SB) await loadAll();
+  else renderAll();
+}
+async function overrideDriverPaid(bid){
+  const reason=prompt('Why mark this driver paid without a car check-in?');
+  if(!reason || !String(reason).trim()) return;
+  if(!await persistDriverPaid(bid,true,reason)){ renderAll(); return; }
   toast('Marked as paid ✓');
   if(typeof SB!=='undefined' && SB) await loadAll();
   else renderAll();
@@ -3138,6 +3282,7 @@ function bookingRowHtml(b){
     let btns=[];
     if(b.driver_id===mineId){
       crewtag='<span class="minetag">Mine</span>';
+      if(needsDriverCheckin(b)) btns.push(`<button class="act tinybtn" onclick="bookingDetail('${b.id}')">Car's back</button>`);
       btns.push(`<button class="ghost tinybtn" onclick="openPrep('${b.id}')">Prep</button>`);
       btns.push(b.release_requested
         ? `<span class="meta" style="font-size:11px">Release pending</span>`
@@ -3179,6 +3324,8 @@ function bookingRowHtml(b){
       ${dayOfContactLine(b)}
       ${dayBeforeEmailLine(b)}
       ${payline}
+      ${needsDriverCheckin(b)?'<div class="fixwarn">Car\'s back — check the car in.</div>':''}
+      ${carFixWarningHtml(b)}
     </div>
     <div class="lactions">${actions}</div>
   </div>`;
@@ -3226,6 +3373,7 @@ function renderSchedule(){
           <span class="dttime">${dc.m} ${dc.d}, ${dc.y}${b.start_time?' · '+fmtTime(b.start_time):''}</span>
           <span class="dtname">${esc(b.customer_name||'Booking')}</span>
           <span class="meta">${car?esc(car.name):'no car'} · ${drv?esc(drv.name):'no driver'}${(()=>{const dp=driverPayFor(b);return dp?` · Pay driver $${dp.amount}`:'';})()}</span>
+          ${carFixWarningHtml(b)}
         </div>`;
       }
       h+=`</div>`;
@@ -3243,7 +3391,23 @@ function renderSchedule(){
           <span class="dttime">${dc.m} ${dc.d}, ${dc.y}</span>
           <span class="dtname">${esc(dp.driver.name)} — $${dp.amount}</span>
           <span class="meta">${esc(b.customer_name||'')}</span>
-          <button class="act tinybtn" onclick="event.stopPropagation();markDriverPaid('${b.id}')">Mark paid</button>
+          ${payBlockedReason(b)
+            ? `<span class="meta">${esc(payBlockedReason(b))}</span><button class="ghost tinybtn" onclick="event.stopPropagation();overrideDriverPaid('${b.id}')">Override</button>`
+            : `<button class="act tinybtn" onclick="event.stopPropagation();markDriverPaid('${b.id}')">Mark paid</button>`}
+        </div>`;
+      }
+      h+=`</div>`;
+    }
+    const missingCheckins=all.filter(missingCheckin).sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
+    if(missingCheckins.length){
+      h+=`<div class="dashrelease"><div class="dashhd">Car's back — no check-in <span class="schcount">${missingCheckins.length}</span></div>
+        <div class="meta" style="margin:-2px 0 10px">Driver pay stays locked until the driver checks the car in.</div>`;
+      for(const b of missingCheckins){
+        const drv=staffById(b.driver_id), dc=fmtDate(b.event_date);
+        h+=`<div class="dtrow" onclick="bookingDetail('${b.id}')">
+          <span class="dttime">${dc.m} ${dc.d}</span>
+          <span class="dtname">${esc(b.customer_name||'Booking')}</span>
+          <span class="meta">${drv?esc(drv.name):'no driver'}</span>
         </div>`;
       }
       h+=`</div>`;
@@ -3284,18 +3448,23 @@ function renderSchedule(){
 
   // ----- CREW: filtered flat list -----
   const todayIso=chicagoToday().iso;
-  let list=[...DATA.bookings].filter(b=>b.status!=='cancelled' && (!b.event_date || b.event_date>=todayIso));
+  let list=[...DATA.bookings].filter(b=>b.status!=='cancelled' && ((!b.event_date || b.event_date>=todayIso) || needsDriverCheckin(b)));
   const mine=myStaffId();
   const me=myStaff();
   const iAmMechanic = me && hasRole(me,'mechanic');
   list=list.filter(b=>{
+    if(needsDriverCheckin(b)) return true;
     if(mine && b.driver_id===mine) return true;
     if(b.driver_id) return iAmMechanic;
     if(b.open_to_all) return !(mine && driverBusyWith(mine, b, DATA.bookings));
     if(b.offer_rank!=null) return isMyTurn(b)||isPendingAbove(b);
     return iAmMechanic && b.car_id;
   });
-  list.sort((a,b)=>(a.event_date||'').localeCompare(b.event_date||''));
+  list.sort((a,b)=>{
+    const ac=needsDriverCheckin(a)?0:1, bc=needsDriverCheckin(b)?0:1;
+    if(ac!==bc) return ac-bc;
+    return (a.event_date||'').localeCompare(b.event_date||'')||(a.start_time||'').localeCompare(b.start_time||'');
+  });
 
   let h=`<div class="sectionhead"><div><div class="kicker">Your runs & open jobs</div><h2 class="display">Schedule</h2></div><span class="line"></span></div>`;
   if(!list.length){h+=`<div class="empty"><div class="big">No jobs right now</div>Nothing assigned or offered to you yet.</div>`;el.innerHTML=h;return}
@@ -3370,6 +3539,7 @@ function calDay(day){
         ${dayOfContactLine(b)}
         ${dayBeforeEmailLine(b)}
         ${ownerCustomerAmountTagHtml(b)}
+        ${carFixWarningHtml(b)}
         ${isOwnerView()?ownerPayPillHtml(b):''}
       </div></div>`;
   }
@@ -3446,7 +3616,7 @@ function renderCars(){
     h+=`<div class="card">
       <div onclick="carDetail('${c.id}')" style="cursor:pointer">
       ${c.photo_url?`<div style="height:150px;background:#000 url('${esc(c.photo_url)}') center/cover"></div>`:''}
-      <div class="hd"><div class="ttl">${esc(c.name)}</div><span class="pill s-${c.status}" style="margin-left:auto">${c.status}</span></div>
+      <div class="hd"><div class="ttl">${esc(c.name)}${openIssuesForCar(c.id).length?'<span class="fixbadge">Needs fix</span>':''}</div><span class="pill s-${c.status}" style="margin-left:auto">${c.status}</span></div>
       <div class="bd">
         <div class="meta">${[c.year,c.make,c.model].filter(Boolean).join(' ')||'—'}${c.color?' · '+esc(c.color):''}</div>
         <div class="meta" style="margin-top:8px">${cb.length} booking${cb.length===1?'':'s'} · ${upcoming} upcoming</div>
@@ -3471,7 +3641,8 @@ function carDetail(cid){
     return `<div class="lrow" style="margin-bottom:8px" onclick="bookingDetail('${b.id}')">
       <div class="datechip"><div class="d">${dc.d}</div><div class="m">${dc.m}</div><div class="y">${dc.y}</div></div>
       <div class="lmain"><div class="ltop"><span class="ttl">${esc(b.customer_name||'Unnamed')}</span>${b.start_time?`<span class="meta">${fmtTime(b.start_time)}</span>`:''}${showOwnerCustomerAmount()?ownerCustomerAmountTagHtml(b):''}</div>
-      <div class="meta">👤 ${drv?esc(drv.name):'<em>no driver</em>'}${b.event_type?' · '+esc(b.event_type):''}</div></div></div>`;
+      <div class="meta">👤 ${drv?esc(drv.name):'<em>no driver</em>'}${b.event_type?' · '+esc(b.event_type):''}</div>
+      ${carFixWarningHtml(b)}</div></div>`;
   };
   const pastShown=past.slice(0,15);
   openModal(c.name, `
@@ -3480,6 +3651,7 @@ function carDetail(cid){
       <div><div style="font:800 22px/1 'Playfair Display',serif">${upcoming.length}</div><div class="meta">upcoming</div></div>
       <div><div style="font:800 22px/1 'Playfair Display',serif">${past.length}</div><div class="meta">past</div></div>
     </div>
+    ${carIssueHistoryHtml(c.id)}
     <div class="schsechd" style="font-size:15px">Upcoming</div>
     ${upcoming.length?upcoming.map(line).join(''):'<div class="meta" style="padding:6px 0 14px">No upcoming bookings.</div>'}
     <div class="schsechd" style="font-size:15px;margin-top:14px">Past${past.length>15?` <span class="meta" style="font-weight:400">(showing 15 of ${past.length})</span>`:''}</div>
@@ -3551,16 +3723,20 @@ function driverJobLineHtml(x, {checkable}={}){
   const when=`${dc.m} ${dc.d}${dc.y?', '+dc.y:''}`;
   const title=`${esc(b.customer_name||'Booking')}${car?' · '+esc(car.name):''}`;
   if(checkable){
+    const block=payBlockedReason(b);
     return `<label class="jobcheck${paid?' paid':''}">
-      <input type="checkbox" ${paid?'checked':''} onchange="toggleDriverPaid('${b.id}',this.checked)">
+      <input type="checkbox" ${paid?'checked':''} ${block?'disabled':''} onchange="toggleDriverPaid('${b.id}',this.checked)">
       <span class="jmain"><span class="jname">${when} · ${title}</span>
-        <span class="meta" style="display:block;margin-top:2px">${paid?'Paid':'Unpaid'}${b.pay_tier?` · T${b.pay_tier}`:''}</span></span>
+        <span class="meta" style="display:block;margin-top:2px">${paid?'Paid':'Unpaid'}${b.pay_tier?` · T${b.pay_tier}`:''}${b.driver_paid_override_reason?' · override':''}</span>
+        ${block?`<span class="payblock">${esc(block)}</span><button type="button" class="ghost tinybtn" onclick="event.preventDefault();event.stopPropagation();overrideDriverPaid('${b.id}')">Override</button>`:''}
+      </span>
       <span class="jamt">$${x.amt}</span>
     </label>`;
   }
   return `<div class="wfrow" onclick="bookingDetail('${b.id}')" style="cursor:pointer">
     <span>${when} · ${title}</span>
     <span class="jamt">$${x.amt}</span>
+    ${carFixWarningHtml(b)}
   </div>`;
 }
 function driverCardJobsHtml(s, admin){
@@ -3782,10 +3958,13 @@ function driverPayStatusHtml(b){
   return `<div class="wfbox"><div class="wfhd">${paid?'Driver paid':'Pay driver'}</div>
     <div class="wfrow${paid?' wf-claimed':''}"><span>${esc(dp.driver.name)}</span><span style="font:800 18px/1 'Playfair Display',serif;color:var(--green)">$${dp.amount}</span></div>
     <div class="meta" style="margin-top:4px">Tier ${b.pay_tier} × $${dp.driver.pay_rate??0}/tier${paid?' · Paid '+paidDateStr:''}</div>
+    ${b.driver_paid_override_reason?`<div class="meta" style="margin-top:6px">Paid without a check-in: ${esc(b.driver_paid_override_reason)}</div>`:''}
     <div style="margin-top:10px">
       ${paid
         ?`<button class="ghost tinybtn" onclick="unmarkDriverPaid('${b.id}')">Undo — mark unpaid</button>`
-        :`<button class="act tinybtn" onclick="markDriverPaid('${b.id}');closeModal()">💵 Mark paid</button>`}
+        : (payBlockedReason(b)
+          ? `<div class="payblock">${esc(payBlockedReason(b))}</div><button class="ghost tinybtn" style="margin-top:8px" onclick="overrideDriverPaid('${b.id}')">Override</button>`
+          : `<button class="act tinybtn" onclick="markDriverPaid('${b.id}');closeModal()">💵 Mark paid</button>`)}
     </div></div>`;
 }
 function waterfallStatusHtml(b){
@@ -4100,6 +4279,179 @@ function bookingShowsTaxExempt(b){
   if(b.tax_exempt) return true;
   return /(?:^|\n)\s*Tax exempt\b/.test(String(b.notes||''));
 }
+function carIssueHistoryHtml(carId){
+  const rows=(DATA.issues||[]).filter(i=>i.car_id===carId).sort((a,b)=>String(b.opened_at||'').localeCompare(String(a.opened_at||'')));
+  if(!rows.length) return '';
+  const line=rows.map(i=>{
+    const when=fmtChicagoStamp(i.opened_at)||'';
+    const booking=DATA.bookings.find(b=>b.id===i.booking_id);
+    const who=booking?esc(booking.customer_name||'Booking'):'Earlier check-in';
+    let state='Noted — OK to use';
+    if(i.status==='open') state='Open — needs a fix';
+    else if(i.status==='fixed') state='Fixed'+(i.fixed_at?' '+fmtChicagoStamp(i.fixed_at):'')+(i.fix_note?' — '+i.fix_note:'');
+    const btn=i.status==='open' && isOwnerView()
+      ? `<button class="ghost tinybtn" onclick="event.stopPropagation();markIssueFixed('${i.id}','${carId}')">Mark fixed</button>`
+      : '';
+    return `<div class="wfrow" style="align-items:flex-start"><span><b>${esc(state)}</b><br><span class="meta">${who}${when?' · '+esc(when):''}</span>${i.notes?`<br>${esc(i.notes)}`:''}</span>${btn}</div>`;
+  }).join('');
+  return `<div class="schsechd" style="font-size:15px">Issue history</div>${line}`;
+}
+async function markIssueFixed(id, carId){
+  if(!isOwnerView()) return;
+  const note=prompt('What was fixed? Leave blank if you only want to close it.');
+  if(note===null) return;
+  const trimmed=String(note).trim();
+  if(typeof SB==='undefined' || !SB){
+    const row=(DATA.issues||[]).find(i=>i.id===id);
+    if(row){ row.status='fixed'; row.fix_note=trimmed||null; row.fixed_at=new Date().toISOString(); }
+    toast('Marked fixed');
+    renderAll();
+    carDetail(carId);
+    return;
+  }
+  const {error}=await SB.from('car_issues').update({status:'fixed', fix_note:trimmed||null}).eq('id',id).eq('status','open');
+  if(error){ toast(error.message); return; }
+  toast('Marked fixed');
+  await loadAll();
+  carDetail(carId);
+}
+function checkinIssuesChanged(){
+  const yes=document.querySelector('input[name=ci_issues]:checked');
+  const box=document.getElementById('ci_issue_box');
+  if(box) box.style.display=yes&&yes.value==='yes'?'block':'none';
+}
+function resizeCheckinPhoto(file){
+  return new Promise((resolve, reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Could not read that photo'));
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        const MAX=1600;
+        let w=img.width, h=img.height;
+        if(w>h && w>MAX){ h=Math.round(h*MAX/w); w=MAX; }
+        else if(h>=w && h>MAX){ w=Math.round(w*MAX/h); h=MAX; }
+        const canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        canvas.toBlob(blob=>{
+          if(!blob) reject(new Error('Could not prepare that photo'));
+          else resolve(blob);
+        }, 'image/jpeg', 0.8);
+      };
+      img.onerror=()=>reject(new Error('Use a JPEG or PNG photo'));
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function checkinPanelHtml(b){
+  const saved=checkinFor(b.id);
+  if(saved){
+    const sev=saved.severity==='needs_fix'?'Needs fix before next booking':'OK to use';
+    return `<div class="checkinbox"><div class="wfhd">Car's back</div>
+      <div class="meta">Parked ${esc(fmtChicagoStamp(saved.parked_at))}</div>
+      <div style="margin-top:8px">Fuel: <b>${esc(fuelLabel(saved.fuel_level))}</b></div>
+      <div>Issues: <b>${saved.has_issues?'Yes':'No'}</b> · ${esc(sev)}</div>
+      ${saved.notes?`<div style="margin-top:6px;white-space:pre-line">${esc(saved.notes)}</div>`:''}
+      <div id="ci-photos-${b.id}" class="meta" style="margin-top:8px"></div>
+    </div>`;
+  }
+  if(!DATA.checkinReady) return '';
+  if(canSubmitCheckin(b)){
+    return `<div class="checkinbox"><div class="wfhd">Car's back</div>
+      <p class="meta" style="margin:0 0 8px">The car should be home and parked. The time is saved when you submit.</p>
+      <label>Fuel level</label>
+      <select id="ci_fuel"><option value="">Choose</option><option value="empty">Empty</option><option value="1/4">1/4</option><option value="1/2">1/2</option><option value="3/4">3/4</option><option value="full">Full</option></select>
+      <div style="margin-top:10px">Any issues?</div>
+      <label class="followup"><input type="radio" name="ci_issues" value="no" onchange="checkinIssuesChanged()"> No</label>
+      <label class="followup"><input type="radio" name="ci_issues" value="yes" onchange="checkinIssuesChanged()"> Yes</label>
+      <div id="ci_issue_box" style="display:none">
+        <label>What happened</label>
+        <textarea id="ci_notes" placeholder="What should Tim know?"></textarea>
+        <div style="margin-top:8px">Before the next booking</div>
+        <label class="followup"><input type="radio" name="ci_severity" value="ok_to_use"> OK to use</label>
+        <label class="followup"><input type="radio" name="ci_severity" value="needs_fix"> Needs fix before next booking</label>
+      </div>
+      <label>Photos</label>
+      <input id="ci_photos" type="file" accept="image/*" multiple>
+      <small class="hint">Up to 6. These stay private in the garage.</small>
+      <div style="margin-top:12px"><button class="act" id="ci_submit" onclick="submitCarCheckin('${b.id}')">Car's back</button></div>
+    </div>`;
+  }
+  if(!isOwnerView() && myStaffId() && b.driver_id===myStaffId() && b.status!=='cancelled' && !bookingHasEnded(b)){
+    return `<div class="meta">Car's back check-in opens after the booking ends.</div>`;
+  }
+  if(isOwnerView() && b.driver_id && b.status!=='cancelled' && bookingHasEnded(b)){
+    return `<div class="payblock">No car check-in yet. Car check-in is required before this driver can be marked paid.</div>`;
+  }
+  return '';
+}
+async function paintCheckinPhotos(bid){
+  const saved=checkinFor(bid);
+  const el=document.getElementById('ci-photos-'+bid);
+  if(!saved || !el) return;
+  const photos=(DATA.checkinPhotos||[]).filter(p=>p.checkin_id===saved.id);
+  if(!photos.length){ el.textContent='No photos'; return; }
+  if(typeof SB==='undefined' || !SB){ el.textContent=photos.length+' photo'+(photos.length===1?'':'s'); return; }
+  const {data, error}=await SB.storage.from('car-checkins').createSignedUrls(photos.map(p=>p.storage_path), 3600);
+  if(error || !data){ el.textContent=photos.length+' photo'+(photos.length===1?'':'s')+' in the garage'; return; }
+  const imgs=data.filter(r=>r.signedUrl).map(r=>`<a href="${esc(r.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(r.signedUrl)}" alt="Check-in photo" style="width:92px;height:92px;object-fit:cover;border-radius:8px;margin:6px 6px 0 0;border:1px solid var(--line)"></a>`).join('');
+  el.innerHTML=imgs||(photos.length+' photos');
+}
+async function submitCarCheckin(bid){
+  const b=DATA.bookings.find(x=>x.id===bid);
+  const me=myStaff();
+  if(!b || !me){ toast('No crew record linked to your login'); return; }
+  const fuel=document.getElementById('ci_fuel')&&document.getElementById('ci_fuel').value;
+  const issuesYes=document.querySelector('input[name=ci_issues]:checked');
+  const notesEl=document.getElementById('ci_notes');
+  const notes=notesEl?notesEl.value:'';
+  const severityEl=document.querySelector('input[name=ci_severity]:checked');
+  const files=document.getElementById('ci_photos')&&document.getElementById('ci_photos').files;
+  if(!fuel){ toast('Choose the fuel level'); return; }
+  if(!issuesYes){ toast('Say whether the car has any issues'); return; }
+  const hasIssues=issuesYes.value==='yes';
+  let severity='ok_to_use';
+  if(hasIssues){
+    if(!String(notes).trim()){ toast('Describe the issue'); return; }
+    if(!severityEl){ toast('Choose OK to use or Needs fix before next booking'); return; }
+    severity=severityEl.value;
+  }
+  if(files && files.length>6){ toast('Add up to 6 photos'); return; }
+  const btn=document.getElementById('ci_submit');
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  const {data, error}=await SB.from('car_checkins').insert({
+    booking_id:b.id, car_id:b.car_id, driver_id:me.id,
+    fuel_level:fuel, has_issues:hasIssues, notes:String(notes||'').trim()||null, severity
+  }).select().single();
+  if(error){
+    if(btn){ btn.disabled=false; btn.textContent="Car's back"; }
+    toast(error.message||'Could not save the check-in');
+    return;
+  }
+  let photoFailed=false;
+  for(const file of (files?[...files]:[]).slice(0,6)){
+    try{
+      const blob=await resizeCheckinPhoto(file);
+      const path=b.id+'/'+((window.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now()+Math.random()))+'.jpg';
+      const up=await SB.storage.from('car-checkins').upload(path, blob, {contentType:'image/jpeg', upsert:false});
+      if(up.error) throw up.error;
+      const row=await SB.from('car_checkin_photos').insert({checkin_id:data.id, booking_id:b.id, storage_path:path});
+      if(row.error) throw row.error;
+    }catch(e){ photoFailed=true; console.error('check-in photo', e); }
+  }
+  let mailed=false;
+  try{
+    const r=await postNotification({type:'car_checkin', booking_id:b.id});
+    mailed=!!(r&&r.ok);
+  }catch(e){ mailed=false; }
+  await loadAll();
+  bookingDetail(b.id);
+  if(photoFailed) toast('Checked in, but a photo did not upload');
+  else if(!mailed) toast('Checked in. The email to Tim will retry.');
+  else toast("Car's back — Tim has the note");
+}
 function bookingDetail(bid){
   const b=DATA.bookings.find(x=>x.id===bid);if(!b)return;
   const car=carById(b.car_id), drv=staffById(b.driver_id);
@@ -4134,12 +4486,15 @@ function bookingDetail(bid){
     ${row('Email', b.customer_email)}
     ${b.needs_trailer?`<div style="margin-bottom:10px"><span class="trailertag">🚛 Car must be trailered</span></div>`:''}
     ${row('Notes', notesWithoutPrice(b.notes))}
+    ${carFixWarningHtml(b)}
+    ${checkinPanelHtml(b)}
     ${isOwnerView()?followupFlagsHtml(b):''}
     ${isOwnerView()?waterfallStatusHtml(b):''}
     ${isOwnerView()?driverPayStatusHtml(b):''}
     ${claimBtns}
   `);
   if(isOwnerView()) loadPayLinkNote(b.id);
+  paintCheckinPhotos(b.id);
 }
 
 function openPrep(bid){
@@ -4411,6 +4766,16 @@ function bootOwnerPreview(){
       {id:'q-declined',customer_name:'Passed Guest',customer_email:'passed@example.com',event_date:past,event_time:'2:00 PM',hours:2,car_id:'c2',status:'declined',decline_reason:'no availability',declined_at:new Date().toISOString()},
     ]
   };
+  DATA.checkinReady=true;
+  DATA.checkinPhotos=[];
+  DATA.issues=[
+    {id:'iss-open', checkin_id:'ci-hist', booking_id:'preview-issue', car_id:'c2', driver_id:'d2', notes:'Soft brake pedal', severity:'needs_fix', status:'open', opened_at:'2026-10-20T18:00:00.000Z'},
+    {id:'iss-fixed', checkin_id:'ci-old', booking_id:'preview-issue', car_id:'c2', driver_id:'d2', notes:'Wiper blade', severity:'needs_fix', status:'fixed', opened_at:'2026-08-01T18:00:00.000Z', fixed_at:'2026-08-02T15:00:00.000Z', fix_note:'Replaced the blade'}
+  ];
+  DATA.checkins=['b-done','b-last-year','b-phyllis-early-1','b-phyllis-early-2','b-phyllis-early-3','b-phyllis-later','b-wix-noprice'].map(id=>{
+    const row=DATA.bookings.find(x=>x.id===id);
+    return {id:'ci-'+id, booking_id:id, car_id:row.car_id, driver_id:row.driver_id, parked_at:(row.event_date||'2026-01-01')+'T23:30:00.000Z', fuel_level:'3/4', has_issues:false, severity:'ok_to_use', notes:null};
+  });
   showApp(); setupRoleUI(); renderAll();
 }
 if(isOwnerPreview()) bootOwnerPreview();
