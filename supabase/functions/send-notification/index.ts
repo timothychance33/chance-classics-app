@@ -34,6 +34,7 @@ import {
 import { ownerQuoteRequestHtml, ownerQuoteRequestSubject } from "../_shared/owner-quote-email.mjs";
 import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/balance-pay-email.mjs";
 import { DRIVER_BUSY_MESSAGE, driverBusyWith } from "../_shared/driver-availability.mjs";
+import { checkinOwnerMail } from "../_shared/car-checkin.mjs";
 
 function bearerToken(req: Request): string {
   const header = req.headers.get("Authorization") || "";
@@ -127,6 +128,83 @@ async function offerSkippedForBusyDriver(driverEmail: string, bookingId: unknown
     return false;
   }
   return !!driverBusyWith(driver.id, booking, assigned);
+}
+
+// Owner email for a saved check-in. The body is not the email: the row in
+// car_checkins is. A stamp stops a second send. A failed send clears it.
+async function emailOwnerCarCheckin(req: Request, bookingId: unknown) {
+  const id = String(bookingId ?? "").trim();
+  if (!id) throw new Error("car_checkin requires booking_id");
+  const token = bearerToken(req);
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!token || !supabaseUrl || !serviceKey) return { forbidden: true };
+  const sb = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    db: { schema: "rental" },
+  });
+  const { data: userWrap, error: userErr } = await sb.auth.getUser(token);
+  if (userErr || !userWrap?.user) return { forbidden: true };
+  const user = userWrap.user;
+  const { data: profile } = await sb.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  const admin = roleTokens(profile?.role).includes("admin");
+
+  const { data: checkin, error: checkinErr } = await sb.from("car_checkins").select("*").eq("booking_id", id).maybeSingle();
+  if (checkinErr) throw new Error(checkinErr.message);
+  if (!checkin) throw new Error("No check-in for this booking");
+  const { data: booking, error: bookingErr } = await sb.from("bookings")
+    .select("id,customer_name,event_type,event_date,start_time,end_time,driver_id,car_id,status")
+    .eq("id", id)
+    .maybeSingle();
+  if (bookingErr) throw new Error(bookingErr.message);
+  if (!booking) throw new Error("Booking not found");
+  const { data: driver } = booking.driver_id
+    ? await sb.from("staff").select("id,name,email").eq("id", booking.driver_id).maybeSingle()
+    : { data: null };
+  if (!admin) {
+    const mine = String(user.email ?? "").trim().toLowerCase();
+    const theirs = String(driver?.email ?? "").trim().toLowerCase();
+    if (!mine || mine !== theirs || driver?.id !== checkin.driver_id) return { forbidden: true };
+  }
+  if (checkin.owner_notified_at) return { ok: true, skipped: "already_sent" };
+
+  const claimed = await sb.from("car_checkins")
+    .update({ owner_notified_at: new Date().toISOString() })
+    .eq("id", checkin.id)
+    .is("owner_notified_at", null)
+    .select("id");
+  if (claimed.error) throw new Error(claimed.error.message);
+  if (!claimed.data?.length) return { ok: true, skipped: "already_sent" };
+
+  try {
+    let carName = "";
+    if (checkin.car_id) {
+      const { data: car } = await sb.from("cars").select("name").eq("id", checkin.car_id).maybeSingle();
+      carName = car?.name || "";
+    }
+    const { data: photos, error: photoErr } = await sb.from("car_checkin_photos").select("storage_path").eq("checkin_id", checkin.id);
+    if (photoErr) throw new Error(photoErr.message);
+    const paths = (photos ?? []).map((row: { storage_path?: string | null }) => row.storage_path).filter(Boolean) as string[];
+    let urls: string[] = [];
+    if (paths.length) {
+      const signed = await sb.storage.from("car-checkins").createSignedUrls(paths, 60 * 60 * 24 * 7);
+      urls = (signed.data ?? []).map((row: { signedUrl?: string | null }) => row.signedUrl).filter(Boolean) as string[];
+    }
+    const mail = checkinOwnerMail({
+      appUrl: APP_URL,
+      carName,
+      driverName: driver?.name || "",
+      booking,
+      checkin,
+      photoUrls: urls,
+      photoCount: paths.length,
+    });
+    const result = await sendEmail(OWNER_EMAIL, mail.subject, mail.html, mail.text);
+    return { ok: true, result };
+  } catch (err) {
+    await sb.from("car_checkins").update({ owner_notified_at: null }).eq("id", checkin.id);
+    throw err;
+  }
 }
 
 Deno.serve(async (req) => {
@@ -375,6 +453,14 @@ Deno.serve(async (req) => {
       const subject = ownerBookingMoneySubject(b, body.money);
       const html = ownerBookingMoneyHtml(b, body.money, APP_URL);
       result = await sendEmail(OWNER_EMAIL, subject, html);
+    } else if (type === "car_checkin") {
+      const sent = await emailOwnerCarCheckin(req, body.booking_id);
+      if (sent.forbidden) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+          status: 403, headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      result = sent;
     } else if (type === "quote_request") {
       const q = body.quote ?? {};
       if (!q.customer_name && !q.service_name) throw new Error("quote_request requires a quote");

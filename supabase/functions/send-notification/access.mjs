@@ -2,7 +2,9 @@
 // function share one rule. The edge function still checks the session and,
 // for a driver offer, that the recipient is on the driver roster.
 
-export const DRIVER_NOTIFY_TYPES = ["claimed", "passed", "offer"];
+// car_checkin is the driver's "car's back" notice. The handler ignores the
+// client body and emails the owner from the saved check-in row.
+export const DRIVER_NOTIFY_TYPES = ["claimed", "passed", "offer", "car_checkin"];
 
 export function roleTokens(role) {
   return String(role ?? "")

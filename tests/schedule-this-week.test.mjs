@@ -46,8 +46,8 @@ const thisWeek=[treyanna, charity, todayJob, sophie, nextWeek, noDate]
   .filter(b=>inThisWeekNeedsAttention(b, week, today));
 assert.deepEqual(thisWeek.map(b=>b.id), ['b-today', 'b-sophie']);
 
-// Staff schedule: same Chicago today cutoff (flat upcoming list, no This Week section).
-assert.match(html, /let list=\[\.\.\.DATA\.bookings\]\.filter\(b=>b\.status!=='cancelled' && \(!b\.event_date \|\| b\.event_date>=todayIso\)\);/,
-  'staff schedule uses the same Chicago today cutoff');
+// Staff schedule: same Chicago today cutoff, plus that driver's missing car check-in.
+assert.match(html, /let list=\[\.\.\.DATA\.bookings\]\.filter\(b=>b\.status!=='cancelled' && \(\(!b\.event_date \|\| b\.event_date>=todayIso\) \|\| needsDriverCheckin\(b\)\)\);/,
+  'staff schedule keeps the Chicago today cutoff and a missing check-in');
 
 console.log('schedule-this-week tests passed');
