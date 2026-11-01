@@ -2,6 +2,10 @@
 // Plain JS so node tests and the edge functions share one rule.
 // America/Chicago. An end at or before the start is the next day.
 // There is no ending-mileage field. Fuel level is the gauge reading.
+// Nudges and the owner alert count from the estimated return to the Benton
+// shop: booking end plus the stored one-way drive_minutes (the same Google
+// drive the mileage lookup saves, and the same minutes the overnight hotel
+// rule adds to get the driver home). No stored drive time uses the end.
 
 export const CHECKIN_TZ = "America/Chicago";
 // 10:05 AM America/Chicago on 2026-11-01. Bookings that ended earlier are not nudged.
@@ -103,6 +107,30 @@ export function bookingEndMs(eventDate, startTime, endTime) {
   return chicagoWallTimeMs(nextDay ? addDays(date, 1) : date, end);
 }
 
+/**
+ * One-way drive minutes already stored on the booking (shop to the event, and
+ * the drive back). Blank, negative, or not a number means the drive was not saved.
+ */
+export function storedDriveMinutes(booking) {
+  const raw = booking?.drive_minutes;
+  if (raw == null || raw === "") return null;
+  const minutes = Number(raw);
+  if (!Number.isFinite(minutes) || minutes < 0) return null;
+  return Math.round(minutes);
+}
+
+/**
+ * When the car should be back at the shop.
+ * Stored drive time is added to the booking end. Otherwise this is the end.
+ */
+export function estimatedReturnMs(booking) {
+  const endMs = bookingEndMs(booking?.event_date, booking?.start_time, booking?.end_time);
+  if (endMs == null) return null;
+  const drive = storedDriveMinutes(booking);
+  if (drive == null) return endMs;
+  return endMs + drive * 60 * 1000;
+}
+
 /** 1-based driver nudge slot, or null when it is too early or past the cap. */
 export function driverNudgeSlot(endMs, nowMs) {
   if (endMs == null || nowMs == null) return null;
@@ -120,14 +148,19 @@ export function ownerMissingDue(endMs, nowMs) {
 
 export function checkinNoticePlan(booking, hasCheckin, nowMs) {
   if (!booking || hasCheckin || !booking.driver_id || booking.status === "cancelled") {
-    return { endMs: null, driverSlot: null, owner: false };
+    return { endMs: null, returnMs: null, driverSlot: null, owner: false };
   }
   const endMs = bookingEndMs(booking.event_date, booking.start_time, booking.end_time);
-  if (endMs == null || endMs < CHECKIN_REQUIRED_FROM) return { endMs: null, driverSlot: null, owner: false };
+  // The cutoff stays on the booking end. A long drive home does not pull an older booking in.
+  if (endMs == null || endMs < CHECKIN_REQUIRED_FROM) {
+    return { endMs: null, returnMs: null, driverSlot: null, owner: false };
+  }
+  const returnMs = estimatedReturnMs(booking);
   return {
     endMs,
-    driverSlot: driverNudgeSlot(endMs, nowMs),
-    owner: ownerMissingDue(endMs, nowMs),
+    returnMs,
+    driverSlot: driverNudgeSlot(returnMs, nowMs),
+    owner: ownerMissingDue(returnMs, nowMs),
   };
 }
 

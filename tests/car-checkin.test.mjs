@@ -14,7 +14,9 @@ import {
   checkinOwnerMail,
   checkinOwnerMissingMail,
   driverNudgeSlot,
+  estimatedReturnMs,
   ownerMissingDue,
+  storedDriveMinutes,
 } from '../supabase/functions/_shared/car-checkin.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -59,12 +61,12 @@ const booking = {
   customer_name: 'June Wedding',
 };
 assert.deepEqual(checkinNoticePlan(booking, true, overnight + 2 * 60 * 60 * 1000), {
-  endMs: null, driverSlot: null, owner: false,
+  endMs: null, returnMs: null, driverSlot: null, owner: false,
 });
 assert.equal(checkinNoticePlan({ ...booking, status: 'cancelled' }, false, overnight + 5 * 60 * 60 * 1000).driverSlot, null);
 assert.equal(CHECKIN_REQUIRED_FROM, Date.parse('2026-11-01T16:05:00Z'));
 assert.deepEqual(checkinNoticePlan(booking, false, overnight + 5 * 60 * 60 * 1000), {
-  endMs: null, driverSlot: null, owner: false,
+  endMs: null, returnMs: null, driverSlot: null, owner: false,
 });
 
 const required = {
@@ -77,13 +79,40 @@ const requiredEnd = bookingEndMs(required.event_date, required.start_time, requi
 assert.equal(requiredEnd, CHECKIN_REQUIRED_FROM);
 const due = checkinNoticePlan(required, false, requiredEnd + 5 * 60 * 60 * 1000);
 assert.equal(due.endMs, requiredEnd);
+assert.equal(due.returnMs, requiredEnd);
 assert.equal(due.driverSlot, 2);
 assert.equal(due.owner, true);
 const justBefore = { ...required, end_time: '10:04' };
 const justBeforeEnd = bookingEndMs(justBefore.event_date, justBefore.start_time, justBefore.end_time);
 assert.ok(justBeforeEnd < CHECKIN_REQUIRED_FROM);
 assert.deepEqual(checkinNoticePlan(justBefore, false, justBeforeEnd + 5 * 60 * 60 * 1000), {
-  endMs: null, driverSlot: null, owner: false,
+  endMs: null, returnMs: null, driverSlot: null, owner: false,
+});
+
+const driveHome = { ...required, drive_minutes: 120 };
+const driveReturn = requiredEnd + 120 * 60 * 1000;
+assert.equal(storedDriveMinutes(driveHome), 120);
+assert.equal(storedDriveMinutes({ drive_minutes: '90' }), 90);
+assert.equal(storedDriveMinutes({ drive_minutes: '' }), null);
+assert.equal(storedDriveMinutes({ drive_minutes: -5 }), null);
+assert.equal(storedDriveMinutes({}), null);
+assert.equal(estimatedReturnMs(driveHome), driveReturn);
+assert.equal(estimatedReturnMs(required), requiredEnd);
+assert.equal(estimatedReturnMs({ ...driveHome, drive_minutes: 'nope' }), requiredEnd);
+const stillDriving = checkinNoticePlan(driveHome, false, requiredEnd + 60 * 60 * 1000);
+assert.equal(stillDriving.endMs, requiredEnd);
+assert.equal(stillDriving.returnMs, driveReturn);
+assert.equal(stillDriving.driverSlot, null);
+assert.equal(stillDriving.owner, false);
+const hourAfterReturn = checkinNoticePlan(driveHome, false, driveReturn + 60 * 60 * 1000);
+assert.equal(hourAfterReturn.driverSlot, 1);
+assert.equal(hourAfterReturn.owner, false);
+const ownerAfterReturn = checkinNoticePlan(driveHome, false, driveReturn + 4 * 60 * 60 * 1000);
+assert.equal(ownerAfterReturn.driverSlot, 2);
+assert.equal(ownerAfterReturn.owner, true);
+const oldTripStillDriving = { ...justBefore, drive_minutes: 180 };
+assert.deepEqual(checkinNoticePlan(oldTripStillDriving, false, justBeforeEnd + 5 * 60 * 60 * 1000), {
+  endMs: null, returnMs: null, driverSlot: null, owner: false,
 });
 
 const ownerMail = checkinOwnerMail({
@@ -151,6 +180,7 @@ assert.match(cutoffMigration, /Car check-in is required before this driver can b
 assert.doesNotMatch(cutoffMigration, /balance_reminder|drop table|drop trigger/i);
 
 assert.match(scheduled, /runCarCheckinMail/);
+assert.match(scheduled, /drive_minutes/);
 assert.match(scheduled, /car_checkin_nudges/);
 assert.match(scheduled, /owner_notified_at/);
 assert.match(scheduled, /checkinDriverNudgeMail/);
@@ -240,9 +270,34 @@ assert.equal(garage.missingCheckin(atCutoff), false);
 assert.equal(garage.payBlockedReason(atCutoff), 'Driver pay waits for the car check-in, which opens after the booking ends.');
 assert.equal(garage.payBlockedReason({ ...atCutoff, driver_paid_at: '2026-11-01T16:10:00.000Z' }), '');
 
+const longTrip = { ...atCutoff, id: 'long', drive_minutes: 120 };
+const longEnd = bookingEndMs(longTrip.event_date, longTrip.start_time, longTrip.end_time);
+nowMs = longEnd + 30 * 60 * 1000;
+assert.equal(garage.missingCheckin(longTrip), false);
+assert.equal(garage.payBlockedReason(longTrip), 'Driver pay waits for the car check-in. The driver is still driving back to the shop.');
+nowMs = longEnd + 120 * 60 * 1000;
+assert.equal(garage.missingCheckin(longTrip), true);
+assert.equal(garage.payBlockedReason(longTrip), 'Car check-in is required before this driver can be marked paid.');
+nowMs = longEnd + 30 * 60 * 1000;
+assert.equal(garage.missingCheckin({ ...longTrip, drive_minutes: '' }), true);
+assert.equal(garage.missingCheckin({ ...justBefore, drive_minutes: 180 }), false);
+const beforeWithDrive = { ...beforeCutoff, drive_minutes: 180 };
+nowMs = bookingEndMs(beforeWithDrive.event_date, beforeWithDrive.start_time, beforeWithDrive.end_time) + 5 * 60 * 60 * 1000;
+assert.equal(garage.missingCheckin(beforeWithDrive), false);
+assert.equal(garage.payBlockedReason(beforeWithDrive), '');
+
 const panelStart = html.indexOf('function checkinPanelHtml');
 const panelEnd = html.indexOf('async function paintCheckinPhotos');
 assert.ok(panelStart > 0 && panelEnd > panelStart);
+let panelNow = Date.parse('2026-11-02T18:00:00.000Z');
+function PanelClock(value) {
+  if (arguments.length === 0) return new RealDate(panelNow);
+  return new RealDate(value);
+}
+PanelClock.now = () => panelNow;
+PanelClock.parse = RealDate.parse;
+PanelClock.UTC = RealDate.UTC;
+PanelClock.prototype = RealDate.prototype;
 const panel = {
   DATA: { checkinReady: true, checkins: [] },
   checkinFor() { return null; },
@@ -251,7 +306,9 @@ const panel = {
   myStaffId() { return 'd1'; },
   bookingHasEnded() { return true; },
   bookingEndMs,
+  estimatedReturnMs,
   CHECKIN_REQUIRED_FROM,
+  Date: PanelClock,
   esc(value) { return String(value ?? ''); },
   fmtChicagoStamp() { return ''; },
   fuelLabel(level) { return level; },
@@ -261,5 +318,11 @@ vm.runInContext(html.slice(panelStart, panelEnd), panel);
 assert.equal(panel.checkinPanelHtml(beforeCutoff), '');
 assert.match(panel.checkinPanelHtml(atCutoff), /class="payblock"/);
 assert.match(panel.checkinPanelHtml(atCutoff), /Car check-in is required before this driver can be marked paid/);
+const panelLong = { ...atCutoff, id: 'panel-long', drive_minutes: 180 };
+const panelEndMs = bookingEndMs(panelLong.event_date, panelLong.start_time, panelLong.end_time);
+panelNow = panelEndMs + 60 * 60 * 1000;
+assert.equal(panel.checkinPanelHtml(panelLong), '');
+panelNow = panelEndMs + 180 * 60 * 1000;
+assert.match(panel.checkinPanelHtml(panelLong), /class="payblock"/);
 
 console.log('car-checkin tests passed');

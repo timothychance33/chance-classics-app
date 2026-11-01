@@ -1492,6 +1492,8 @@ function ownerPayPillHtml(b, extraStyle){
 // Car's back timing matches supabase/functions/_shared/car-checkin.mjs.
 // End <= start is the next day in America/Chicago. Fuel is collected. Mileage is not.
 // Check-in is required only when the booking ends at or after 10:05 AM Chicago on 2026-11-01.
+// The needs-check-in flag and the pay block wait until the estimated return to the shop:
+// booking end plus the stored one-way drive_minutes. No stored drive time uses the end.
 const CHECKIN_UI_MS=14*86400000;
 const CHECKIN_REQUIRED_FROM=Date.parse('2026-11-01T16:05:00Z');
 function checkinAddDays(isoDate, days){
@@ -1544,6 +1546,19 @@ function bookingHasEnded(b, now){
   if(end==null) return false;
   return (now||Date.now())>=end;
 }
+function storedDriveMinutes(b){
+  if(!b || b.drive_minutes==null || b.drive_minutes==='') return null;
+  const minutes=Number(b.drive_minutes);
+  if(!Number.isFinite(minutes) || minutes<0) return null;
+  return Math.round(minutes);
+}
+function estimatedReturnMs(b){
+  const end=bookingEndMs(b&&b.event_date, b&&b.start_time, b&&b.end_time);
+  if(end==null) return null;
+  const drive=storedDriveMinutes(b);
+  if(drive==null) return end;
+  return end+drive*60*1000;
+}
 function checkinFor(bid){
   return (DATA.checkins||[]).find(c=>c.booking_id===bid)||null;
 }
@@ -1555,8 +1570,9 @@ function missingCheckin(b){
   if(checkinFor(b.id)) return false;
   const end=bookingEndMs(b.event_date, b.start_time, b.end_time);
   if(end==null || end<CHECKIN_REQUIRED_FROM) return false;
-  if(!bookingHasEnded(b)) return false;
-  return Date.now()-end<=CHECKIN_UI_MS;
+  const back=estimatedReturnMs(b);
+  if(back==null || Date.now()<back) return false;
+  return Date.now()-back<=CHECKIN_UI_MS;
 }
 function needsDriverCheckin(b){
   const mine=myStaffId();
@@ -1573,8 +1589,10 @@ function payBlockedReason(b){
   if(!DATA.checkinReady || !b || b.driver_paid_at || checkinFor(b.id)) return '';
   const end=bookingEndMs(b.event_date, b.start_time, b.end_time);
   if(end!=null && end<CHECKIN_REQUIRED_FROM) return '';
-  if(!bookingHasEnded(b)) return 'Driver pay waits for the car check-in, which opens after the booking ends.';
-  return 'Car check-in is required before this driver can be marked paid.';
+  const back=estimatedReturnMs(b);
+  if(back!=null && Date.now()>=back) return 'Car check-in is required before this driver can be marked paid.';
+  if(end!=null && Date.now()>=end && back!=null && back>end) return 'Driver pay waits for the car check-in. The driver is still driving back to the shop.';
+  return 'Driver pay waits for the car check-in, which opens after the booking ends.';
 }
 function fuelLabel(level){
   return ({empty:'Empty','1/4':'1/4','1/2':'1/2','3/4':'3/4',full:'Full'})[level]||(level||'—');
@@ -4416,9 +4434,11 @@ function checkinPanelHtml(b){
   if(!isOwnerView() && myStaffId() && b.driver_id===myStaffId() && b.status!=='cancelled' && !bookingHasEnded(b)){
     return `<div class="meta">Car's back check-in opens after the booking ends.</div>`;
   }
-  if(isOwnerView() && b.driver_id && b.status!=='cancelled' && bookingHasEnded(b)){
+  if(isOwnerView() && b.driver_id && b.status!=='cancelled'){
     const end=bookingEndMs(b.event_date, b.start_time, b.end_time);
-    if(end!=null && end<CHECKIN_REQUIRED_FROM) return '';
+    if(end==null || end<CHECKIN_REQUIRED_FROM) return '';
+    const back=estimatedReturnMs(b);
+    if(back==null || Date.now()<back) return '';
     return `<div class="payblock">No car check-in yet. Car check-in is required before this driver can be marked paid.</div>`;
   }
   return '';
