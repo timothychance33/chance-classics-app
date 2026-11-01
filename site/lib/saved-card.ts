@@ -153,6 +153,85 @@ export function balanceReminderMonday(isoDate: string) {
   return weekMonday;
 }
 
+function isoDay(value: string) {
+  const day = String(value || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : "";
+}
+
+/** Catch-up: the reminder Monday has arrived and the event is still today or later. Keep in sync with saved-card.mjs. */
+export function balanceReminderDue(eventDate: string, todayIso: string) {
+  const event = isoDay(eventDate);
+  const today = isoDay(todayIso);
+  if (!event || !today || event < today) return false;
+  const monday = balanceReminderMonday(event);
+  return Boolean(monday) && today >= monday;
+}
+
+/** Today through the Tuesday after this week's Monday. Past dates are excluded. */
+export function balanceReminderCatchupWindow(todayIso: string) {
+  const today = isoDay(todayIso);
+  if (!today) return { from: "", to: "" };
+  const [year, month, day] = today.split("-").map(Number);
+  const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const daysFromMonday = dow === 0 ? 6 : dow - 1;
+  const thisMonday = addDays(today, -daysFromMonday);
+  return { from: today, to: addDays(thisMonday, 8) };
+}
+
+function roundedMoney(value: unknown) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return roundMoney(n);
+}
+
+/** 0 when amount paid already covers the total, even if balance_due_usd is still positive. */
+export function reminderBalanceUsd(row: {
+  total_usd?: unknown;
+  amount_paid_usd?: unknown;
+  balance_due_usd?: unknown;
+} | null | undefined) {
+  const total = roundedMoney(row?.total_usd);
+  const paid = roundedMoney(row?.amount_paid_usd) ?? 0;
+  if (total != null && paid >= total) return 0;
+  const listed = roundedMoney(row?.balance_due_usd);
+  if (listed != null) return listed;
+  if (total == null) return null;
+  return roundMoney(total - paid);
+}
+
+const BALANCE_REMINDER_STATUSES = ["confirmed", "prepping", "ready", "out", "completed"];
+
+/** Confirmed pipeline, plus a `new` row that already has a deposit or full payment. */
+export function balanceReminderStatusOk(booking: {
+  status?: string | null;
+  payment_status?: string | null;
+} | null | undefined) {
+  const status = String(booking?.status || "").trim().toLowerCase();
+  if (BALANCE_REMINDER_STATUSES.includes(status)) return true;
+  const pay = String(booking?.payment_status || "").trim().toLowerCase();
+  return status === "new" && (pay === "deposit" || pay === "paid");
+}
+
+/**
+ * Customer wording for when the balance is due.
+ * The due date stays the day before the event.
+ * Today: that day has already arrived, so say due today.
+ * Tomorrow: the day before is today.
+ */
+export function balanceDuePhrase(eventDate: string, todayIso: string) {
+  const event = isoDay(eventDate);
+  const today = isoDay(todayIso);
+  if (!event || !today) return "the day before your event";
+  if (event <= today) return "today";
+  if (event === addDays(today, 1)) return "today, the day before your event";
+  return "the day before your event";
+}
+
+export function balanceCheckoutDuePhrase(eventDate: string, todayIso: string) {
+  return balanceDuePhrase(eventDate, todayIso).replace(/your event/g, "the event");
+}
+
 /**
  * Deposit and balance refunds lower amount paid only.
  * Overage and damage refunds lower the total and amount paid together,

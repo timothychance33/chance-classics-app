@@ -4042,7 +4042,7 @@ function chargeSavedCardHtml(b){
   const saved=!!(b.stripe_customer_id && b.stripe_payment_method_id);
   const email=String(b.customer_email||'').trim();
   const note=saved
-    ? 'The Monday reminder emails a pay link. Charge the saved card here for the balance instead, or for an overage or damage.'
+    ? 'The balance reminder emails a pay link once the Monday before the event has arrived, including a late booking on the next hourly run. Charge the saved card here for the balance instead, or for an overage or damage.'
     : (email
       ? 'No card was saved on this booking, so Charge saved card stays off. Amount and reason stay on. Send pay link emails '+email+' a secure checkout page.'
       : 'No card was saved on this booking, so Charge saved card stays off. Send pay link stays off until this booking has a customer email.');

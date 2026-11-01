@@ -1,5 +1,5 @@
 import type { rentalDb } from "@/lib/rental-db";
-import { WEDDING_COLUMN_NAMES } from "@/lib/booking-rules";
+import { WEDDING_COLUMN_NAMES, chicagoDate } from "@/lib/booking-rules";
 import { ownerBookingCreatedRows, shouldEmailOwnerAboutBooking } from "./owner-booking-email.mjs";
 
 export {
@@ -133,7 +133,7 @@ export async function postOwnerBookingEmail(booking: Record<string, unknown>) {
   return postOwnerNotice({ type: "booking_created", booking });
 }
 
-/** Email the customer the same balance pay-link note the Monday reminder sends. */
+/** Email the customer the same balance pay-link note the balance reminder sends. */
 export async function emailCustomerBalancePay(input: {
   to: string;
   customerName: string;
@@ -148,6 +148,8 @@ export async function emailCustomerBalancePay(input: {
   returnLocation?: string;
   taxExempt?: boolean;
   notes?: string;
+  mondayReminder?: boolean;
+  today?: string;
 }) {
   const to = String(input.to || "").trim();
   if (!to) return { ok: false as const, error: "This booking has no customer email." };
@@ -169,6 +171,8 @@ export async function emailCustomerBalancePay(input: {
     return_location: input.returnLocation || "",
     tax_exempt: input.taxExempt === true,
     notes: input.notes || "",
+    monday_reminder: input.mondayReminder === true,
+    today: input.today || chicagoDate(),
   });
 }
 

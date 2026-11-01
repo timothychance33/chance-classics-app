@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { applySucceededCharge } from "@/lib/booking-charge";
 import { validateDayOfContact } from "@/lib/booking-rules";
+import { sendCatchUpBalanceReminder } from "@/lib/balance-reminder";
 import { confirmedDepositUpdate, depositDollarsFromSession, totalDollarsFromCheckout } from "@/lib/deposit-payment";
 import { confirmPaidQuote } from "@/lib/quote-booking";
 import { emailOwnerAboutBooking, emailOwnerAboutMoney, paymentNoticeIds, quoteLinkedBookingId } from "@/lib/owner-booking-notify";
@@ -164,13 +165,15 @@ export async function POST(request: Request) {
       if (cardError) {
         return NextResponse.json({ error: `The booking was saved, but the card was not stored. ${cardError}` }, { status: 500 });
       }
+      let balanceReminder = null;
       if (createdId) {
         const cardStored = await storeSavedCard(db, createdId, savedCard);
         if (cardStored) {
           return NextResponse.json({ error: `The booking was saved, but the card was not stored. ${cardStored}` }, { status: 500 });
         }
+        balanceReminder = await sendCatchUpBalanceReminder(db, stripe, createdId);
       }
-      return NextResponse.json({ received: true, ...confirmed });
+      return NextResponse.json({ received: true, ...confirmed, balanceReminder });
     } catch (error) {
       const message = error instanceof Error ? error.message : "The quote booking could not be saved.";
       return NextResponse.json({ error: message }, { status: 500 });
@@ -255,6 +258,7 @@ export async function POST(request: Request) {
   if (cardStored) {
     return NextResponse.json({ error: `The booking was saved, but the card was not stored. ${cardStored}` }, { status: 500 });
   }
+  const balanceReminder = await sendCatchUpBalanceReminder(db, stripe, String(bookingId));
 
   const carId = updated.data.car_id;
   if (carId) {
@@ -273,5 +277,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ received: true, confirmed: true });
+  return NextResponse.json({ received: true, confirmed: true, balanceReminder });
 }

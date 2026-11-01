@@ -1,6 +1,9 @@
 // Customer balance pay-link email. No secrets and no network.
 // scheduled-tasks and send-notification both import this.
-// The Monday reminder and a one-click garage pay link use the same copy.
+// The balance reminder and a one-click garage pay link use the same copy.
+// Pass today (Chicago YYYY-MM-DD) so an event today or tomorrow says the balance is due today.
+
+import { balanceDuePhrase } from "./saved-card.mjs";
 
 function esc(s) {
   return (s ?? "").toString().replace(/[&<>"]/g, (c) => ({
@@ -101,12 +104,16 @@ function warmCopy(input) {
   const carSentence = car
     ? `${car} is getting polished up and ready to roll.`
     : "Your car is getting polished up and ready to roll.";
+  const due = input?.today
+    ? balanceDuePhrase(input?.eventDate, input.today)
+    : "the day before your event";
+  const amount = money(input?.amount);
   return {
     who,
     greeting: `We're so excited to be a part of your event on ${date}! ${carSentence}`,
     balance: input?.taxExempt
-      ? `Your remaining balance is ${money(input?.amount)}. Tax exempt. It is due the day before your event. You can pay securely with the button below.`
-      : `Your remaining balance is ${money(input?.amount)} (the booking total includes 10.25% sales tax), due the day before your event. You can pay securely with the button below.`,
+      ? `Your remaining balance is ${amount}. Tax exempt. It is due ${due}. You can pay securely with the button below.`
+      : `Your remaining balance is ${amount} (the booking total includes 10.25% sales tax), due ${due}. You can pay securely with the button below.`,
   };
 }
 
