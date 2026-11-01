@@ -22,8 +22,11 @@
 //      A later run the same day retries only bookings that are still unstamped.
 //      day_before_email_sent_at stops a second send.
 //   6) Car check-in: owner email if a check-in was saved but not mailed, then
-//      driver nudges starting 1 hour after the booking end (every 3 hours, 4 max)
-//      and one owner alert if the check-in is still missing after 4 hours.
+//      driver nudges starting 1 hour after the estimated return to the shop
+//      (every 3 hours, 4 max) and one owner alert if the check-in is still
+//      missing 4 hours after that return. Return is the booking end plus the
+//      stored one-way drive_minutes. No stored drive time uses the end.
+//      Bookings that ended before the check-in cutoff are still skipped.
 //      End <= start is the next day, America/Chicago. Email only — no SMS sender.
 //
 // Weekly digest also accepts a Vercel cron POST { weekly_only: true }.
@@ -445,12 +448,17 @@ async function runCarCheckinMail(
 
   const today = chicagoParts(now).date;
   const from = addCheckinDays(today, -CHECKIN_LOOKBACK_DAYS);
-  const due = await sb.from("bookings")
-    .select("id,driver_id,car_id,event_date,start_time,end_time,status,customer_name")
+  const checkinBookings = (columns: string) => sb.from("bookings")
+    .select(columns)
     .not("driver_id", "is", null)
     .neq("status", "cancelled")
     .gte("event_date", from)
     .lte("event_date", today);
+  let due = await checkinBookings("id,driver_id,car_id,event_date,start_time,end_time,status,customer_name,drive_minutes");
+  // Older databases may not have drive_minutes yet. Those bookings use the end time.
+  if (due.error && /drive_minutes/i.test(due.error.message || "")) {
+    due = await checkinBookings("id,driver_id,car_id,event_date,start_time,end_time,status,customer_name");
+  }
   if (due.error) {
     report.errors.push(`check-in nudge query failed: ${due.error.message}`);
     return;
