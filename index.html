@@ -1491,7 +1491,9 @@ function ownerPayPillHtml(b, extraStyle){
 }
 // Car's back timing matches supabase/functions/_shared/car-checkin.mjs.
 // End <= start is the next day in America/Chicago. Fuel is collected. Mileage is not.
+// Check-in is required only when the booking ends at or after 10:05 AM Chicago on 2026-11-01.
 const CHECKIN_UI_MS=14*86400000;
+const CHECKIN_REQUIRED_FROM=Date.parse('2026-11-01T16:05:00Z');
 function checkinAddDays(isoDate, days){
   const [y,m,d]=String(isoDate).slice(0,10).split('-').map(Number);
   const dt=new Date(Date.UTC(y, m-1, d));
@@ -1551,9 +1553,10 @@ function openIssuesForCar(carId){
 function missingCheckin(b){
   if(!DATA.checkinReady || !b || b.status==='cancelled' || !b.driver_id) return false;
   if(checkinFor(b.id)) return false;
-  if(!bookingHasEnded(b)) return false;
   const end=bookingEndMs(b.event_date, b.start_time, b.end_time);
-  return end!=null && Date.now()-end<=CHECKIN_UI_MS;
+  if(end==null || end<CHECKIN_REQUIRED_FROM) return false;
+  if(!bookingHasEnded(b)) return false;
+  return Date.now()-end<=CHECKIN_UI_MS;
 }
 function needsDriverCheckin(b){
   const mine=myStaffId();
@@ -1568,6 +1571,8 @@ function canSubmitCheckin(b){
 }
 function payBlockedReason(b){
   if(!DATA.checkinReady || !b || b.driver_paid_at || checkinFor(b.id)) return '';
+  const end=bookingEndMs(b.event_date, b.start_time, b.end_time);
+  if(end!=null && end<CHECKIN_REQUIRED_FROM) return '';
   if(!bookingHasEnded(b)) return 'Driver pay waits for the car check-in, which opens after the booking ends.';
   return 'Car check-in is required before this driver can be marked paid.';
 }
@@ -4412,6 +4417,8 @@ function checkinPanelHtml(b){
     return `<div class="meta">Car's back check-in opens after the booking ends.</div>`;
   }
   if(isOwnerView() && b.driver_id && b.status!=='cancelled' && bookingHasEnded(b)){
+    const end=bookingEndMs(b.event_date, b.start_time, b.end_time);
+    if(end!=null && end<CHECKIN_REQUIRED_FROM) return '';
     return `<div class="payblock">No car check-in yet. Car check-in is required before this driver can be marked paid.</div>`;
   }
   return '';
