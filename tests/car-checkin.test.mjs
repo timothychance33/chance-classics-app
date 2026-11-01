@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 
 import { allowNotify } from '../supabase/functions/send-notification/access.mjs';
 import {
+  CHECKIN_REQUIRED_FROM,
   DRIVER_NUDGE_CAP,
   bookingEndMs,
   checkinDriverNudgeMail,
@@ -19,6 +20,7 @@ import {
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 const migration = readFileSync(join(root, 'supabase/migrations/20261031220000_car_checkin.sql'), 'utf8');
+const cutoffMigration = readFileSync(join(root, 'supabase/migrations/20261101161000_checkin_required_from.sql'), 'utf8');
 const scheduled = readFileSync(join(root, 'supabase/functions/scheduled-tasks/index.ts'), 'utf8');
 const notify = readFileSync(join(root, 'supabase/functions/send-notification/index.ts'), 'utf8');
 const shared = readFileSync(join(root, 'supabase/functions/_shared/car-checkin.mjs'), 'utf8');
@@ -60,9 +62,29 @@ assert.deepEqual(checkinNoticePlan(booking, true, overnight + 2 * 60 * 60 * 1000
   endMs: null, driverSlot: null, owner: false,
 });
 assert.equal(checkinNoticePlan({ ...booking, status: 'cancelled' }, false, overnight + 5 * 60 * 60 * 1000).driverSlot, null);
-const due = checkinNoticePlan(booking, false, overnight + 5 * 60 * 60 * 1000);
+assert.equal(CHECKIN_REQUIRED_FROM, Date.parse('2026-11-01T16:05:00Z'));
+assert.deepEqual(checkinNoticePlan(booking, false, overnight + 5 * 60 * 60 * 1000), {
+  endMs: null, driverSlot: null, owner: false,
+});
+
+const required = {
+  ...booking,
+  event_date: '2026-11-01',
+  start_time: '09:00',
+  end_time: '10:05',
+};
+const requiredEnd = bookingEndMs(required.event_date, required.start_time, required.end_time);
+assert.equal(requiredEnd, CHECKIN_REQUIRED_FROM);
+const due = checkinNoticePlan(required, false, requiredEnd + 5 * 60 * 60 * 1000);
+assert.equal(due.endMs, requiredEnd);
 assert.equal(due.driverSlot, 2);
 assert.equal(due.owner, true);
+const justBefore = { ...required, end_time: '10:04' };
+const justBeforeEnd = bookingEndMs(justBefore.event_date, justBefore.start_time, justBefore.end_time);
+assert.ok(justBeforeEnd < CHECKIN_REQUIRED_FROM);
+assert.deepEqual(checkinNoticePlan(justBefore, false, justBeforeEnd + 5 * 60 * 60 * 1000), {
+  endMs: null, driverSlot: null, owner: false,
+});
 
 const ownerMail = checkinOwnerMail({
   appUrl: 'https://app.chanceclassics.com',
@@ -121,6 +143,12 @@ assert.match(migration, /Car check-in is required before this driver can be mark
 assert.match(migration, /bucket_id = 'car-checkins'/);
 assert.match(migration, /public = false/);
 assert.doesNotMatch(migration, /ending_mileage/);
+assert.match(cutoffMigration, /NOT APPLIED/);
+assert.match(cutoffMigration, /create or replace function rental\.guard_driver_paid/);
+assert.match(cutoffMigration, /CHECKIN_REQUIRED_FROM constant timestamptz := timestamptz '2026-11-01T16:05:00Z'/);
+assert.match(cutoffMigration, /rental\.booking_end_at\(new\.event_date, new\.start_time, new\.end_time\) < CHECKIN_REQUIRED_FROM/);
+assert.match(cutoffMigration, /Car check-in is required before this driver can be marked paid/);
+assert.doesNotMatch(cutoffMigration, /balance_reminder|drop table|drop trigger/i);
 
 assert.match(scheduled, /runCarCheckinMail/);
 assert.match(scheduled, /car_checkin_nudges/);
@@ -158,8 +186,80 @@ assert.match(html, /endMin<=startMin/);
 assert.doesNotMatch(html, /ending_mileage|ending mileage/i);
 assert.doesNotMatch(html, /service_role/);
 assert.equal((html.match(/fetch\(NOTIFY_FN_URL/g) || []).length, 1);
+assert.equal((html.match(/2026-11-01T16:05:00Z/g) || []).length, 1);
+assert.equal((shared.match(/2026-11-01T16:05:00Z/g) || []).length, 1);
+assert.match(html, /const CHECKIN_REQUIRED_FROM=Date\.parse\('2026-11-01T16:05:00Z'\)/);
 
 const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).filter((s) => s.trim());
 for (const source of scripts) new vm.Script(source);
+
+const garageStart = html.indexOf('const CHECKIN_UI_MS');
+const garageEnd = html.indexOf('function fuelLabel');
+assert.ok(garageStart > 0 && garageEnd > garageStart);
+let nowMs = Date.parse('2026-11-02T18:00:00.000Z');
+const RealDate = Date;
+function Clock(value) {
+  if (arguments.length === 0) return new RealDate(nowMs);
+  return new RealDate(value);
+}
+Clock.now = () => nowMs;
+Clock.parse = RealDate.parse;
+Clock.UTC = RealDate.UTC;
+Clock.prototype = RealDate.prototype;
+const garage = {
+  DATA: { checkinReady: true, checkins: [] },
+  Date: Clock,
+  Intl,
+};
+vm.createContext(garage);
+vm.runInContext(html.slice(garageStart, garageEnd), garage);
+
+const beforeCutoff = {
+  id: 'before',
+  driver_id: 'd1',
+  status: 'confirmed',
+  event_date: '2026-11-01',
+  start_time: '09:00',
+  end_time: '10:04',
+};
+const atCutoff = { ...beforeCutoff, id: 'at', end_time: '10:05' };
+const afterCutoff = { ...beforeCutoff, id: 'after', end_time: '18:00' };
+assert.equal(garage.missingCheckin(beforeCutoff), false);
+assert.equal(garage.payBlockedReason(beforeCutoff), '');
+assert.equal(garage.missingCheckin(atCutoff), true);
+assert.equal(garage.payBlockedReason(atCutoff), 'Car check-in is required before this driver can be marked paid.');
+assert.equal(garage.missingCheckin(afterCutoff), true);
+garage.DATA.checkins = [{ booking_id: 'at' }];
+assert.equal(garage.missingCheckin(atCutoff), false);
+assert.equal(garage.payBlockedReason(atCutoff), '');
+garage.DATA.checkins = [];
+nowMs = Date.parse('2026-11-01T16:00:00.000Z');
+assert.equal(garage.missingCheckin(beforeCutoff), false);
+assert.equal(garage.payBlockedReason(beforeCutoff), '');
+assert.equal(garage.missingCheckin(atCutoff), false);
+assert.equal(garage.payBlockedReason(atCutoff), 'Driver pay waits for the car check-in, which opens after the booking ends.');
+assert.equal(garage.payBlockedReason({ ...atCutoff, driver_paid_at: '2026-11-01T16:10:00.000Z' }), '');
+
+const panelStart = html.indexOf('function checkinPanelHtml');
+const panelEnd = html.indexOf('async function paintCheckinPhotos');
+assert.ok(panelStart > 0 && panelEnd > panelStart);
+const panel = {
+  DATA: { checkinReady: true, checkins: [] },
+  checkinFor() { return null; },
+  canSubmitCheckin() { return false; },
+  isOwnerView() { return true; },
+  myStaffId() { return 'd1'; },
+  bookingHasEnded() { return true; },
+  bookingEndMs,
+  CHECKIN_REQUIRED_FROM,
+  esc(value) { return String(value ?? ''); },
+  fmtChicagoStamp() { return ''; },
+  fuelLabel(level) { return level; },
+};
+vm.createContext(panel);
+vm.runInContext(html.slice(panelStart, panelEnd), panel);
+assert.equal(panel.checkinPanelHtml(beforeCutoff), '');
+assert.match(panel.checkinPanelHtml(atCutoff), /class="payblock"/);
+assert.match(panel.checkinPanelHtml(atCutoff), /Car check-in is required before this driver can be marked paid/);
 
 console.log('car-checkin tests passed');

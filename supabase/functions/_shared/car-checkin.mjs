@@ -4,6 +4,8 @@
 // There is no ending-mileage field. Fuel level is the gauge reading.
 
 export const CHECKIN_TZ = "America/Chicago";
+// 10:05 AM America/Chicago on 2026-11-01. Bookings that ended earlier are not nudged.
+export const CHECKIN_REQUIRED_FROM = Date.parse("2026-11-01T16:05:00Z");
 export const DRIVER_NUDGE_FIRST_MS = 60 * 60 * 1000;
 export const DRIVER_NUDGE_EVERY_MS = 3 * 60 * 60 * 1000;
 export const DRIVER_NUDGE_CAP = 4;
@@ -121,7 +123,7 @@ export function checkinNoticePlan(booking, hasCheckin, nowMs) {
     return { endMs: null, driverSlot: null, owner: false };
   }
   const endMs = bookingEndMs(booking.event_date, booking.start_time, booking.end_time);
-  if (endMs == null) return { endMs: null, driverSlot: null, owner: false };
+  if (endMs == null || endMs < CHECKIN_REQUIRED_FROM) return { endMs: null, driverSlot: null, owner: false };
   return {
     endMs,
     driverSlot: driverNudgeSlot(endMs, nowMs),
