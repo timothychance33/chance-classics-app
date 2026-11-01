@@ -135,6 +135,16 @@ assert.match(notify, /owner_notified_at: null/);
 assert.doesNotMatch(shared, /ending_mileage/);
 
 assert.match(html, /id="ci_fuel"/);
+assert.match(html, /class="ci-pill"/);
+assert.match(html, /name="ci_issues" value="no"/);
+assert.match(html, /name="ci_issues" value="yes"/);
+const checkinForm = html.slice(html.indexOf('id="ci_fuel"'), html.indexOf('id="ci_submit"'));
+const issueBox = checkinForm.indexOf('id="ci_issue_box"');
+const photos = checkinForm.indexOf('id="ci_photos" type="file" accept="image/*" multiple');
+const notes = checkinForm.indexOf('id="ci_notes"');
+const severity = checkinForm.indexOf('name="ci_severity" value="needs_fix"');
+assert.ok(issueBox > 0 && notes > issueBox && severity > issueBox && photos > issueBox, 'issue details sit inside the Yes section');
+assert.ok(checkinForm.indexOf('id="ci_photos"') < checkinForm.lastIndexOf('ci_issue_box') || checkinForm.includes('id="ci_issue_box"'), 'photos follow the Yes choice');
 assert.match(html, /Needs fix before next booking/);
 assert.match(html, /Car check-in is required before this driver can be marked paid/);
 assert.match(html, /function overrideDriverPaid/);
