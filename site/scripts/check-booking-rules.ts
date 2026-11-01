@@ -43,7 +43,18 @@ import {
   promotedStatusIfNew,
   totalDollarsFromCheckout,
 } from "../lib/deposit-payment.ts";
-import { balanceReminderMonday, chargeAmounts, depositCheckoutSaveCard, refundAmounts } from "../lib/saved-card.ts";
+import {
+  balanceCheckoutDuePhrase,
+  balanceDuePhrase,
+  balanceReminderCatchupWindow,
+  balanceReminderDue,
+  balanceReminderMonday,
+  balanceReminderStatusOk,
+  chargeAmounts,
+  depositCheckoutSaveCard,
+  refundAmounts,
+  reminderBalanceUsd,
+} from "../lib/saved-card.ts";
 
 function assert(cond: boolean, message: string) {
   if (!cond) throw new Error(message);
@@ -300,6 +311,17 @@ assert(balanceReminderMonday("2026-10-18") === "2026-10-12", "Sunday uses Monday
 assert(balanceReminderMonday("2026-10-12") === "2026-10-05", "Monday uses the previous Monday");
 assert(balanceReminderMonday("2026-10-13") === "2026-10-05", "Tuesday uses the previous Monday");
 assert(balanceReminderMonday("2026-10-19") === "2026-10-12", "next Monday uses this Monday");
+assert(balanceReminderDue("2026-11-03", "2026-11-01") === true, "a Tuesday event is due once the previous Monday has passed");
+assert(balanceReminderDue("2026-11-04", "2026-11-01") === false, "next Wednesday waits for its own Monday");
+assert(balanceReminderDue("2026-10-31", "2026-11-01") === false, "a past event is not a catch-up");
+assert(balanceReminderCatchupWindow("2026-11-01").from === "2026-11-01" && balanceReminderCatchupWindow("2026-11-01").to === "2026-11-03", "Sunday catch-up stops at Tuesday");
+assert(reminderBalanceUsd({ total_usd: 551.25, amount_paid_usd: 551.25, balance_due_usd: 40 }) === 0, "amount paid covering the total is settled");
+assert(reminderBalanceUsd({ total_usd: 551.25, amount_paid_usd: 250, balance_due_usd: 301.25 }) === 301.25, "an open balance stays open");
+assert(balanceReminderStatusOk({ status: "confirmed" }) === true, "confirmed bookings get the reminder");
+assert(balanceReminderStatusOk({ status: "new", payment_status: "unpaid" }) === false, "an unpaid new booking is not confirmed");
+assert(balanceDuePhrase("2026-11-01", "2026-11-01") === "today", "an event today is due today");
+assert(balanceDuePhrase("2026-11-02", "2026-11-01") === "today, the day before your event", "an event tomorrow is due today");
+assert(balanceCheckoutDuePhrase("2026-11-14", "2026-11-01") === "the day before the event", "a later event keeps the day-before due date");
 const saveCard = depositCheckoutSaveCard();
 assert(saveCard.customer_creation === "always" && saveCard.payment_intent_data.setup_future_usage === "off_session", "deposit checkout saves the card");
 assert(!("payment_method_types" in saveCard), "deposit checkout uses Dashboard payment methods");

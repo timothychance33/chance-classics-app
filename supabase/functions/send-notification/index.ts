@@ -434,6 +434,8 @@ Deno.serve(async (req) => {
         pickup: body.pickup_location,
         dropoff: body.return_location,
         taxExempt: body.tax_exempt === true,
+        mondayReminder: body.monday_reminder === true,
+        today: typeof body.today === "string" ? body.today : "",
         hotelLine: (String(body.notes || "").match(/^Overnight driver hotel:\s*(.+)$/im) || [])[1] || "",
       };
       const subject = balancePaySubject(body.event_date);

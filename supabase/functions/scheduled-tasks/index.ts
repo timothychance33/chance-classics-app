@@ -4,10 +4,18 @@
 //   1) 12-hour warning + 48h auto-advance on unanswered offers
 //   2) Weekly driver digest: Monday morning America/Chicago
 //   3) Quote auto-reminder before expiry
-//   4) Balance reminder: Monday before the event (America/Chicago).
+//   4) Balance reminder: the Monday before the event (America/Chicago),
+//      then a catch-up on every later hourly run.
 //      Wed–Sun: Monday of that week. Mon or Tue: the previous Monday.
-//      The email says the balance is due the day before the event.
-//      Skips a $0 balance and any booking already stamped balance_reminder_sent_at.
+//      Once today is on or after balanceReminderMonday(eventDate), a confirmed
+//      booking with a balance still open and no balance_reminder_sent_at is
+//      emailed if the event is today or later. A deposit paid after that
+//      Monday is picked up on the next hourly run after 7am Chicago.
+//      Past events are left alone.
+//      The balance is due the day before the event. If the event is today or
+//      tomorrow, the email says the balance is due today.
+//      Skips a $0 balance, a booking whose amount paid already covers the
+//      total, and any booking already stamped balance_reminder_sent_at.
 //   5) Day-before client email: 10:00 AM America/Chicago the day before the event.
 //      Confirmed (and later) bookings, plus status new when the deposit or full
 //      payment is already recorded. The hourly job sends it on the 10:00 run.
@@ -30,7 +38,13 @@
 // ============================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { balanceReminderMonday, reminderEventWindow } from "../_shared/saved-card.mjs";
+import {
+  balanceCheckoutDuePhrase,
+  balanceReminderCatchupWindow,
+  balanceReminderDue,
+  balanceReminderStatusOk,
+  reminderBalanceUsd,
+} from "../_shared/saved-card.mjs";
 import { CUSTOMER_REPLY_TO, DEFAULT_FROM_EMAIL, htmlToPlainText } from "../_shared/email-plain.mjs";
 import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/balance-pay-email.mjs";
 import { driverBusyWith, offerRankFor } from "../_shared/driver-availability.mjs";
@@ -248,6 +262,7 @@ async function balancePayLink(input: {
   amount: number;
   eventDate: string;
   taxExempt?: boolean;
+  today?: string;
 }) {
   const params = new URLSearchParams();
   params.set("mode", "payment");
@@ -264,10 +279,13 @@ async function balancePayLink(input: {
   params.set("line_items[0][price_data][currency]", "usd");
   params.set("line_items[0][price_data][unit_amount]", String(Math.round(input.amount * 100)));
   params.set("line_items[0][price_data][product_data][name]", "Chance Classics rental balance");
+  const due = input.today
+    ? balanceCheckoutDuePhrase(input.eventDate, input.today)
+    : "the day before the event";
   params.set("line_items[0][price_data][product_data][description]",
     input.taxExempt
-      ? `Balance for ${input.eventDate}. Tax exempt. The balance is due the day before the event.`
-      : `Balance for ${input.eventDate}. The booking total includes 10.25% sales tax. The balance is due the day before the event.`);
+      ? `Balance for ${input.eventDate}. Tax exempt. The balance is due ${due}.`
+      : `Balance for ${input.eventDate}. The booking total includes 10.25% sales tax. The balance is due ${due}.`);
   if (input.customerId.startsWith("cus_")) params.set("customer", input.customerId);
   else params.set("customer_email", input.email);
 
@@ -828,16 +846,18 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ================= 4) BALANCE REMINDER (Monday before the event, Chicago) =================
-  // Customer copy is balancePayHtml, the same note a garage pay link emails.
-  // Hourly pg_cron sends these after 7am. The Monday driver-digest call can send too.
-  // balance_reminder_sent_at stops a second email.
+  // ================= 4) BALANCE REMINDER (catch-up after the reminder Monday) =================
+  // Customer copy is balancePayHtml, the same note a garage pay link emails,
+  // plus the driver line. Hourly pg_cron sends these after 7am Chicago, any day
+  // once that Monday has arrived, so a late deposit is picked up on the next run.
+  // balance_reminder_sent_at stops a second email. Past events are not queried.
   summary.balance_reminders = { sent: 0, skipped: 0, errors: [] as string[] };
   {
     const chicagoNow = chicagoParts(now);
     const balanceSummary = summary.balance_reminders as { sent: number; skipped: number; errors: string[]; reason?: string };
-    if (chicagoNow.weekday !== "Monday") {
-      balanceSummary.reason = `not Monday in ${CHICAGO_TZ} (it is ${chicagoNow.weekday})`;
+    const eventWindow = balanceReminderCatchupWindow(chicagoNow.date);
+    if (!eventWindow.from || !eventWindow.to) {
+      balanceSummary.reason = "Chicago date is missing";
     } else if (chicagoNow.hour < 7) {
       balanceSummary.reason = `before 7am in ${CHICAGO_TZ} (hour ${chicagoNow.hour})`;
     } else if (!STRIPE_SECRET_KEY) {
@@ -847,8 +867,7 @@ Deno.serve(async (req) => {
       balanceSummary.reason = "RESEND_API_KEY is not set";
       balanceSummary.errors.push(balanceSummary.reason);
     } else {
-      const eventWindow = reminderEventWindow(chicagoNow.date);
-      const balanceColumns = "id,customer_name,customer_email,event_date,event_type,start_time,end_time,pickup_location,return_location,status,notes,total_usd,amount_paid_usd,balance_due_usd,balance_reminder_sent_at,stripe_customer_id,car_id,tax_exempt";
+      const balanceColumns = "id,customer_name,customer_email,event_date,event_type,start_time,end_time,pickup_location,return_location,status,payment_status,notes,total_usd,amount_paid_usd,balance_due_usd,balance_reminder_sent_at,stripe_customer_id,car_id,tax_exempt";
       const balanceQuery = (columns: string) => sb.from("bookings")
         .select(columns)
         .is("balance_reminder_sent_at", null)
@@ -870,20 +889,12 @@ Deno.serve(async (req) => {
         for (const b of due.data ?? []) {
           const email = String(b.customer_email || "").trim();
           const eventDate = String(b.event_date || "").slice(0, 10);
-          if (!email || balanceReminderMonday(eventDate) !== chicagoNow.date) {
+          if (!email || !balanceReminderStatusOk(b) || !balanceReminderDue(eventDate, chicagoNow.date)) {
             balanceSummary.skipped += 1;
             continue;
           }
-          const balance = b.balance_due_usd != null && b.balance_due_usd !== ""
-            ? Math.round(Number(b.balance_due_usd) * 100) / 100
-            : (b.total_usd == null
-              ? null
-              : Math.round((Number(b.total_usd) - Number(b.amount_paid_usd || 0)) * 100) / 100);
-          if (balance == null || !Number.isFinite(balance) || balance <= 0) {
-            balanceSummary.skipped += 1;
-            continue;
-          }
-          if (balance < 0.5) {
+          const balance = reminderBalanceUsd(b);
+          if (balance == null || !Number.isFinite(balance) || balance < 0.5) {
             balanceSummary.skipped += 1;
             continue;
           }
@@ -908,6 +919,7 @@ Deno.serve(async (req) => {
               amount: balance,
               eventDate,
               taxExempt: bookingTaxExempt(b),
+              today: chicagoNow.date,
             });
             const cn = await carName(b.car_id);
             const payMail = {
@@ -922,6 +934,7 @@ Deno.serve(async (req) => {
               pickup: b.pickup_location,
               dropoff: b.return_location,
               mondayReminder: true,
+              today: chicagoNow.date,
               taxExempt: bookingTaxExempt(b),
               hotelLine: (String(b.notes || "").match(/^Overnight driver hotel:\s*(.+)$/im) || [])[1] || "",
             };
@@ -1054,6 +1067,7 @@ Deno.serve(async (req) => {
                 amount: Number(preview.balance),
                 eventDate: String(row.event_date || "").slice(0, 10),
                 taxExempt: bookingTaxExempt(row),
+                today: chicagoNow.date,
               });
             }
             const mail = renderDayBeforeEmail({

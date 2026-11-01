@@ -2,7 +2,16 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
-import { balanceReminderMonday, reminderEventWindow } from '../supabase/functions/_shared/saved-card.mjs';
+import {
+  balanceCheckoutDuePhrase,
+  balanceDuePhrase,
+  balanceReminderCatchupWindow,
+  balanceReminderDue,
+  balanceReminderMonday,
+  balanceReminderStatusOk,
+  reminderBalanceUsd,
+  reminderEventWindow,
+} from '../supabase/functions/_shared/saved-card.mjs';
 import {
   MONDAY_DRIVER_LINE,
   balanceEventDate,
@@ -23,6 +32,34 @@ assert.equal(balanceReminderMonday('2026-10-12'), '2026-10-05');
 assert.equal(balanceReminderMonday('2026-10-13'), '2026-10-05');
 assert.equal(balanceReminderMonday('2026-10-20'), '2026-10-12');
 assert.deepEqual(reminderEventWindow('2026-10-12'), { from: '2026-10-14', to: '2026-10-20' });
+assert.equal(balanceReminderDue('2026-10-14', '2026-10-12'), true);
+assert.equal(balanceReminderDue('2026-10-14', '2026-10-13'), true);
+assert.equal(balanceReminderDue('2026-10-14', '2026-10-11'), false);
+assert.equal(balanceReminderDue('2026-10-31', '2026-11-01'), false);
+assert.equal(balanceReminderDue('2026-11-01', '2026-11-01'), true);
+assert.equal(balanceReminderDue('2026-11-03', '2026-11-01'), true);
+assert.equal(balanceReminderDue('2026-11-04', '2026-11-01'), false);
+assert.equal(balanceReminderDue('2026-10-12', '2026-10-12'), true);
+assert.deepEqual(balanceReminderCatchupWindow('2026-11-01'), { from: '2026-11-01', to: '2026-11-03' });
+assert.deepEqual(balanceReminderCatchupWindow('2026-10-12'), { from: '2026-10-12', to: '2026-10-20' });
+assert.deepEqual(balanceReminderCatchupWindow('2026-10-15'), { from: '2026-10-15', to: '2026-10-20' });
+assert.equal(reminderBalanceUsd({ total_usd: 551.25, amount_paid_usd: 551.25, balance_due_usd: 301.25 }), 0);
+assert.equal(reminderBalanceUsd({ total_usd: 551.25, amount_paid_usd: 600, balance_due_usd: 50 }), 0);
+assert.equal(reminderBalanceUsd({ total_usd: 551.25, amount_paid_usd: 250, balance_due_usd: 301.25 }), 301.25);
+assert.equal(reminderBalanceUsd({ total_usd: 551.25, amount_paid_usd: 250 }), 301.25);
+assert.equal(reminderBalanceUsd({ balance_due_usd: 0, total_usd: 100, amount_paid_usd: 40 }), 0);
+assert.equal(balanceReminderStatusOk({ status: 'confirmed', payment_status: 'deposit' }), true);
+assert.equal(balanceReminderStatusOk({ status: 'prepping' }), true);
+assert.equal(balanceReminderStatusOk({ status: 'new', payment_status: 'deposit' }), true);
+assert.equal(balanceReminderStatusOk({ status: 'new', payment_status: 'unpaid' }), false);
+assert.equal(balanceReminderStatusOk({ status: 'declined', payment_status: 'deposit' }), false);
+assert.equal(balanceReminderStatusOk({ status: 'hold', payment_status: 'deposit' }), false);
+assert.equal(balanceReminderStatusOk({ status: 'cancelled' }), false);
+assert.equal(balanceDuePhrase('2026-11-14', '2026-11-01'), 'the day before your event');
+assert.equal(balanceDuePhrase('2026-11-02', '2026-11-01'), 'today, the day before your event');
+assert.equal(balanceDuePhrase('2026-11-01', '2026-11-01'), 'today');
+assert.equal(balanceDuePhrase('2026-11-14', ''), 'the day before your event');
+assert.equal(balanceCheckoutDuePhrase('2026-11-02', '2026-11-01'), 'today, the day before the event');
 
 const bookings = read('site/app/api/bookings/route.ts');
 const quoteBook = read('site/app/api/quotes/book/route.ts');
@@ -72,6 +109,15 @@ assert.match(notices, /enable row level security/);
 
 const scheduled = read('supabase/functions/scheduled-tasks/index.ts');
 assert.match(scheduled, /balanceReminderMonday/);
+assert.match(scheduled, /balanceReminderDue/);
+assert.match(scheduled, /balanceReminderCatchupWindow/);
+assert.match(scheduled, /balanceReminderStatusOk/);
+assert.match(scheduled, /reminderBalanceUsd/);
+assert.match(scheduled, /today: chicagoNow\.date/);
+assert.doesNotMatch(scheduled, /balanceReminderMonday\(eventDate\) !==/);
+assert.match(scheduled, /before 7am in/);
+assert.doesNotMatch(scheduled, /not Monday in \$\{CHICAGO_TZ\} \(it is \$\{chicagoNow\.weekday\}\)/);
+assert.match(scheduled, /runCarCheckinMail/);
 assert.match(scheduled, /balance_reminder_sent_at/);
 assert.match(scheduled, /The balance is due the day before the event/);
 assert.match(scheduled, /10\.25% sales tax/);
@@ -158,6 +204,16 @@ assert.match(payText, /https:\/\/checkout\.stripe\.com\/c\/pay\/cs_test_123/);
 assert.doesNotMatch(payText, /<a |<p>/);
 assert.doesNotMatch(payMail, /You'll get your driver's name/);
 assert.doesNotMatch(payText, /You'll get your driver's name/);
+const tomorrowMail = balancePayHtml({ ...payInput, eventDate: '2026-11-02', today: '2026-11-01' });
+const tomorrowText = balancePayText({ ...payInput, eventDate: '2026-11-02', today: '2026-11-01' });
+assert.match(tomorrowMail, /due today, the day before your event/);
+assert.match(tomorrowText, /due today, the day before your event/);
+const sameDayMail = balancePayHtml({ ...payInput, eventDate: '2026-11-01', today: '2026-11-01', taxExempt: true });
+const sameDayText = balancePayText({ ...payInput, eventDate: '2026-11-01', today: '2026-11-01', taxExempt: true });
+assert.match(sameDayMail, /It is due today\./);
+assert.match(sameDayText, /It is due today\./);
+assert.doesNotMatch(sameDayMail, /day before/);
+assert.doesNotMatch(sameDayText, /day before/);
 const mondayHtml = balancePayHtml({ ...payInput, mondayReminder: true });
 const mondayText = balancePayText({ ...payInput, mondayReminder: true });
 assert.equal(mondayHtml.split(MONDAY_DRIVER_LINE).length, 2);
@@ -182,7 +238,14 @@ const notify = read('supabase/functions/send-notification/index.ts');
 assert.match(notify, /type === "balance_pay"/);
 assert.match(notify, /balancePayHtml/);
 assert.match(notify, /balancePayText\(payMail\)/);
-assert.doesNotMatch(notify, /mondayReminder/);
+assert.match(notify, /mondayReminder: body\.monday_reminder === true/);
+assert.match(notify, /today: typeof body\.today === "string" \? body\.today : ""/);
+assert.doesNotMatch(read('site/app/api/bookings/charge/route.ts'), /monday_reminder:\s*true|mondayReminder:\s*true/);
+assert.match(read('site/lib/balance-reminder.ts'), /mondayReminder: true/);
+assert.match(read('site/lib/balance-reminder.ts'), /balanceReminderDue/);
+assert.match(read('site/lib/balance-reminder.ts'), /reminderBalanceUsd/);
+assert.match(webhook, /sendCatchUpBalanceReminder/);
+assert.equal((webhook.match(/sendCatchUpBalanceReminder\(/g) || []).length, 2);
 const sharedMail = read('supabase/functions/send-notification/shared.ts');
 assert.match(sharedMail, /FROM_EMAIL = Deno\.env\.get\("FROM_EMAIL"\) \?\? DEFAULT_FROM_EMAIL/);
 assert.match(sharedMail, /reply_to: REPLY_TO/);
@@ -266,6 +329,7 @@ assert.match(chargeWebhook, /applySucceededCharge/);
 assert.match(chargeWebhook, /source: "checkout"/);
 assert.match(chargeWebhook, /emailOwnerAboutMoney/);
 assert.match(chargeWebhook, /amountUsd: amount/);
+assert.doesNotMatch(chargeWebhook, /sendCatchUpBalanceReminder/);
 assert.match(read('site/lib/booking-charge.ts'), /amount_paid_usd: next\.paid/);
 assert.match(read('site/lib/booking-charge.ts'), /OPEN_CHARGE = \["pending"/);
 assert.match(read('site/lib/stripe-booking-events.ts'), /source !== "off_session"/);

@@ -4,7 +4,8 @@ import { applySucceededCharge } from "@/lib/booking-charge";
 import { authorizeCharge, chargeCors } from "@/lib/charge-auth";
 import { emailCustomerBalancePay, emailOwnerAboutMoney, failedChargeNoticeIds, paymentNoticeIds } from "@/lib/owner-booking-notify";
 import { rentalDb } from "@/lib/rental-db";
-import { bookingTotals, chargeAmounts, chargeDescription, isChargeReason } from "@/lib/saved-card";
+import { chicagoDate } from "@/lib/booking-rules";
+import { balanceCheckoutDuePhrase, bookingTotals, chargeAmounts, chargeDescription, isChargeReason } from "@/lib/saved-card";
 
 export const runtime = "nodejs";
 
@@ -71,6 +72,7 @@ async function payLink(stripe: Stripe, input: {
   reason: "balance" | "overage" | "damage";
   description: string;
   taxExempt?: boolean;
+  eventDate?: string;
 }) {
   const paid = input.reason === "balance" ? "balance" : "charge";
   const base: Stripe.Checkout.SessionCreateParams = {
@@ -98,8 +100,8 @@ async function payLink(stripe: Stripe, input: {
           product_data: {
             name: input.description,
             description: input.taxExempt
-              ? "Tax exempt. The balance is due the day before the event."
-              : "The balance is due the day before the event. The booking total includes 10.25% sales tax.",
+              ? `Tax exempt. The balance is due ${balanceCheckoutDuePhrase(input.eventDate || "", chicagoDate())}.`
+              : `The balance is due ${balanceCheckoutDuePhrase(input.eventDate || "", chicagoDate())}. The booking total includes 10.25% sales tax.`,
           },
         },
       },
@@ -244,6 +246,7 @@ async function sendBalancePayLink(
         reason: input.reason,
         description: chargeDescription(input.reason),
         taxExempt: row.tax_exempt === true || /(?:^|\n)\s*Tax exempt\b/i.test(String(row.notes || "")),
+        eventDate: String(row.event_date || ""),
       });
     } catch (error) {
       return json(request, { error: stripeMessage(error) }, 502);
