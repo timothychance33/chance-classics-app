@@ -215,7 +215,7 @@ p { margin: 0 0 1em; }
 
 /* Home */
 .hero { display: block; width: 100%; }
-.hero img { width: 100%; height: auto; display: block; max-height: 78vh; object-fit: cover; object-position: center; }
+.hero img { width: 100%; height: auto; display: block; max-height: 60vh; object-fit: cover; object-position: center 85%; }
 .hero-quote {
   display: flex;
   justify-content: center;
