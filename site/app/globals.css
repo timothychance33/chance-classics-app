@@ -214,8 +214,7 @@ p { margin: 0 0 1em; }
 .instagram-strip a { font-weight: 600; }
 
 /* Home */
-.hero { display: block; width: 100%; }
-.hero img { width: 100%; height: auto; display: block; max-height: 60vh; object-fit: cover; object-position: center 85%; }
+.hero, .hero img { width: 100%; height: auto; display: block; max-height: max(300px, calc(100vh - 300px)); object-fit: cover; object-position: center 85%; }
 .hero-quote {
   display: flex;
   justify-content: center;
