@@ -49,10 +49,10 @@ export function defaultShareImage() {
     alt: OG_IMAGE_ALT,
   };
 }
-export const LOGO = "/images/logo_chance-classics-chrome_520.webp";
-export const LOGO_2X = "/images/logo_chance-classics-chrome_1040.webp";
-export const LOGO_FLAT = "/images/logo_chance-classics-flat_300.webp";
-export const LOGO_FLAT_2X = "/images/logo_chance-classics-flat_600.webp";
+export const LOGO = "/images/logo_chance-classics-chrome_680.webp";
+export const LOGO_2X = "/images/logo_chance-classics-chrome_1360.webp";
+export const LOGO_FLAT = "/images/logo_chance-classics-flat_340.webp";
+export const LOGO_FLAT_2X = "/images/logo_chance-classics-flat_680.webp";
 export const FACEBOOK_ICON = "/images/icon_facebook_01.webp";
 
 export type Img = { src: string; alt: string; w: number; h: number; file?: string };

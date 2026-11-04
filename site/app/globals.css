@@ -107,19 +107,19 @@ p { margin: 0 0 1em; }
 /* Header */
 .site-header {
   text-align: center;
-  padding: 18px 16px 8px;
+  padding: 10px 16px 4px;
   background: #fff;
 }
 .logo {
   display: inline-block;
   line-height: 0;
 }
-.logo img { width: min(520px, 86vw); height: auto; }
+.logo img { width: min(680px, 88vw); height: auto; }
 .tagline {
   font-family: var(--serif);
   font-size: clamp(28px, 4vw, 48px);
   line-height: 1.2;
-  margin: 8px 0 18px;
+  margin: 4px 0 10px;
 }
 .menu-btn {
   display: none;
@@ -214,7 +214,7 @@ p { margin: 0 0 1em; }
 .instagram-strip a { font-weight: 600; }
 
 /* Home */
-.hero, .hero img { width: 100%; height: auto; display: block; max-height: max(300px, calc(100vh - 300px)); object-fit: cover; object-position: center 85%; }
+.hero, .hero img { width: 100%; height: auto; display: block; max-height: max(300px, calc(100vh - 420px)); object-fit: cover; object-position: center 85%; }
 .hero-quote {
   display: flex;
   justify-content: center;
@@ -765,7 +765,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   .split, .svc-row, .svc-row.reverse, .service-top, .two { grid-template-columns: 1fr; direction: ltr; }
   .svc-row img { height: auto; aspect-ratio: 4/3; }
   .masonry { columns: 1; }
-  .logo img { width: min(280px, 78vw); }
+  .logo img { width: min(330px, 84vw); }
   .tagline { font-size: 26px; }
   .thumbs img { width: calc(50% - 8px); height: auto; aspect-ratio: 1; }
 }

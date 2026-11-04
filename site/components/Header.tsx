@@ -30,7 +30,7 @@ export function Header() {
       <Link href="/" className="logo" onClick={close}>
         <picture>
           <source media="(max-width: 760px)" srcSet={`${LOGO_FLAT} 1x, ${LOGO_FLAT_2X} 2x`} />
-          <img src={LOGO} srcSet={`${LOGO} 1x, ${LOGO_2X} 2x`} alt="Chance Classics" width={520} height={240} />
+          <img src={LOGO} srcSet={`${LOGO} 1x, ${LOGO_2X} 2x`} alt="Chance Classics" width={680} height={289} />
         </picture>
       </Link>
       <p className="tagline">Classic and Luxury Car Rental</p>
