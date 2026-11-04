@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { FACEBOOK, FACEBOOK_ICON, LOGO } from "@/lib/content";
+import { FACEBOOK, FACEBOOK_ICON, LOGO, LOGO_2X, LOGO_FLAT, LOGO_FLAT_2X } from "@/lib/content";
 
 const links = [
   { href: "/", label: "Home" },
@@ -28,7 +28,10 @@ export function Header() {
   return (
     <header className="site-header">
       <Link href="/" className="logo" onClick={close}>
-        <img src={LOGO} alt="Chance Classics" width={513} height={255} />
+        <picture>
+          <source media="(max-width: 760px)" srcSet={`${LOGO_FLAT} 1x, ${LOGO_FLAT_2X} 2x`} />
+          <img src={LOGO} srcSet={`${LOGO} 1x, ${LOGO_2X} 2x`} alt="Chance Classics" width={520} height={240} />
+        </picture>
       </Link>
       <p className="tagline">Classic and Luxury Car Rental</p>
       <button
