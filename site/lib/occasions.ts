@@ -158,11 +158,18 @@ export const occasions: {
         file: "occasion-photo-shoots-01.jpg",
       },
       {
-        src: "/images/occasion-photo-shoots-02.webp",
-        alt: "Sunset photo shoot beside Rosie, our red 1960 Corvette, in a field",
-        w: 1200,
+        src: "/images/occasion-photo-shoots-04.webp",
+        alt: "Couple posing at the chrome grille of Phyllis, our cream 1941 Buick Super convertible",
+        w: 1068,
         h: 1600,
-        file: "occasion-photo-shoots-02.jpg",
+        file: "occasion-photo-shoots-04.jpg",
+      },
+      {
+        src: "/images/occasion-photo-shoots-07.webp",
+        alt: "Family photo shoot with Bonnie, our 1937 Cadillac Fleetwood Series 75, in a cotton field",
+        w: 1600,
+        h: 1067,
+        file: "occasion-photo-shoots-07.jpg",
       },
       {
         src: "/images/occasion-photo-shoots-03.webp",
@@ -172,11 +179,11 @@ export const occasions: {
         file: "occasion-photo-shoots-03.jpg",
       },
       {
-        src: "/images/occasion-photo-shoots-04.webp",
-        alt: "Couple posing at the chrome grille of Phyllis, our cream 1941 Buick Super convertible",
-        w: 1068,
+        src: "/images/occasion-photo-shoots-02.webp",
+        alt: "Sunset photo shoot beside Rosie, our red 1960 Corvette, in a field",
+        w: 1200,
         h: 1600,
-        file: "occasion-photo-shoots-04.jpg",
+        file: "occasion-photo-shoots-02.jpg",
       },
       {
         src: "/images/occasion-photo-shoots-05.webp",
@@ -184,6 +191,13 @@ export const occasions: {
         w: 1600,
         h: 1600,
         file: "occasion-photo-shoots-05.jpg",
+      },
+      {
+        src: "/images/occasion-photo-shoots-08.webp",
+        alt: "Family and their dog posing at the back of Bonnie, our 1937 Cadillac Fleetwood Series 75, at sunset",
+        w: 1600,
+        h: 1067,
+        file: "occasion-photo-shoots-08.jpg",
       },
       {
         src: "/images/occasion-photo-shoots-06.webp",
