@@ -2035,8 +2035,9 @@ const HOTEL_MILES_OVER=60, HOTEL_RETURN_CUTOFF_MINUTES=2*60, HOTEL_NIGHT_USD=200
 const HOTEL_LINE_LABEL='Overnight driver hotel';
 const HOTEL_FEE=HOTEL_NIGHT_USD;
 const FOLLOWUP_DAYS=3, QUOTE_VALID_DAYS=7;
-// Prep, travel, and trailer time kept clear before AND after each booking of the same car.
-// Change this one number to adjust the gap. The database exclusion constraint does not include it.
+// Prep and trailer time kept clear before AND after each booking of the same car,
+// in addition to the one-way drive. Change this one number to adjust the gap.
+// The database exclusion constraint does not include it.
 const BOOKING_BUFFER_HOURS=2;
 const NO_AVAILABILITY_REASON='no availability';
 function renderQuotes(){
@@ -2239,7 +2240,25 @@ function dayNumber(iso){
   if(!match) return null;
   return Math.floor(Date.UTC(Number(match[1]), Number(match[2])-1, Number(match[3]))/86400000);
 }
-function blockedInterval(booking, bufferHours){
+// One-way drive when a job has miles but no stored drive time. 245 miles is 268 minutes.
+const DRIVE_MPH=55;
+function knownTravelNumber(value){
+  if(value==null||value==='') return null;
+  const n=Number(value);
+  if(!Number.isFinite(n)||n<0) return null;
+  return n;
+}
+function travelMinutes(job){
+  if(!job||typeof job!=='object') return 0;
+  const drive=knownTravelNumber(job.drive_minutes!=null&&job.drive_minutes!==''?job.drive_minutes:job.driveMinutes);
+  if(drive!=null) return drive;
+  const miles=knownTravelNumber(job.mileage_miles!=null&&job.mileage_miles!==''?job.mileage_miles:job.miles);
+  if(miles==null) return 0;
+  return Math.ceil(miles/DRIVE_MPH*60);
+}
+// Car block is [start - drive - buffer, end + drive + buffer].
+// Pass travelMin (including 0) to skip the job's own drive. Driver overlap does that.
+function blockedInterval(booking, bufferHours, travelMin){
   if(!booking||booking.status==='cancelled'||!booking.event_date) return null;
   const day=dayNumber(booking.event_date);
   const startMin=clockMinutes(booking.start_time);
@@ -2248,27 +2267,31 @@ function blockedInterval(booking, bufferHours){
   let end=endMin;
   if(end<=startMin) end+=1440;
   const buffer=(bufferHours==null?BOOKING_BUFFER_HOURS:Number(bufferHours))*60;
+  const travel=travelMin==null?travelMinutes(booking):Math.max(0, Number(travelMin)||0);
   const origin=day*1440;
-  return {start:origin+startMin-buffer, end:origin+end+buffer};
+  return {start:origin+startMin-travel-buffer, end:origin+end+travel+buffer};
 }
-function requestedInterval(evDate, startTime, hours){
+function requestedInterval(evDate, startTime, hours, job){
   const day=dayNumber(evDate);
   const startMin=clockMinutes(startTime);
   const duration=Number(hours);
   if(day==null||startMin==null||!Number.isFinite(duration)||duration<=0) return null;
+  const travel=travelMinutes(job);
   const start=day*1440+startMin;
-  return {start, end:start+duration*60};
+  return {start:start-travel, end:start+duration*60+travel};
 }
 function intervalsOverlap(a, b){
   return !!(a&&b&&a.start<b.end&&b.start<a.end);
 }
-// Same 2-hour rule as car availability. Buffer one booking, compare to the other's raw window.
+// Driver overlap stays the flat 2-hour gap (travel forced to 0). Car availability
+// adds drive time in blockedInterval. supabase/functions/_shared/driver-availability.mjs
+// still uses that flat window and is not updated here.
 // A missing start or end overlaps only on the same calendar date. Cancelled bookings do not.
 function driverWindowsOverlap(a, b){
   if(!a||!b) return false;
   if(a.status==='cancelled'||b.status==='cancelled') return false;
-  const blocked=blockedInterval(a);
-  const raw=blockedInterval(b, 0);
+  const blocked=blockedInterval(a, null, 0);
+  const raw=blockedInterval(b, 0, 0);
   if(blocked&&raw) return intervalsOverlap(blocked, raw);
   const da=a.event_date?String(a.event_date).slice(0,10):'';
   const db=b.event_date?String(b.event_date).slice(0,10):'';
@@ -2304,12 +2327,24 @@ function quoteSlot(hours){
   }
   h=parseFloat(h);
   if(!Number.isFinite(h)||h<=0) h=INCLUDED_HOURS;
-  return {startTime:window._quoteEventTime||null, hours:h};
+  const milesEl=document.getElementById('q_miles');
+  let miles=null;
+  if(milesEl){
+    const raw=String(milesEl.value||'').trim();
+    if(raw!==''){
+      const n=Number(raw);
+      if(Number.isFinite(n)&&n>=0) miles=n;
+    }
+  }else if(window._quoteTrip&&window._quoteTrip.miles!=null&&window._quoteTrip.miles!==''){
+    const n=Number(window._quoteTrip.miles);
+    if(Number.isFinite(n)&&n>=0) miles=n;
+  }
+  return {startTime:window._quoteEventTime||null, hours:h, miles:miles, driveMinutes:quoteDriveMinutes()};
 }
 function findBookingClash(carId, evDate, request){
   if(!evDate||!carId) return null;
   const slot=request||quoteSlot();
-  const wanted=requestedInterval(evDate, slot.startTime, slot.hours);
+  const wanted=requestedInterval(evDate, slot.startTime, slot.hours, slot);
   return (DATA.bookings||[]).find(b=>{
     if(!b||b.car_id!==carId||b.status==='cancelled') return false;
     if(!wanted) return b.event_date===evDate;
@@ -2883,7 +2918,8 @@ function quoteRecalc(){
   const hasEmail=!!(q&&q.customer_email);
   const resend=!!(q&&(q.status==='sent'||q.status==='booked'));
 
-  // Availability: the quote's start + hours overlaps a booking, plus BOOKING_BUFFER_HOURS on both sides.
+  // Availability: the quote occupies [start - drive, end + drive].
+  // An existing booking blocks [start - its drive - BOOKING_BUFFER_HOURS, end + its drive + BOOKING_BUFFER_HOURS].
   const avail=document.getElementById('q_avail');
   const altsEl=document.getElementById('q_alts');
   const sendRow=document.getElementById('q_send_row');
@@ -2913,7 +2949,7 @@ function quoteRecalc(){
         const drv=staffById(clash.driver_id);
         const span=timeSpanLabel(clash.start_time, clash.end_time);
         others=carsForAlternateOffers(evDate, carId, slot);
-        avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} isn't free for this time — ${esc(clash.customer_name||'another customer')}${span?' is booked '+esc(span):' is already booked that day'}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}. We keep ${BOOKING_BUFFER_HOURS} hours clear before and after.
+        avail.innerHTML=`<div class="qwarn">⚠️ ${esc(carById(carId)?.name||'This car')} isn't free for this time — ${esc(clash.customer_name||'another customer')}${span?' is booked '+esc(span):' is already booked that day'}${drv?' · driver: '+esc(drv.name):''}${clash.status?' · '+esc(clash.status):''}. We keep ${BOOKING_BUFFER_HOURS} hours clear before and after, plus the drive each way.
           <div class="meta" style="margin-top:6px;font-weight:600">Hours, miles, and hotel still apply — we just swap the car. ${others.length?`Prices for the ${others.length} open car${others.length===1?'':'s'} update as you type.`:'Nothing else is free for this time.'}</div>
           ${hasEmail && !others.length
             ? `<div style="margin-top:8px"><button class="ghost tinybtn" style="border-color:var(--oxblood);color:var(--oxblood);background:#fff" onclick="unavailableNotice('${qid}','${carId}')">✉️ Tell them it's booked</button></div>`

@@ -4,6 +4,7 @@ import {
   holdIsFresh,
   openStartTimes,
   type Busy,
+  type TripTravel,
 } from "@/lib/booking-rules";
 import type { rentalDb } from "@/lib/rental-db";
 
@@ -17,6 +18,8 @@ type Row = {
   status: string | null;
   source: string | null;
   created_at: string | null;
+  drive_minutes?: number | string | null;
+  mileage_miles?: number | string | null;
 };
 
 export async function carIdForName(db: Db, name: string) {
@@ -42,7 +45,7 @@ export async function busyRanges(db: Db, carId: string, date: string, now = new 
   const dates = [addDays(date, -1), date, addDays(date, 1)];
   const { data, error } = await db
     .from("bookings")
-    .select("id,event_date,start_time,end_time,status,source,created_at")
+    .select("id,event_date,start_time,end_time,status,source,created_at,drive_minutes,mileage_miles")
     .eq("car_id", carId)
     .in("event_date", dates)
     .neq("status", "cancelled");
@@ -57,13 +60,21 @@ export async function busyRanges(db: Db, carId: string, date: string, now = new 
       start: String(row.start_time || ""),
       end: String(row.end_time || ""),
       date: String(row.event_date || date),
+      drive_minutes: row.drive_minutes ?? null,
+      mileage_miles: row.mileage_miles ?? null,
     }));
 }
 
-export async function openTimesForCar(db: Db, carId: string, date: string, hours: number) {
+export async function openTimesForCar(
+  db: Db,
+  carId: string,
+  date: string,
+  hours: number,
+  request?: TripTravel | null,
+) {
   await releaseStaleHolds(db, carId);
   const busy = await busyRanges(db, carId, date);
-  return openStartTimes(hours, busy, date);
+  return openStartTimes(hours, busy, date, request);
 }
 
 function optionalBookingColumn(name: string) {

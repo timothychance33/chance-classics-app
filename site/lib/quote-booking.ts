@@ -146,7 +146,10 @@ export async function quoteTimeFree(db: Db, quote: QuoteRow) {
   if (end == null) return { ok: false as const, error: "This quote's hours don't make a valid end time. Ask Chance Classics for a new link." };
   await releaseStaleHolds(db, quote.car_id);
   const busy = await busyRanges(db, quote.car_id, quote.event_date);
-  const taken = slotTaken(quote.event_date, start, hours, busy);
+  const taken = slotTaken(quote.event_date, start, hours, busy, {
+    miles: quote.miles,
+    driveMinutes: quote.drive_minutes,
+  });
   if (taken) return { ok: false as const, error: "That time was just taken. Ask Chance Classics for a new quote." };
   return { ok: true as const, start, end: fromMinutes(end), hours };
 }

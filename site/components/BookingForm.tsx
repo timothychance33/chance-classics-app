@@ -253,11 +253,14 @@ export function BookingForm({ car, carName, basePrice }: Props) {
     setSlotsReady(false);
     setSlotNote("Checking open times…");
     const params = new URLSearchParams({ car, date: draft.date, hours: String(draft.hours) });
+    if (mileage?.miles != null) params.set("miles", String(mileage.miles));
+    if (mileage?.driveMinutes != null) params.set("driveMinutes", String(mileage.driveMinutes));
     fetch(`/api/availability/?${params}`)
       .then((response) => response.json())
       .then((data) => {
         if (ignore) return;
-        const next = data.connected === false ? openStartTimes(draft.hours, []) : Array.isArray(data.slots) ? data.slots : [];
+        const trip = { miles: mileage?.miles, driveMinutes: mileage?.driveMinutes };
+        const next = data.connected === false ? openStartTimes(draft.hours, [], draft.date, trip) : Array.isArray(data.slots) ? data.slots : [];
         setSlots(next);
         setSlotsReady(true);
         setDraft((current) => {
@@ -283,7 +286,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
     return () => {
       ignore = true;
     };
-  }, [car, draft.date, draft.hours]);
+  }, [car, draft.date, draft.hours, mileage?.driveMinutes, mileage?.miles]);
 
   const input = useMemo(() => bookingInput(draft, car), [draft, car]);
   const wedding = useMemo(() => weddingInput(draft), [draft]);

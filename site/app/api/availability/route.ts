@@ -4,6 +4,13 @@ import { rentalDb } from "@/lib/rental-db";
 import { carIdForName, openTimesForCar } from "@/lib/site-booking";
 import { serviceBySlug } from "@/lib/content";
 
+function optionalTravel(value: string | null) {
+  if (value == null || value.trim() === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const slug = url.searchParams.get("car") || "";
@@ -43,7 +50,10 @@ export async function GET(request: Request) {
         error: `${service.car} is not on the garage calendar yet.`,
       });
     }
-    const slots = await openTimesForCar(db, carId, date, hours);
+    const slots = await openTimesForCar(db, carId, date, hours, {
+      miles: optionalTravel(url.searchParams.get("miles")),
+      driveMinutes: optionalTravel(url.searchParams.get("driveMinutes")),
+    });
     return NextResponse.json({ connected: true, slots });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Calendar lookup failed.";

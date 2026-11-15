@@ -6,15 +6,19 @@ import assert from 'node:assert/strict';
 
 import {
   BOOKING_BUFFER_HOURS,
+  DRIVE_MPH,
   NO_AVAILABILITY_REASON,
   blockedInterval,
   carsForAlternateOffers,
   declineAvailabilityPatch,
   defaultDeclineAvailabilityMessage,
   findBookingClash,
+  intervalsOverlap,
   isOpenQuote,
   partitionQuotes,
   QUOTE_VALID_DAYS,
+  requestedInterval,
+  travelMinutes,
 } from '../lib/quotes.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,6 +28,13 @@ const notifyIndex = readFileSync(join(notifyDir, 'index.ts'), 'utf8');
 const notify = ['index.ts', 'shared.ts', 'quotes.ts'].map((name) => readFileSync(join(notifyDir, name), 'utf8')).join('\n');
 
 assert.equal(BOOKING_BUFFER_HOURS, 2, 'buffer defaults to 2 hours');
+assert.equal(DRIVE_MPH, 55, 'a missing drive time uses 55 mph');
+assert.equal(travelMinutes({ miles: 245 }), 268, '245 miles is ceil(245 / 55 * 60) minutes');
+assert.equal(travelMinutes({ mileage_miles: 245, drive_minutes: null }), 268);
+assert.equal(travelMinutes({ drive_minutes: 90, mileage_miles: 245 }), 90, 'a stored drive time wins over miles');
+assert.equal(travelMinutes({ driveMinutes: 0, miles: 245 }), 0, 'a zero drive time is present and is not replaced by miles');
+assert.equal(travelMinutes({ drive_minutes: null, mileage_miles: null }), 0);
+assert.equal(travelMinutes(null), 0);
 
 const morning = {
   id: 'am',
@@ -155,6 +166,74 @@ assert.equal(
   'a same-day booking with no end time still blocks, because its window cannot be placed',
 );
 
+// Dec 12 2026, Phyllis: New Iberia parade 5:00–7:00 PM, 245 miles from Benton,
+// against Kristy Cory's confirmed Shreveport wedding 9:30–11:30 PM with no stored drive.
+const kristy = {
+  id: '1aac7516-0000-0000-0000-000000000001',
+  car_id: 'phyllis',
+  event_date: '2026-12-12',
+  start_time: '21:30',
+  end_time: '23:30',
+  status: 'confirmed',
+  customer_name: 'Kristy Cory',
+  mileage_miles: null,
+  drive_minutes: null,
+};
+const newIberia = { startTime: '5:00 PM', hours: 2, miles: 245 };
+const kristyClash = findBookingClash([kristy], 'phyllis', '2026-12-12', newIberia);
+assert.equal(kristyClash?.id, kristy.id, '245 miles of travel from New Iberia clashes with the 9:30 PM Shreveport wedding');
+assert.equal(kristyClash?.customer_name, 'Kristy Cory');
+assert.equal(
+  findBookingClash([kristy], 'phyllis', '2026-12-12', { startTime: '5:00 PM', hours: 2 }),
+  null,
+  'without miles the 5:00–7:00 PM parade does not reach a 9:30 PM booking',
+);
+const paradeBare = requestedInterval('2026-12-12', '5:00 PM', 2);
+const paradeTrip = requestedInterval('2026-12-12', '5:00 PM', 2, newIberia);
+assert.equal(paradeBare.start - paradeTrip.start, 268);
+assert.equal(paradeTrip.end - paradeBare.end, 268);
+const weddingBlocked = blockedInterval(kristy);
+assert.equal(weddingBlocked.start - blockedInterval(kristy, 0).start, -120, 'unknown travel keeps the 2 hour buffer only');
+assert.equal(intervalsOverlap(paradeTrip, weddingBlocked), true);
+const touchDrive = requestedInterval('2026-12-12', '5:00 PM', 2, { driveMinutes: 30 });
+assert.equal(touchDrive.end, weddingBlocked.start);
+assert.equal(
+  findBookingClash([kristy], 'phyllis', '2026-12-12', { startTime: '5:00 PM', hours: 2, miles: 245, driveMinutes: 30 }),
+  null,
+  'touching the blocked start is still free, and a stored drive time replaces the 55 mph estimate',
+);
+
+const farParade = {
+  id: 'parade',
+  car_id: 'phyllis',
+  event_date: '2026-12-12',
+  start_time: '17:00',
+  end_time: '19:00',
+  status: 'confirmed',
+  customer_name: 'New Iberia parade',
+  mileage_miles: 245,
+  drive_minutes: null,
+};
+assert.equal(
+  findBookingClash([farParade], 'phyllis', '2026-12-12', { startTime: '9:30 PM', hours: 2 })?.id,
+  'parade',
+  'an existing far booking blocks a later local request',
+);
+assert.equal(
+  findBookingClash(
+    [{ ...farParade, mileage_miles: null }],
+    'phyllis',
+    '2026-12-12',
+    { startTime: '9:30 PM', hours: 2 },
+  ),
+  null,
+  'without the far booking miles, 9:30 PM starts after the 2 hour buffer',
+);
+const farBlocked = blockedInterval(farParade);
+const farRaw = blockedInterval({ ...farParade, mileage_miles: null }, 0);
+assert.equal(farRaw.start - farBlocked.start, 268 + 120);
+assert.equal(farBlocked.end - farRaw.end, 268 + 120);
+
 const wider = blockedInterval(morning, 3);
 const standard = blockedInterval(morning);
 assert.ok(wider && standard && wider.start < standard.start && wider.end > standard.end, 'the buffer argument widens both sides');
@@ -205,8 +284,12 @@ assert.match(html, /the next day/);
 const overlap = readFileSync(join(root, 'supabase/migrations/20261025191600_bookings_overnight_end.sql'), 'utf8');
 assert.match(overlap, /end_time <= start_time then interval '1 day'/);
 assert.doesNotMatch(overlap, /end_time > start_time/);
+assert.match(html, /DRIVE_MPH=55/);
+assert.match(html, /function travelMinutes/);
 assert.match(html, /function blockedInterval/);
 assert.match(html, /function requestedInterval/);
+assert.match(html, /miles:miles, driveMinutes:quoteDriveMinutes\(\)/);
+assert.match(html, /requestedInterval\(evDate, slot\.startTime, slot\.hours, slot\)/);
 assert.match(html, /findBookingClash\(carId, evDate, slot\)/);
 assert.match(html, /findBookingClash\(f\.car_id, evDate, slot\)/);
 assert.match(html, /Decline: no availability/);
@@ -221,6 +304,54 @@ assert.doesNotMatch(html, /service_role/);
 const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).filter((s) => s.trim());
 assert.ok(scripts.length, 'page has inline script');
 for (const source of scripts) new vm.Script(source);
+
+const pageStart = html.indexOf('function clockMinutes');
+const pageEnd = html.indexOf('function isElviraCar');
+assert.ok(pageStart > 0 && pageEnd > pageStart);
+const page = { BOOKING_BUFFER_HOURS: 2, DATA: { bookings: [] } };
+vm.createContext(page);
+vm.runInContext(html.slice(pageStart, pageEnd), page);
+const travelJobs = [
+  { miles: 245 },
+  { mileage_miles: 245, drive_minutes: null },
+  { drive_minutes: 90, mileage_miles: 245 },
+  { driveMinutes: 0, miles: 245 },
+  { drive_minutes: null, mileage_miles: null },
+  {},
+];
+function sameInterval(actual, expected, message) {
+  assert.ok(actual && expected, message);
+  assert.equal(actual.start, expected.start, message);
+  assert.equal(actual.end, expected.end, message);
+}
+for (const job of travelJobs) {
+  assert.equal(page.travelMinutes(job), travelMinutes(job), `page travelMinutes matches for ${JSON.stringify(job)}`);
+}
+sameInterval(page.blockedInterval(kristy), blockedInterval(kristy), 'page blocked window matches Kristy');
+sameInterval(page.blockedInterval(farParade), blockedInterval(farParade), 'page blocked window matches the far parade');
+sameInterval(page.blockedInterval(morning, 3), blockedInterval(morning, 3), 'page buffer argument matches');
+sameInterval(
+  page.requestedInterval('2026-12-12', '5:00 PM', 2, newIberia),
+  requestedInterval('2026-12-12', '5:00 PM', 2, newIberia),
+  'page request window matches New Iberia',
+);
+sameInterval(
+  page.requestedInterval('2026-12-12', '9:30 PM', 2),
+  requestedInterval('2026-12-12', '9:30 PM', 2),
+  'page request window matches a local trip',
+);
+page.DATA.bookings = [kristy];
+assert.equal(
+  page.findBookingClash('phyllis', '2026-12-12', newIberia)?.customer_name,
+  'Kristy Cory',
+  'the garage copy names the conflicting booking',
+);
+assert.equal(page.findBookingClash('phyllis', '2026-12-12', { startTime: '5:00 PM', hours: 2 }), null);
+page.DATA.bookings = [farParade];
+assert.equal(
+  page.findBookingClash('phyllis', '2026-12-12', { startTime: '9:30 PM', hours: 2 })?.id,
+  farParade.id,
+);
 
 const declinedBranch = notify.slice(notify.indexOf('export async function handleQuoteDeclined'));
 assert.match(notifyIndex, /type === "quote_declined"/);
