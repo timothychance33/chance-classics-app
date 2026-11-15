@@ -101,7 +101,7 @@ async function offerSkippedForBusyDriver(driverEmail: string, bookingId: unknown
     db: { schema: "rental" },
   });
   const { data: booking, error: bookingError } = await sb.from("bookings")
-    .select("id,event_date,start_time,end_time,status,driver_id")
+    .select("id,event_date,start_time,end_time,status,driver_id,drive_minutes,mileage_miles")
     .eq("id", id)
     .maybeSingle();
   if (bookingError || !booking) {
@@ -120,7 +120,7 @@ async function offerSkippedForBusyDriver(driverEmail: string, bookingId: unknown
   );
   if (!driver?.id) return false;
   const { data: assigned, error: assignedError } = await sb.from("bookings")
-    .select("id,driver_id,event_date,start_time,end_time,status")
+    .select("id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles")
     .eq("driver_id", driver.id)
     .neq("status", "cancelled");
   if (assignedError || !assigned) {

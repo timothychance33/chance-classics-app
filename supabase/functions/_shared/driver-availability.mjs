@@ -1,27 +1,36 @@
 // Who may be offered a booking, and who may claim it.
 //
-// Overlap uses the same 2-hour prep/travel buffer as car availability
-// (BOOKING_BUFFER_HOURS in lib/quotes.mjs and index.html). Cancelled
-// bookings are ignored. A driver is busy only when driver_id is already
-// set on another non-cancelled booking.
+// Overlap uses the same drive and buffer as car availability
+// (travelMinutes, DRIVE_MPH, and BOOKING_BUFFER_HOURS in lib/quotes.mjs).
+// One-way minutes are drive_minutes when that value is present, including 0.
+// Otherwise ceil(miles / DRIVE_MPH * 60) when miles are known. Otherwise 0,
+// which leaves a local job on the old 2-hour gap.
+//
+// Callers must select drive_minutes and mileage_miles on every booking
+// passed in. A field that is absent is unknown travel and counts as 0.
+//
+// Cancelled bookings are ignored. A driver is busy only when driver_id is
+// already set on another non-cancelled booking.
 //
 // When both bookings have a date, a start, and an end:
 //   If end is at or before start, the end is the next calendar day
-//   (22:00–00:00). Expand one booking by 2 hours on both sides and
-//   compare that to the other booking's raw [start, end). They overlap
-//   when expandedStart < otherEnd and otherStart < expandedEnd.
-//   Touching endpoints do not overlap, so a job that starts exactly when
-//   the buffer ends is free. The check is symmetric: buffering either
-//   side gives the same answer. That is a 2-hour gap, not 4.
+//   (22:00–00:00). Expand one booking by its drive plus 2 hours on both
+//   sides and compare that to the other booking's [start - drive, end + drive).
+//   They overlap when expandedStart < otherEnd and otherStart < expandedEnd.
+//   Touching endpoints do not overlap. The check is symmetric: buffering
+//   either side gives the same answer. That is one 2-hour gap plus both
+//   drives, not two buffers.
 // When either booking is missing a start or an end, the window cannot
 // be placed, so the same calendar date counts as an overlap. Different
 // dates do not.
 //
 // The database trigger in
 // supabase/migrations/20261017160000_driver_claim_no_time_overlap.sql
-// uses this same rule. It is not applied automatically.
+// still uses a flat 2-hour gap and does not include drive time.
+// It is not applied automatically.
 
 export const BOOKING_BUFFER_HOURS = 2;
+export const DRIVE_MPH = 55;
 export const DRIVER_BUSY_MESSAGE = 'You already have a booking at that time';
 
 const MINUTES_PER_DAY = 1440;
@@ -53,6 +62,38 @@ export function dayNumber(iso) {
   return Math.floor(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) / 86400000);
 }
 
+function knownTravelNumber(value) {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
+/**
+ * One-way minutes between the Benton shop and the job.
+ * Same rule as travelMinutes in lib/quotes.mjs: drive_minutes (or
+ * driveMinutes) wins, including 0. Otherwise ceil(miles / DRIVE_MPH * 60)
+ * when miles are known. Otherwise 0.
+ */
+export function travelMinutes(job) {
+  if (!job || typeof job !== 'object') return 0;
+  const drive = knownTravelNumber(
+    job.drive_minutes != null && job.drive_minutes !== '' ? job.drive_minutes : job.driveMinutes,
+  );
+  if (drive != null) return drive;
+  const miles = knownTravelNumber(
+    job.mileage_miles != null && job.mileage_miles !== '' ? job.mileage_miles : job.miles,
+  );
+  if (miles == null) return 0;
+  return Math.ceil((miles / DRIVE_MPH) * 60);
+}
+
+/**
+ * Minutes since a fixed epoch for the window a booking blocks:
+ * [start - drive - buffer, end + drive + buffer]. An end at or before the
+ * start runs past midnight (22:00–00:00). Returns null when start or end
+ * is missing — callers then fall back to a same-day block.
+ */
 export function blockedInterval(booking, bufferHours = BOOKING_BUFFER_HOURS) {
   if (!booking || booking.status === 'cancelled' || !booking.event_date) return null;
   const day = dayNumber(booking.event_date);
@@ -62,8 +103,9 @@ export function blockedInterval(booking, bufferHours = BOOKING_BUFFER_HOURS) {
   let end = endMin;
   if (end <= startMin) end += MINUTES_PER_DAY;
   const buffer = Number(bufferHours) * 60;
+  const travel = travelMinutes(booking);
   const origin = day * MINUTES_PER_DAY;
-  return { start: origin + startMin - buffer, end: origin + end + buffer };
+  return { start: origin + startMin - travel - buffer, end: origin + end + travel + buffer };
 }
 
 export function intervalsOverlap(a, b) {
