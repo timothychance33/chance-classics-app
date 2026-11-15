@@ -5,13 +5,20 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
 import {
+  blockedInterval as quoteBlockedInterval,
+  travelMinutes as quoteTravelMinutes,
+} from '../lib/quotes.mjs';
+import {
   BOOKING_BUFFER_HOURS,
+  DRIVE_MPH,
   DRIVER_BUSY_MESSAGE,
+  blockedInterval,
   busyOfferAdvances,
   claimDecision,
   driverBusyWith,
   driverWindowsOverlap,
   offerRankFor,
+  travelMinutes,
 } from '../supabase/functions/_shared/driver-availability.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,7 +30,22 @@ const migration = readFileSync(join(root, 'supabase/migrations/20261017160000_dr
 const config = readFileSync(join(root, 'supabase/config.toml'), 'utf8');
 
 assert.equal(BOOKING_BUFFER_HOURS, 2);
+assert.equal(DRIVE_MPH, 55);
 assert.equal(DRIVER_BUSY_MESSAGE, 'You already have a booking at that time');
+
+const travelJobs = [
+  { miles: 245 },
+  { mileage_miles: 245, drive_minutes: null },
+  { drive_minutes: 90, mileage_miles: 245 },
+  { driveMinutes: 0, miles: 245 },
+  { drive_minutes: null, mileage_miles: null },
+  {},
+  null,
+];
+for (const job of travelJobs) {
+  assert.equal(travelMinutes(job), quoteTravelMinutes(job), `travelMinutes matches quotes for ${JSON.stringify(job)}`);
+}
+assert.equal(travelMinutes({ miles: 245 }), 268, '245 miles is ceil(245 / 55 * 60) minutes');
 
 const morning = {
   id: 'am',
@@ -82,6 +104,58 @@ const noEnd = { id: 'no-end', driver_id: 'd1', event_date: '2026-10-16', start_t
 assert.equal(driverWindowsOverlap(noEnd, afternoon), true, 'a same-day booking with no end still overlaps');
 assert.equal(driverWindowsOverlap(noEnd, { ...afternoon, event_date: '2026-10-17' }), false);
 
+// Dec 12 2026: New Iberia parade 5:00–7:00 PM, 245 miles, against a Shreveport
+// wedding 9:30–11:30 PM with no stored drive. The same pair the car check rejects.
+const shreveport = {
+  id: 'shreveport',
+  driver_id: 'd1',
+  event_date: '2026-12-12',
+  start_time: '21:30',
+  end_time: '23:30',
+  status: 'confirmed',
+  mileage_miles: null,
+  drive_minutes: null,
+};
+const newIberia = {
+  id: 'new-iberia',
+  driver_id: 'd1',
+  event_date: '2026-12-12',
+  start_time: '17:00',
+  end_time: '19:00',
+  status: 'confirmed',
+  mileage_miles: 245,
+  drive_minutes: null,
+};
+assert.equal(driverWindowsOverlap(newIberia, shreveport), true, '245 miles from New Iberia conflicts with a 9:30 PM job that has no drive');
+assert.equal(driverWindowsOverlap(shreveport, newIberia), true, 'the same pair conflicts when the far job is the one already assigned');
+assert.equal(
+  driverWindowsOverlap({ ...newIberia, mileage_miles: null }, shreveport),
+  false,
+  'without miles the 5:00–7:00 PM parade does not reach 9:30 PM',
+);
+assert.equal(driverWindowsOverlap(shreveport, { ...newIberia, mileage_miles: null }), false);
+assert.equal(driverBusyWith('d1', { ...newIberia, driver_id: null }, [shreveport])?.id, 'shreveport');
+assert.equal(driverBusyWith('d1', { ...shreveport, driver_id: null }, [newIberia])?.id, 'new-iberia');
+
+const shortParade = { ...newIberia, drive_minutes: 30, mileage_miles: 245 };
+assert.equal(driverWindowsOverlap(shortParade, shreveport), false, 'a 30 minute stored drive touches the Shreveport buffer and is free');
+assert.equal(driverWindowsOverlap(shreveport, shortParade), false);
+assert.equal(
+  driverWindowsOverlap({ ...newIberia, drive_minutes: 0 }, shreveport),
+  false,
+  'a stored drive of 0 stays local even when miles are 245',
+);
+assert.equal(driverWindowsOverlap({ ...newIberia, drive_minutes: 90 }, shreveport), true, 'a stored drive time replaces the 55 mph estimate');
+
+for (const booking of [morning, newIberia, shreveport, shortParade, { ...newIberia, drive_minutes: 0 }]) {
+  for (const buffer of [undefined, 0]) {
+    const driverWindow = blockedInterval(booking, buffer);
+    const quoteWindow = quoteBlockedInterval(booking, buffer);
+    assert.equal(driverWindow.start, quoteWindow.start, `blocked start matches quotes for ${booking.id}`);
+    assert.equal(driverWindow.end, quoteWindow.end, `blocked end matches quotes for ${booking.id}`);
+  }
+}
+
 assert.equal(driverBusyWith('d1', insideBuffer, [morning])?.id, 'am');
 assert.equal(driverBusyWith('d1', afternoon, [morning]), null);
 assert.equal(driverBusyWith('d1', exactClear, [morning]), null);
@@ -126,6 +200,18 @@ assert.equal(claimDecision({
   booking: offer,
   bookings: [],
 }).status, 403);
+assert.equal(offerRankFor(staff, { ...newIberia, driver_id: null, needs_trailer: false }, [shreveport], [], null), 2, 'the far parade is not offered to the driver who has Shreveport');
+assert.equal(offerRankFor(staff, { ...shreveport, driver_id: null, needs_trailer: false }, [newIberia], [], null), 2, 'Shreveport is not offered to the driver who has the far parade');
+assert.equal(claimDecision({
+  me,
+  booking: { ...newIberia, driver_id: null, offer_rank: 1 },
+  bookings: [shreveport],
+}).error, DRIVER_BUSY_MESSAGE);
+assert.equal(claimDecision({
+  me,
+  booking: { ...shreveport, driver_id: null, offer_rank: 1 },
+  bookings: [newIberia],
+}).error, DRIVER_BUSY_MESSAGE);
 
 const open = { id: 'open', offer_rank: 1, driver_id: null, passed_by: [], event_date: '2026-10-16', start_time: '11:00', end_time: '13:00', status: 'confirmed' };
 const advances = busyOfferAdvances(staff, me, [open], [morning]);
@@ -146,6 +232,15 @@ assert.equal(sandbox.driverWindowsOverlap(overnight, nextMorning), true);
 assert.equal(sandbox.driverBusyWith('d1', insideBuffer, [morning]).id, 'am');
 assert.equal(sandbox.driverBusyWith('d1', afternoon, [morning]), null);
 assert.equal(sandbox.driverBusyWith('d1', exactClear, [morning]), null);
+assert.equal(sandbox.driverWindowsOverlap(newIberia, shreveport), true, 'the garage copy conflicts on the New Iberia parade');
+assert.equal(sandbox.driverWindowsOverlap(shreveport, newIberia), true, 'the garage copy conflicts in the other direction');
+assert.equal(sandbox.driverWindowsOverlap({ ...newIberia, mileage_miles: null }, shreveport), false);
+assert.equal(sandbox.driverWindowsOverlap(shortParade, shreveport), false);
+assert.equal(sandbox.driverWindowsOverlap({ ...newIberia, drive_minutes: 0 }, shreveport), false);
+assert.equal(sandbox.driverBusyWith('d1', { ...newIberia, driver_id: null }, [shreveport]).id, 'shreveport');
+assert.equal(sandbox.driverBusyWith('d1', { ...shreveport, driver_id: null }, [newIberia]).id, 'new-iberia');
+assert.match(html, /from\('bookings'\)\.select\('\*'\)/);
+assert.match(html, /including the drive each way and the 2-hour buffer/);
 
 assert.match(html, /const CLAIM_FN_URL = SUPABASE_URL \+ '\/functions\/v1\/claim-booking'/);
 assert.match(html, /You already have a booking at that time/);
@@ -170,6 +265,16 @@ assert.doesNotMatch(notify, /service_role/);
 assert.match(claimFn, /claimDecision/);
 assert.match(claimFn, /assigned_by: "claim"/);
 assert.match(claimFn, /busyOfferAdvances/);
+const assignedCols = 'id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles';
+assert.equal(claimFn.split(`"${assignedCols}"`).length - 1, 2, 'claim loads drive time for the assigned rows before and after the claim');
+assert.match(claimFn, /offer_rank,passed_by,open_to_all,needs_trailer,pay_tier,drive_minutes,mileage_miles/);
+assert.match(scheduled, new RegExp(`select\\("${assignedCols}"\\)`));
+assert.match(notify, /select\("id,event_date,start_time,end_time,status,driver_id,drive_minutes,mileage_miles"\)/);
+assert.match(notify, new RegExp(`select\\("${assignedCols}"\\)`));
+assert.doesNotMatch(claimFn, /select\("id,driver_id,event_date,start_time,end_time,status"\)/);
+assert.doesNotMatch(scheduled, /select\("id,driver_id,event_date,start_time,end_time,status"\)/);
+assert.doesNotMatch(notify, /select\("id,driver_id,event_date,start_time,end_time,status"\)/);
+assert.doesNotMatch(notify, /select\("id,event_date,start_time,end_time,status,driver_id"\)/);
 assert.match(claimFn, /ignored secret in the query string/);
 assert.doesNotMatch(claimFn, /searchParams\.get\(["']secret["']\)/);
 

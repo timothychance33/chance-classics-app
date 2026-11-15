@@ -2256,9 +2256,8 @@ function travelMinutes(job){
   if(miles==null) return 0;
   return Math.ceil(miles/DRIVE_MPH*60);
 }
-// Car block is [start - drive - buffer, end + drive + buffer].
-// Pass travelMin (including 0) to skip the job's own drive. Driver overlap does that.
-function blockedInterval(booking, bufferHours, travelMin){
+// Car and driver block is [start - drive - buffer, end + drive + buffer].
+function blockedInterval(booking, bufferHours){
   if(!booking||booking.status==='cancelled'||!booking.event_date) return null;
   const day=dayNumber(booking.event_date);
   const startMin=clockMinutes(booking.start_time);
@@ -2267,7 +2266,7 @@ function blockedInterval(booking, bufferHours, travelMin){
   let end=endMin;
   if(end<=startMin) end+=1440;
   const buffer=(bufferHours==null?BOOKING_BUFFER_HOURS:Number(bufferHours))*60;
-  const travel=travelMin==null?travelMinutes(booking):Math.max(0, Number(travelMin)||0);
+  const travel=travelMinutes(booking);
   const origin=day*1440;
   return {start:origin+startMin-travel-buffer, end:origin+end+travel+buffer};
 }
@@ -2283,15 +2282,17 @@ function requestedInterval(evDate, startTime, hours, job){
 function intervalsOverlap(a, b){
   return !!(a&&b&&a.start<b.end&&b.start<a.end);
 }
-// Driver overlap stays the flat 2-hour gap (travel forced to 0). Car availability
-// adds drive time in blockedInterval. supabase/functions/_shared/driver-availability.mjs
-// still uses that flat window and is not updated here.
-// A missing start or end overlaps only on the same calendar date. Cancelled bookings do not.
+// Driver overlap matches supabase/functions/_shared/driver-availability.mjs.
+// One side is [start - drive - 2h, end + drive + 2h]; the other is
+// [start - drive, end + drive]. Touching endpoints are free. No drive data
+// leaves the old 2-hour gap. Bookings load with select('*'), so drive_minutes
+// and mileage_miles are on the row. A missing start or end overlaps only on
+// the same calendar date. Cancelled bookings do not.
 function driverWindowsOverlap(a, b){
   if(!a||!b) return false;
   if(a.status==='cancelled'||b.status==='cancelled') return false;
-  const blocked=blockedInterval(a, null, 0);
-  const raw=blockedInterval(b, 0, 0);
+  const blocked=blockedInterval(a);
+  const raw=blockedInterval(b, 0);
   if(blocked&&raw) return intervalsOverlap(blocked, raw);
   const da=a.event_date?String(a.event_date).slice(0,10):'';
   const db=b.event_date?String(b.event_date).slice(0,10):'';
@@ -3919,7 +3920,7 @@ function bookingModal(id){
         <option value="5" ${b.pay_tier==5?'selected':''}>Tier 5 (top)</option>
       </select></div>
     </div>
-    <small class="hint">Setting a tier offers this job down the priority list. A driver who already has a booking in this window, including the 2-hour buffer, is skipped.</small>
+    <small class="hint">Setting a tier offers this job down the priority list. A driver who already has a booking in this window, including the drive each way and the 2-hour buffer, is skipped.</small>
     ${isOwnerView()?`<div><label>Customer amount</label>
       <input id="f_amount" inputmode="decimal" placeholder="$0.00" value="${storedCustomerAmount(b)!=null?esc(storedCustomerAmount(b).toFixed(2)):''}">
       <small class="hint">${b.tax_exempt?'Tax exempt. Customer total with no sales tax.':'Customer total including 10.25% sales tax.'} Earnings uses this Price line. Staff never see it.</small>
