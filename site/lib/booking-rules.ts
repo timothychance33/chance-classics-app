@@ -29,10 +29,13 @@ export const MILE_RATE_USD = EXTRA_MILE_USD;
 export const MILE_THRESHOLD = MILE_RADIUS;
 
 /**
- * Same 2-hour gap as BOOKING_BUFFER_HOURS in lib/quotes.mjs.
- * Applied before and after each booking, including when the gap crosses midnight.
+ * Same 2-hour gap as BOOKING_BUFFER_HOURS in lib/quotes.mjs, plus the one-way
+ * drive on each side of an existing booking. The new request gets the drive
+ * and not the extra 2 hours. Touching endpoints stay free.
  */
 export const BOOKING_BUFFER_HOURS = 2;
+/** One-way estimate when miles are known and drive_minutes is not. 245 miles is 268 minutes. */
+export const DRIVE_MPH = 55;
 const MINUTES_PER_DAY = 1440;
 export const SHOP_ADDRESS = "118 5th St E, Benton, LA 71006";
 export const MILEAGE_REVIEW_TEXT = "We'll confirm mileage.";
@@ -141,14 +144,43 @@ export function dayNumber(iso: string | null | undefined) {
 
 export type Interval = { start: number; end: number };
 
-/** Booking window plus BOOKING_BUFFER_HOURS on both sides. An end at or before the start runs past midnight. */
+export type TripTravel = {
+  miles?: number | string | null;
+  driveMinutes?: number | string | null;
+  mileage_miles?: number | string | null;
+  drive_minutes?: number | string | null;
+};
+
+function knownTravelNumber(value: unknown) {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
+function firstTravelValue(primary: unknown, fallback: unknown) {
+  if (primary != null && primary !== "") return primary;
+  return fallback;
+}
+
+/** drive_minutes or driveMinutes if present, else ceil(miles / DRIVE_MPH * 60), else 0. */
+export function travelMinutes(job: TripTravel | null | undefined) {
+  if (!job || typeof job !== "object") return 0;
+  const drive = knownTravelNumber(firstTravelValue(job.drive_minutes, job.driveMinutes));
+  if (drive != null) return drive;
+  const miles = knownTravelNumber(firstTravelValue(job.mileage_miles, job.miles));
+  if (miles == null) return 0;
+  return Math.ceil((miles / DRIVE_MPH) * 60);
+}
+
+/** Booking window plus its drive and BOOKING_BUFFER_HOURS on both sides. An end at or before the start runs past midnight. */
 export function blockedInterval(
   booking: {
     event_date?: string | null;
     start_time?: string | null;
     end_time?: string | null;
     status?: string | null;
-  },
+  } & TripTravel,
   bufferHours = BOOKING_BUFFER_HOURS,
 ): Interval | null {
   if (!booking || booking.status === "cancelled" || !booking.event_date) return null;
@@ -159,17 +191,25 @@ export function blockedInterval(
   let end = endMin;
   if (end <= startMin) end += MINUTES_PER_DAY;
   const buffer = Number(bufferHours) * 60;
+  const travel = travelMinutes(booking);
   const origin = day * MINUTES_PER_DAY;
-  return { start: origin + startMin - buffer, end: origin + end + buffer };
+  return { start: origin + startMin - travel - buffer, end: origin + end + travel + buffer };
 }
 
-export function requestedInterval(evDate: string, startTime: string, hours: number): Interval | null {
+/** Requested occupancy is [start - drive, end + drive]. No extra buffer. */
+export function requestedInterval(
+  evDate: string,
+  startTime: string,
+  hours: number,
+  job?: TripTravel | null,
+): Interval | null {
   const day = dayNumber(evDate);
   const startMin = clockMinutes(startTime);
   const duration = Number(hours);
   if (day == null || startMin == null || !Number.isFinite(duration) || duration <= 0) return null;
+  const travel = travelMinutes(job);
   const start = day * MINUTES_PER_DAY + startMin;
-  return { start, end: start + duration * 60 };
+  return { start: start - travel, end: start + duration * 60 + travel };
 }
 
 export function intervalsOverlap(a: Interval | null, b: Interval | null) {
@@ -246,11 +286,17 @@ export function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd
   return aStart < bEnd && bStart < aEnd;
 }
 
-export type Busy = { start: string; end: string; date?: string };
+export type Busy = { start: string; end: string; date?: string } & TripTravel;
 
-/** True when the requested window overlaps a booking expanded by the buffer, including a buffer that crosses midnight. */
-export function slotTaken(date: string, start: string, hours: number, busy: Busy[]) {
-  const wanted = requestedInterval(date, start, hours);
+/** True when the requested occupancy overlaps a booking expanded by its drive and the buffer, including a window that crosses midnight. */
+export function slotTaken(
+  date: string,
+  start: string,
+  hours: number,
+  busy: Busy[],
+  request?: TripTravel | null,
+) {
+  const wanted = requestedInterval(date, start, hours, request);
   if (!wanted) return true;
   return busy.some((item) => {
     const itemDate = item.date || date;
@@ -260,17 +306,24 @@ export function slotTaken(date: string, start: string, hours: number, busy: Busy
       start_time: item.start,
       end_time: item.end,
       status: "active",
+      drive_minutes: item.drive_minutes ?? item.driveMinutes,
+      mileage_miles: item.mileage_miles ?? item.miles,
     });
     if (!blocked) return itemDate === date;
     return intervalsOverlap(wanted, blocked);
   });
 }
 
-export function openStartTimes(hours: number, busy: Busy[], onDate = "2000-01-01") {
+export function openStartTimes(
+  hours: number,
+  busy: Busy[],
+  onDate = "2000-01-01",
+  request?: TripTravel | null,
+) {
   const slots: string[] = [];
   for (let start = DAY_START_MIN; start <= LAST_START_MIN; start += SLOT_STEP_MIN) {
     const label = fromMinutes(start);
-    if (!slotTaken(onDate, label, hours, busy)) slots.push(label);
+    if (!slotTaken(onDate, label, hours, busy, request)) slots.push(label);
   }
   return slots;
 }

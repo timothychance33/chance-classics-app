@@ -110,7 +110,10 @@ export async function POST(request: Request) {
     }
     await releaseStaleHolds(db, carId);
     const busy = await busyRanges(db, carId, value.date);
-    const clash = slotTaken(value.date, value.start, value.hours, busy);
+    const clash = slotTaken(value.date, value.start, value.hours, busy, {
+      miles: mileage.miles,
+      driveMinutes: mileage.driveMinutes,
+    });
     if (clash) {
       return NextResponse.json({ error: "That time was just taken. Pick another open time." }, { status: 409 });
     }

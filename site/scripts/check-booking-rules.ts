@@ -11,6 +11,8 @@ import {
   endMinutes,
   mileageCharge,
   BOOKING_BUFFER_HOURS,
+  DRIVE_MPH,
+  travelMinutes,
   openStartTimes,
   quoteCheckoutLines,
   quoteIsTaxExempt,
@@ -61,6 +63,11 @@ function assert(cond: boolean, message: string) {
 }
 
 assert(BOOKING_BUFFER_HOURS === 2, "buffer is 2 hours");
+assert(DRIVE_MPH === 55, "a missing drive time uses 55 mph");
+assert(travelMinutes({ miles: 245 }) === 268, "245 miles is 268 minutes");
+assert(travelMinutes({ driveMinutes: 90, miles: 245 }) === 90, "a stored drive time wins over miles");
+assert(travelMinutes({ drive_minutes: null, mileage_miles: null }) === 0, "unknown travel is 0");
+assert(travelMinutes({ driveMinutes: 0, miles: 245 }) === 0, "a zero drive time is kept");
 const busy = [{ start: "10:00", end: "12:00", date: "2026-10-16" }];
 const open = openStartTimes(2, busy, "2026-10-16");
 assert(!open.includes("08:00") && !open.includes("10:00") && !open.includes("12:00"), "2 hour buffer hides the edges");
@@ -95,6 +102,29 @@ assert(!slotTaken("2026-10-16", "21:00", 2, nextMorning), "9:00–11:00 PM ends 
 assert(slotTaken("2026-10-16", "21:15", 2, nextMorning), "9:15 PM runs into the buffer before 1:00 AM");
 const afterThree = [{ date: "2026-10-17", start: "03:00", end: "05:00" }];
 assert(!slotTaken("2026-10-16", "23:00", 2, afterThree), "11:00 PM–1:00 AM ends as the 3:00 AM buffer begins");
+const shreveportWedding = [{ date: "2026-12-12", start: "21:30", end: "23:30", drive_minutes: null, mileage_miles: null }];
+assert(
+  slotTaken("2026-12-12", "17:00", 2, shreveportWedding, { miles: 245 }),
+  "New Iberia 5:00–7:00 PM, 245 miles, clashes with a 9:30–11:30 PM wedding whose travel is unknown",
+);
+assert(!slotTaken("2026-12-12", "17:00", 2, shreveportWedding), "without miles the 5:00 PM parade does not reach 9:30 PM");
+assert(
+  !slotTaken("2026-12-12", "17:00", 2, shreveportWedding, { miles: 245, driveMinutes: 30 }),
+  "a 30 minute drive only touches the wedding buffer and stays free",
+);
+const farAfternoon = [{ date: "2026-12-12", start: "17:00", end: "19:00", mileage_miles: 245, drive_minutes: null }];
+assert(
+  slotTaken("2026-12-12", "21:30", 2, farAfternoon, { miles: 0 }),
+  "an existing far booking blocks a later local request",
+);
+assert(
+  !slotTaken("2026-12-12", "21:30", 2, [{ date: "2026-12-12", start: "17:00", end: "19:00" }]),
+  "without stored miles, 9:30 PM is after the 2 hour buffer",
+);
+const paradeStarts = openStartTimes(2, shreveportWedding, "2026-12-12", { miles: 245 });
+assert(!paradeStarts.includes("17:00"), "Book Online hides 5:00 PM when the new trip is 245 miles from a 9:30 PM wedding");
+assert(openStartTimes(2, shreveportWedding, "2026-12-12").includes("17:00"), "5:00 PM stays open when the new trip has no drive");
+assert(!openStartTimes(2, farAfternoon, "2026-12-12", { miles: 0 }).includes("21:30"), "Book Online hides 9:30 PM after a far 5:00 PM booking");
 assert(rangesOverlap(60, 120, 90, 150) && !rangesOverlap(60, 120, 120, 180), "range math");
 
 const baseHours = quoteTotal(500, 2, 0);
@@ -429,6 +459,16 @@ assert(!validateBooking({ ...lateBooking, start: "00:00" }, bookNow).ok, "midnig
 assert(!validateBooking({ ...lateBooking, start: "23:50" }, bookNow).ok, "starts stay on 15-minute steps");
 const form = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../components/BookingForm.tsx"), "utf8");
 assert(form.includes("START_WINDOW_NOTE") && form.includes("rentalEndLabel"), "booking page uses the shared window and shows the end");
+assert(form.includes('params.set("miles"') && form.includes('params.set("driveMinutes"'), "booking page sends the typed pickup mileage when it asks for open times");
+const availabilityRoute = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../app/api/availability/route.ts"), "utf8");
+assert(availabilityRoute.includes('searchParams.get("miles")') && availabilityRoute.includes('searchParams.get("driveMinutes")'), "open-slot route reads pickup miles and drive minutes");
+assert(availabilityRoute.includes("openTimesForCar"), "open-slot route asks the calendar for open starts");
+const siteBooking = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../lib/site-booking.ts"), "utf8");
+assert(siteBooking.includes("drive_minutes,mileage_miles"), "busy ranges load drive time and miles");
+const quoteBooking = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../lib/quote-booking.ts"), "utf8");
+assert(quoteBooking.includes("driveMinutes: quote.drive_minutes") && quoteBooking.includes("miles: quote.miles"), "a quote link checks its own drive");
+const bookingRoute = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../app/api/bookings/route.ts"), "utf8");
+assert(bookingRoute.includes("driveMinutes: mileage.driveMinutes") && bookingRoute.includes("miles: mileage.miles"), "saving a booking uses the pickup drive");
 assert(!form.includes("8:00 PM"), "booking page no longer stops at 8:00 PM");
 assert(!form.includes("finish the same day"), "the form no longer requires the rental to finish the same day");
 
