@@ -1,5 +1,8 @@
 // Shared helpers for send-notification
 import { CUSTOMER_REPLY_TO, DEFAULT_FROM_EMAIL, htmlToPlainText } from "../_shared/email-plain.mjs";
+import { driverFacingNotes } from "../_shared/driver-notes.mjs";
+
+export { driverFacingNotes };
 
 export const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 export const NOTIFY_SECRET = Deno.env.get("NOTIFY_SECRET") ?? "";
@@ -94,7 +97,7 @@ export function driverBookingBlock(b: Record<string, unknown>) {
     ["Drop-off", b.return_location],
     ["Phone", b.customer_phone],
     ["Email", b.customer_email],
-    ["Notes", b.notes],
+    ["Notes", driverFacingNotes(b.notes)],
     ["Status", b.status],
   ];
   let html = rows

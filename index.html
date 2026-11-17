@@ -505,6 +505,7 @@ img,svg{max-width:100%}
 <div id="toast"></div>
 
 <script src="pay-link-note.js"></script>
+<script type="module" src="driver-notes.mjs"></script>
 <script>
 // ---------- config ----------
 // Supabase connection. The anon/publishable key is safe in a browser app
@@ -699,17 +700,17 @@ async function loadAll(){
     const [c,s,b,p,t,q,ci,iss,ph]=await Promise.all([
       SB.from('cars').select('*').order('name'),
       SB.from('staff').select('*').order('name'),
-      SB.from('bookings').select('*').order('event_date'),
+      loadBookingRows(),
       SB.from('booking_prep_tasks').select('*').order('sort_order'),
       SB.from('car_prep_templates').select('*').order('sort_order'),
-      SB.from('quote_requests').select('*').order('created_at',{ascending:false}),
+      isOwnerView()?SB.from('quote_requests').select('*').order('created_at',{ascending:false}):Promise.resolve({data:[],error:null}),
       SB.from('car_checkins').select('*').order('created_at',{ascending:false}),
       SB.from('car_issues').select('*').order('opened_at',{ascending:false}),
       SB.from('car_checkin_photos').select('*').order('created_at'),
     ]);
     for(const r of [c,s,b,p,t]) if(r.error) throw r.error;
     const checkinReady=!ci.error && !iss.error;
-    DATA={cars:c.data,staff:s.data,bookings:b.data,prep:p.data,templates:t.data,quotes:(q&&!q.error)?q.data:[],
+    DATA={cars:c.data,staff:s.data,bookings:staffBookings(b),prep:p.data,templates:t.data,quotes:(q&&!q.error)?q.data:[],
       checkins:checkinReady?(ci.data||[]):[],
       issues:checkinReady?(iss.data||[]):[],
       checkinPhotos:(ph&&!ph.error&&ph.data)?ph.data:[],
@@ -722,8 +723,8 @@ async function loadAll(){
       finally{ releasingOffers=false; }
     }
     if(movedOffers){
-      const again=await SB.from('bookings').select('*').order('event_date');
-      if(!again.error && again.data) DATA.bookings=again.data;
+      const again=await loadBookingRows();
+      if(again) DATA.bookings=staffBookings(again);
       toast(DRIVER_BUSY_MESSAGE);
     }
     renderAll();
@@ -977,10 +978,29 @@ async function notifyOfferTo(booking){
   }catch(e){ toast('Offer email failed: '+(e.message||e)); }
 }
 
-// Driver-facing notes hide the owner-only Wix Price line (same as notesForViewer).
+// Driver-facing notes. The rules live in driver-notes.mjs, the same file the
+// driver emails and the Monday digest use. If that script did not load, hide
+// the notes instead of showing a price, tax, deposit, or balance line.
 function driverFacingNotes(notes){
-  if(!notes) return '';
-  return String(notes).split('\n').filter(line=>!/^\s*Price:\s*\$/i.test(line)).join('\n').trim();
+  if(typeof sanitizeDriverNotes==='function') return sanitizeDriverNotes(notes);
+  return '';
+}
+const STAFF_HIDDEN_MONEY=['payment_status','total_usd','amount_paid_usd','balance_due_usd','mileage_fee_usd','hotel_fee_usd','stripe_customer_id','stripe_payment_method_id','stripe_deposit_session_id','stripe_balance_session_id','balance_paid_at','balance_payment_method','balance_reminder_sent_at','wix_order_number','wix_booking_id','tax_exempt','tax_exempt_note'];
+function staffBooking(row){
+  if(isOwnerView()||!row) return row;
+  const next={...row, notes:driverFacingNotes(row.notes)||null};
+  for(const key of STAFF_HIDDEN_MONEY){
+    if(key in next) next[key]=null;
+  }
+  return next;
+}
+function staffBookings(rows){ return (rows||[]).map(staffBooking); }
+async function loadBookingRows(){
+  const safe=await SB.from('bookings_for_session').select('*').order('event_date');
+  if(!safe.error && Array.isArray(safe.data)) return safe.data;
+  const raw=await SB.from('bookings').select('*').order('event_date');
+  if(raw.error) throw raw.error;
+  return raw.data||[];
 }
 function normTime(t){
   if(t==null||t==='') return '';
@@ -1338,7 +1358,7 @@ function showOwnerCustomerAmount(){
 function notesForViewer(notes){
   if(!notes) return notes;
   if(showOwnerCustomerAmount()) return notes;
-  return notesWithoutPrice(notes);
+  return driverFacingNotes(notes);
 }
 function bookingIdKey(id){
   return String(id||'').replace(/[^a-zA-Z0-9_-]/g,'');
@@ -3992,7 +4012,7 @@ async function saveBooking(id){
         }
       }
     }else{
-      const {data,error}=await SB.from('bookings').insert(rec).select().single();if(error)throw error;
+      const {data,error}=await SB.from('bookings').insert(rec).select('id').single();if(error)throw error;
       savedId=data&&data.id;
       ownerMailed=await notifyOwnerNewBooking({...rec,id:savedId});
       // copy car prep template into booking
@@ -4578,7 +4598,7 @@ function bookingDetail(bid){
     ${row('Phone', b.customer_phone)}
     ${row('Email', b.customer_email)}
     ${b.needs_trailer?`<div style="margin-bottom:10px"><span class="trailertag">🚛 Car must be trailered</span></div>`:''}
-    ${row('Notes', notesWithoutPrice(b.notes))}
+    ${row('Notes', isOwnerView()?notesWithoutPrice(b.notes):driverFacingNotes(b.notes))}
     ${carFixWarningHtml(b)}
     ${checkinPanelHtml(b)}
     ${isOwnerView()?followupFlagsHtml(b):''}

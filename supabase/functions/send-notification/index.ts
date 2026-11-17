@@ -20,6 +20,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   APP_URL, NOTIFY_SECRET, OWNER_EMAIL, cors, esc, sendEmail,
   bookingBlock, driverBookingBlock, wrap, appButton, payLine, bookingTitle, dayOfContactEmailHtml,
+  driverFacingNotes,
 } from "./shared.ts";
 import { handleQuoteAlternatives, handleQuoteDeclined } from "./quotes.ts";
 import { allowNotify, roleTokens, secretMatches } from "./access.mjs";
@@ -370,9 +371,13 @@ Deno.serve(async (req) => {
       const changes = Array.isArray(body.changes) ? body.changes : [];
       const changeRows = changes.length
         ? `<table style="border-collapse:collapse;margin:12px 0">${
-          changes.map((c: { label?: string; from?: string; to?: string }) =>
-            `<tr><td style="padding:4px 12px 4px 0;color:#6b6052;font-size:13px;vertical-align:top">${esc(c.label)}</td><td style="padding:4px 0;font-size:14px"><s style="color:#9aa7b4">${esc(c.from)}</s> → <b>${esc(c.to)}</b></td></tr>`
-          ).join("")
+          changes.map((c: { label?: string; from?: string; to?: string }) => {
+            const notes = String(c.label || "").trim().toLowerCase() === "notes";
+            const from = notes ? driverFacingNotes(c.from) : c.from;
+            const to = notes ? driverFacingNotes(c.to) : c.to;
+            if (notes && from === to) return "";
+            return `<tr><td style="padding:4px 12px 4px 0;color:#6b6052;font-size:13px;vertical-align:top">${esc(c.label)}</td><td style="padding:4px 0;font-size:14px"><s style="color:#9aa7b4">${esc(from)}</s> → <b>${esc(to)}</b></td></tr>`;
+          }).join("")
         }</table>`
         : "";
       const subject = body.subject || `Booking updated: ${bookingTitle(b)}`;

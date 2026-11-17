@@ -51,6 +51,7 @@ import {
 import { CUSTOMER_REPLY_TO, DEFAULT_FROM_EMAIL, htmlToPlainText } from "../_shared/email-plain.mjs";
 import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/balance-pay-email.mjs";
 import { driverBusyWith, offerRankFor } from "../_shared/driver-availability.mjs";
+import { driverFacingNotes } from "../_shared/driver-notes.mjs";
 import {
   DAY_BEFORE_STATUSES,
   PAID_NEW_PAYMENTS,
@@ -124,15 +125,6 @@ type Staff = {
 
 function staffName(d: Staff | undefined) {
   return (d?.name || d?.full_name || "").trim() || "there";
-}
-
-function driverFacingNotes(notes: unknown) {
-  if (!notes) return "";
-  return String(notes)
-    .split("\n")
-    .filter((line) => !/^\s*Price:\s*\$/i.test(line))
-    .join("\n")
-    .trim();
 }
 
 function normTime(t: unknown) {

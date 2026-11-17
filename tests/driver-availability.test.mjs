@@ -287,6 +287,6 @@ assert.match(migration, /interval '2 hours'/);
 assert.match(migration, /assigned_by is not distinct from 'owner'/);
 assert.match(migration, /status is distinct from 'cancelled'/);
 assert.match(migration, /security invoker/);
-assert.match(readFileSync(join(root, 'sw.js'), 'utf8'), /chance-classics-v9/);
+assert.match(readFileSync(join(root, 'sw.js'), 'utf8'), /chance-classics-v10/);
 
 console.log('driver-availability tests passed');
