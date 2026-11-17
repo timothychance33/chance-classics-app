@@ -999,10 +999,20 @@ function staffBooking(row){
 }
 function staffBookings(rows){ return (rows||[]).map(staffBooking); }
 async function loadBookingRows(){
+  // bookings_for_session is the only read that is safe for every login.
+  // An owner gets the real notes and money columns from it. A driver gets
+  // sanitized notes and null money columns. select * on rental.bookings
+  // is the pre-migration owner fallback only. Drivers must not use it:
+  // table SELECT still returns notes and total_usd until the grant fix
+  // is applied, and after that select * is denied.
   const safe=await SB.from('bookings_for_session').select('*').order('event_date');
   if(!safe.error && Array.isArray(safe.data)) return safe.data;
+  if(!isOwnerView()){
+    const message=safe.error&&safe.error.message?safe.error.message:'The schedule is not available yet.';
+    throw new Error(message);
+  }
   const raw=await SB.from('bookings').select('*').order('event_date');
-  if(raw.error) throw raw.error;
+  if(raw.error) throw (safe.error||raw.error);
   return raw.data||[];
 }
 function normTime(t){
