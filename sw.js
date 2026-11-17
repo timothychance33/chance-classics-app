@@ -3,8 +3,8 @@
 // Data still comes live from Supabase (network), so we use a
 // network-first strategy and only fall back to cache when offline.
 
-const CACHE = 'chance-classics-v9';
-const SHELL = ['./', './index.html', './pay-link-note.js', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './manifest.json'];
+const CACHE = 'chance-classics-v10';
+const SHELL = ['./', './index.html', './pay-link-note.js', './driver-notes.mjs', './supabase/functions/_shared/driver-notes.mjs', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(()=>{}));
