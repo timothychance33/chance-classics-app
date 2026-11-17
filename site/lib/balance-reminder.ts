@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { SITE_URL } from "@/lib/content";
 import { chicagoDate } from "@/lib/booking-rules";
+import { balanceLinkMetadata } from "@/lib/customer-amount.mjs";
 import { emailCustomerBalancePay } from "@/lib/owner-booking-notify";
 import type { rentalDb } from "@/lib/rental-db";
 import {
@@ -9,6 +10,7 @@ import {
   balanceReminderStatusOk,
   reminderBalanceUsd,
 } from "@/lib/saved-card";
+import { supersedeStaleBalanceLinks } from "@/lib/supersede-pay-links";
 
 type Db = NonNullable<ReturnType<typeof rentalDb>>;
 
@@ -41,23 +43,17 @@ async function openBalanceCheckout(stripe: Stripe, input: {
   customerId: string;
   amountCents: number;
   description: string;
+  totalUsd?: number | null;
 }) {
+  const metadata = balanceLinkMetadata(input.bookingId, "balance", input.totalUsd);
   const base: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
     client_reference_id: input.bookingId,
     success_url: `${SITE_URL}/booking/confirmed/?paid=balance`,
     cancel_url: `${SITE_URL}/payment-request-page/`,
-    metadata: {
-      booking_id: input.bookingId,
-      purpose: "charge",
-      reason: "balance",
-    },
+    metadata,
     payment_intent_data: {
-      metadata: {
-        booking_id: input.bookingId,
-        purpose: "charge",
-        reason: "balance",
-      },
+      metadata,
     },
     line_items: [
       {
@@ -134,6 +130,7 @@ async function sendIfDue(db: Db, stripe: Stripe, bookingId: string): Promise<Bal
   if (balance == null || !Number.isFinite(balance) || balance < 0.5) {
     return { sent: false, skipped: "settled" };
   }
+  const totalUsd = row.total_usd == null || row.total_usd === "" ? null : Number(row.total_usd);
 
   const claimed = await db.from("bookings")
     .update({ balance_reminder_sent_at: new Date().toISOString() })
@@ -154,12 +151,23 @@ async function sendIfDue(db: Db, stripe: Stripe, bookingId: string): Promise<Bal
 
   try {
     const taxExempt = taxExemptRow(row);
+    try {
+      await supersedeStaleBalanceLinks(stripe, db, {
+        bookingId,
+        totalUsd: Number.isFinite(totalUsd) ? totalUsd : null,
+        balanceUsd: balance,
+        customerId: String(row.stripe_customer_id || ""),
+      });
+    } catch (error) {
+      console.error("balance reminder could not void a stale pay link", error);
+    }
     const session = await openBalanceCheckout(stripe, {
       bookingId,
       email,
       customerId: String(row.stripe_customer_id || ""),
       amountCents: Math.round(balance * 100),
       description: checkoutDescription(eventDate, today, taxExempt),
+      totalUsd: Number.isFinite(totalUsd) ? totalUsd : null,
     });
     const payUrl = session.url || "";
     if (!payUrl) {

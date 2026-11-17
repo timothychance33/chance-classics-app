@@ -48,6 +48,7 @@ import {
   balanceReminderStatusOk,
   reminderBalanceUsd,
 } from "../_shared/saved-card.mjs";
+import { balanceCheckoutIsStale, SUPERSEDED_PAY_LINK } from "../_shared/customer-amount.mjs";
 import { CUSTOMER_REPLY_TO, DEFAULT_FROM_EMAIL, htmlToPlainText } from "../_shared/email-plain.mjs";
 import { balancePayHtml, balancePaySubject, balancePayText } from "../_shared/balance-pay-email.mjs";
 import { driverBusyWith, offerRankFor } from "../_shared/driver-availability.mjs";
@@ -252,15 +253,114 @@ async function sendEmail(to: string, subject: string, html: string, text?: strin
 
 function fmtDate(d: string | null | undefined) { return d ?? "TBD"; }
 
+async function stripeForm(path: string, method: "GET" | "POST", body?: URLSearchParams) {
+  const headers: Record<string, string> = { Authorization: `Bearer ${STRIPE_SECRET_KEY}` };
+  if (method === "POST") headers["Content-Type"] = "application/x-www-form-urlencoded";
+  const r = await fetch(`https://api.stripe.com/v1${path}`, {
+    method,
+    headers,
+    ...(body ? { body } : {}),
+  });
+  const text = await r.text();
+  let parsed: {
+    id?: string;
+    url?: string;
+    data?: Array<Record<string, unknown>>;
+    error?: { message?: string };
+  } = {};
+  try { parsed = JSON.parse(text); } catch { parsed = { error: { message: text.slice(0, 300) } }; }
+  if (!r.ok) throw new Error(parsed.error?.message || "Stripe request failed.");
+  return parsed;
+}
+
+async function expireStaleBalanceSessions(
+  sb: ReturnType<typeof createClient>,
+  input: { bookingId: string; totalUsd: number | null; balanceUsd: number; customerId: string },
+) {
+  let sessions: Array<Record<string, unknown>> = [];
+  try {
+    const query = `status:'open' AND metadata['booking_id']:'${input.bookingId}'`;
+    const found = await stripeForm(`/checkout/sessions/search?query=${encodeURIComponent(query)}&limit=100`, "GET");
+    sessions = Array.isArray(found.data) ? found.data : [];
+  } catch (error) {
+    console.error("balance pay link search failed", error instanceof Error ? error.message : error);
+  }
+  if (!sessions.length && input.customerId.startsWith("cus_")) {
+    try {
+      const listed = await stripeForm(
+        `/checkout/sessions?customer=${encodeURIComponent(input.customerId)}&status=open&limit=100`,
+        "GET",
+      );
+      const rows = Array.isArray(listed.data) ? listed.data : [];
+      sessions = rows.filter((session) => {
+        const metadata = session.metadata && typeof session.metadata === "object"
+          ? session.metadata as Record<string, string>
+          : {};
+        return metadata.booking_id === input.bookingId;
+      });
+    } catch (error) {
+      console.error("balance pay link list failed", error instanceof Error ? error.message : error);
+    }
+  }
+  for (const session of sessions) {
+    const metadata = (session.metadata && typeof session.metadata === "object" ? session.metadata : {}) as Record<string, string>;
+    const purpose = String(metadata.purpose || "");
+    const reason = String(metadata.reason || "");
+    if (purpose && purpose !== "charge") continue;
+    if (reason && reason !== "balance") continue;
+    if (String(session.status || "") !== "open") continue;
+    const cents = Number(session.amount_total);
+    if (!Number.isFinite(cents)) continue;
+    const amount = Math.round(cents) / 100;
+    if (!balanceCheckoutIsStale({
+      reason: "balance",
+      amountUsd: amount,
+      metadataTotalUsd: metadata.total_usd,
+      currentTotalUsd: input.totalUsd,
+      currentBalanceUsd: input.balanceUsd,
+    })) continue;
+    const id = String(session.id || "");
+    if (!id.startsWith("cs_")) continue;
+    try {
+      await stripeForm(`/checkout/sessions/${id}/expire`, "POST", new URLSearchParams());
+    } catch (error) {
+      console.error("balance pay link expire failed", error instanceof Error ? error.message : error);
+      continue;
+    }
+    const marked = await sb.from("booking_charges").update({
+      status: "failed",
+      error_message: SUPERSEDED_PAY_LINK,
+    }).eq("stripe_checkout_session_id", id).in("status", ["pending", "authentication_required"]);
+    if (marked.error && !/booking_charges/i.test(marked.error.message || "")) {
+      console.error("balance pay link status was not saved", marked.error.message);
+    }
+  }
+}
+
 async function balancePayLink(input: {
+  sb: ReturnType<typeof createClient>;
   bookingId: string;
   email: string;
   customerId: string;
   amount: number;
+  totalUsd?: number | null;
   eventDate: string;
   taxExempt?: boolean;
   today?: string;
 }) {
+  const totalUsd = input.totalUsd == null || !Number.isFinite(Number(input.totalUsd))
+    ? null
+    : Math.round(Number(input.totalUsd) * 100) / 100;
+  try {
+    await expireStaleBalanceSessions(input.sb, {
+      bookingId: input.bookingId,
+      totalUsd,
+      balanceUsd: input.amount,
+      customerId: input.customerId,
+    });
+  } catch (error) {
+    console.error("balance pay link expire failed", error instanceof Error ? error.message : error);
+  }
   const params = new URLSearchParams();
   params.set("mode", "payment");
   params.set("success_url", `${SITE_URL}/booking/confirmed/?paid=balance`);
@@ -272,6 +372,10 @@ async function balancePayLink(input: {
   params.set("payment_intent_data[metadata][booking_id]", input.bookingId);
   params.set("payment_intent_data[metadata][purpose]", "charge");
   params.set("payment_intent_data[metadata][reason]", "balance");
+  if (totalUsd != null) {
+    params.set("metadata[total_usd]", totalUsd.toFixed(2));
+    params.set("payment_intent_data[metadata][total_usd]", totalUsd.toFixed(2));
+  }
   params.set("line_items[0][quantity]", "1");
   params.set("line_items[0][price_data][currency]", "usd");
   params.set("line_items[0][price_data][unit_amount]", String(Math.round(input.amount * 100)));
@@ -287,28 +391,40 @@ async function balancePayLink(input: {
   else params.set("customer_email", input.email);
 
   const send = async (body: URLSearchParams) => {
-    const r = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body,
-    });
-    const text = await r.text();
-    let parsed: { url?: string; error?: { message?: string } } = {};
-    try { parsed = JSON.parse(text); } catch { parsed = { error: { message: text.slice(0, 300) } }; }
-    if (!r.ok || !parsed.url) throw new Error(parsed.error?.message || "Stripe did not return a pay link.");
-    return parsed.url;
+    const parsed = await stripeForm("/checkout/sessions", "POST", body);
+    if (!parsed.url) throw new Error("Stripe did not return a pay link.");
+    return parsed;
   };
+  let session: { id?: string; url?: string };
   try {
-    return await send(params);
+    session = await send(params);
   } catch (error) {
     if (!params.get("customer")) throw error;
     params.delete("customer");
     params.set("customer_email", input.email);
-    return send(params);
+    session = await send(params);
   }
+  if (session.id && session.url) {
+    const saved = await input.sb.from("booking_charges").insert({
+      booking_id: input.bookingId,
+      amount_usd: Math.round(input.amount * 100) / 100,
+      reason: "balance",
+      status: "pending",
+      stripe_checkout_session_id: session.id,
+      pay_url: session.url,
+    });
+    if (saved.error && saved.error.code !== "23505" && !/booking_charges/i.test(saved.error.message || "")) {
+      console.error("balance pay link was not saved", saved.error.message);
+    }
+    const stamped = await input.sb.from("bookings")
+      .update({ stripe_balance_session_id: session.id })
+      .eq("id", input.bookingId);
+    if (stamped.error && !/stripe_balance_session_id/i.test(stamped.error.message || "")) {
+      console.error("balance session was not saved", stamped.error.message);
+    }
+  }
+  if (!session.url) throw new Error("Stripe did not return a pay link.");
+  return session.url;
 }
 
 function dayOfContactEmailHtml(b: Booking) {
@@ -915,10 +1031,12 @@ Deno.serve(async (req) => {
           }
           try {
             const payUrl = await balancePayLink({
+              sb,
               bookingId: String(b.id),
               email,
               customerId: b.stripe_customer_id ? String(b.stripe_customer_id) : "",
               amount: balance,
+              totalUsd: b.total_usd == null || b.total_usd === "" ? null : Number(b.total_usd),
               eventDate,
               taxExempt: bookingTaxExempt(b),
               today: chicagoNow.date,
@@ -1063,10 +1181,12 @@ Deno.serve(async (req) => {
             let payUrl = "";
             if (preview.needsPayLink) {
               payUrl = await balancePayLink({
+                sb,
                 bookingId: String(row.id),
                 email,
                 customerId: row.stripe_customer_id ? String(row.stripe_customer_id) : "",
                 amount: Number(preview.balance),
+                totalUsd: row.total_usd == null || row.total_usd === "" ? null : Number(row.total_usd),
                 eventDate: String(row.event_date || "").slice(0, 10),
                 taxExempt: bookingTaxExempt(row),
                 today: chicagoNow.date,

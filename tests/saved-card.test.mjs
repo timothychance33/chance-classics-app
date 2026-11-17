@@ -268,7 +268,8 @@ assert.match(charge, /pay_url: payUrl/);
 assert.match(charge, /balance_reminder_sent_at/);
 assert.match(charge, /emailedTo/);
 assert.match(charge, /reason: "pay_link"/);
-assert.match(charge, /purpose: "charge"/);
+assert.match(charge, /balanceLinkMetadata/);
+assert.match(read('site/lib/customer-amount.mjs'), /purpose: "charge"/);
 assert.doesNotMatch(charge, /payment_method_types\s*:/);
 assert.doesNotMatch(charge, /No card was saved on this booking\./);
 
