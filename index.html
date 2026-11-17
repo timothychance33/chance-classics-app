@@ -525,6 +525,9 @@ const MILEAGE_FN_URL = SUPABASE_URL + '/functions/v1/quote-mileage';
 // Authorization is a normal request header on that proxy; the service worker
 // does not intercept non-GET, so the bearer token is not dropped.
 const CHARGE_API_URL = '/api/bookings/charge/';
+// Same proxy and trailing slash as the charge route. Saving a customer amount
+// writes the tax-inclusive total and voids a pay link for the old balance.
+const CUSTOMER_AMOUNT_API_URL = '/api/bookings/customer-amount/';
 
 // Resolve the key: inline value wins; otherwise use a saved on-device value.
 function resolveKey(){
@@ -1936,6 +1939,28 @@ function openEarnWindow(kind, carId){
   }
   openModal(title, body);
 }
+function applyCustomerAmountResult(booking, data){
+  if(!booking||!data) return booking;
+  if(data.notes!=null) booking.notes=data.notes;
+  if(data.total!=null) booking.total_usd=data.total;
+  if(data.balance!=null) booking.balance_due_usd=data.balance;
+  if(data.payment_status) booking.payment_status=data.payment_status;
+  return booking;
+}
+async function syncCustomerAmount(booking, amount){
+  const headers=await sessionBearerHeaders();
+  const r=await fetch(CUSTOMER_AMOUNT_API_URL,{
+    method:'POST',
+    headers,
+    body:JSON.stringify({bookingId:booking.id, amount})
+  });
+  const {data, detail}=await readChargeBody(r, true);
+  if(!r.ok || !data.ok){
+    const err=new Error(data.error||detail||'Could not update the customer amount');
+    throw err;
+  }
+  return data;
+}
 async function saveOwnerCustomerAmount(bid, inputId, after){
   if(!isOwnerView()){ toast('Owner only'); return; }
   const input=document.getElementById(inputId);
@@ -1944,20 +1969,25 @@ async function saveOwnerCustomerAmount(bid, inputId, after){
   const local=findBooking(bid);
   if(!local){ toast('Booking not found'); return; }
   const hadStored=storedCustomerAmount(local)!=null;
-  const notes=setWixPriceInNotes(local.notes, amount);
-  const prev=local.notes;
-    local.notes=notes;
-  if(typeof SB!=='undefined' && SB){
-    const {error}=await SB.from('bookings').update({notes}).eq('id',local.id);
-    if(error){ local.notes=prev; toast(error.message); return; }
+  const previous={...local};
+  let synced;
+  try{
+    synced=await syncCustomerAmount(local, amount);
+  }catch(e){
+    toast(e.message||'Could not update the customer amount');
+    return;
   }
+  applyCustomerAmountResult(local, synced);
   let amountMailed=true;
   if(String(local.status||'').toLowerCase()!=='hold'){
-    amountMailed=await notifyOwnerBookingChanged(local, ownerBookingChanges({...local, notes:prev}, local));
+    amountMailed=await notifyOwnerBookingChanged(local, ownerBookingChanges(previous, local));
   }
-  toast(amountMailed===false
-    ? 'Customer amount saved, but the email to you failed'
-    : (hadStored?'Customer amount updated':'Customer amount saved'));
+  const warning=synced.payLinkWarning?String(synced.payLinkWarning):'';
+  toast(warning
+    ? warning
+    : (amountMailed===false
+      ? 'Customer amount saved, but the email to you failed'
+      : (hadStored?'Customer amount updated':'Customer amount saved')));
   renderEarnings();
   if(after==='drill' && earnDrill) openEarnWindow(earnDrill.kind, earnDrill.carId);
   else if(after==='detail') bookingDetail(local.id);
@@ -3981,10 +4011,17 @@ async function saveBooking(id){
   try{
     let savedId=id||null;
     let ownerMailed=true;
+    let moneyWarning='';
     if(id){
       const {error}=await SB.from('bookings').update(rec).eq('id',id);if(error)throw error;
+      let synced=null;
+      if(keepAmt!=null){
+        try{ synced=await syncCustomerAmount({id:id}, keepAmt); }
+        catch(e){ moneyWarning=e.message||'The balance did not update.'; }
+      }
       if(existing){
         const next={...existing, ...rec, id:id};
+        if(synced) applyCustomerAmountResult(next, synced);
         const prevStatus=String(existing.status||'').toLowerCase();
         const nextStatus=String(next.status||'').toLowerCase();
         if(!(prevStatus==='hold' && nextStatus==='hold')){
@@ -3994,7 +4031,14 @@ async function saveBooking(id){
     }else{
       const {data,error}=await SB.from('bookings').insert(rec).select().single();if(error)throw error;
       savedId=data&&data.id;
-      ownerMailed=await notifyOwnerNewBooking({...rec,id:savedId});
+      let synced=null;
+      if(keepAmt!=null && savedId){
+        try{ synced=await syncCustomerAmount({id:savedId}, keepAmt); }
+        catch(e){ moneyWarning=e.message||'The balance did not update.'; }
+      }
+      const created={...rec,id:savedId};
+      if(synced) applyCustomerAmountResult(created, synced);
+      ownerMailed=await notifyOwnerNewBooking(created);
       // copy car prep template into booking
       if(rec.car_id){
         const tpl=DATA.templates.filter(t=>t.car_id===rec.car_id);
@@ -4006,7 +4050,11 @@ async function saveBooking(id){
     const mailed=bookingForDriverMail({...rec,id:savedId}, existing);
     if(justOffered) notifyOfferTo(mailed);  // email the #1 driver that a job awaits
     notifyDriversAfterBookingWrite({previous:existing, next:mailed});
-    closeModal();toast(ownerMailed===false?'Booking saved, but the email to you failed':'Booking saved');await loadAll();
+    closeModal();
+    toast(moneyWarning
+      ? 'Booking saved, but the balance did not update. '+moneyWarning
+      : (ownerMailed===false?'Booking saved, but the email to you failed':'Booking saved'));
+    await loadAll();
   }catch(e){toast('Error: '+(e.message||e))}
 }
 async function delBooking(id){
@@ -4080,18 +4128,20 @@ function waterfallStatusHtml(b){
 
 function bookingBalanceDue(b){
   if(!b) return null;
+  const hasTotal=b.total_usd!=null && b.total_usd!=='';
+  const total=hasTotal?Number(b.total_usd):NaN;
+  const paid=Number(b.amount_paid_usd||0);
+  if(Number.isFinite(total)){
+    if(!(paid<total)) return 0;
+    return Math.round((total-paid)*100)/100;
+  }
   if(b.balance_due_usd!=null && b.balance_due_usd!==''){
     const n=Number(b.balance_due_usd);
-    if(Number.isFinite(n)) return Math.round(n*100)/100;
-  }
-  if(b.total_usd!=null && b.total_usd!==''){
-    const total=Number(b.total_usd);
-    const paid=Number(b.amount_paid_usd||0);
-    if(Number.isFinite(total)) return Math.round((total-paid)*100)/100;
+    if(Number.isFinite(n)) return Math.max(0, Math.round(n*100)/100);
   }
   const wix=wixPriceDetailsFromNotes(b.notes);
-  if(wix && wix.due!=null) return wix.due;
-  if(wix && wix.amount!=null) return Math.round((wix.amount-Number(b.amount_paid_usd||0))*100)/100;
+  if(wix && wix.due!=null) return Math.max(0, wix.due);
+  if(wix && wix.amount!=null) return Math.max(0, Math.round((wix.amount-paid)*100)/100);
   return null;
 }
 function chargeSavedCardHtml(b){

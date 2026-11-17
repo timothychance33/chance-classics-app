@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { applySucceededCharge } from "@/lib/booking-charge";
 import { authorizeCharge, chargeCors } from "@/lib/charge-auth";
+import { balanceLinkMetadata } from "@/lib/customer-amount.mjs";
 import { emailCustomerBalancePay, emailOwnerAboutMoney, failedChargeNoticeIds, paymentNoticeIds } from "@/lib/owner-booking-notify";
 import { rentalDb } from "@/lib/rental-db";
 import { chicagoDate } from "@/lib/booking-rules";
 import { balanceCheckoutDuePhrase, bookingTotals, chargeAmounts, chargeDescription, isChargeReason } from "@/lib/saved-card";
+import { supersedeStaleBalanceLinks } from "@/lib/supersede-pay-links";
 
 export const runtime = "nodejs";
 
@@ -73,21 +75,17 @@ async function payLink(stripe: Stripe, input: {
   description: string;
   taxExempt?: boolean;
   eventDate?: string;
+  totalUsd?: number | null;
 }) {
   const paid = input.reason === "balance" ? "balance" : "charge";
+  const metadata = balanceLinkMetadata(input.bookingId, input.reason, input.totalUsd);
   const base: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
     client_reference_id: input.bookingId,
-    metadata: {
-      booking_id: input.bookingId,
-      purpose: "charge",
-      reason: input.reason,
-    },
+    metadata,
     payment_intent_data: {
       metadata: {
-        booking_id: input.bookingId,
-        purpose: "charge",
-        reason: input.reason,
+        ...metadata,
         source: "checkout",
       },
     },
@@ -208,6 +206,19 @@ async function sendBalancePayLink(
   const totals = bookingTotals(row);
   const checked = chargeAmounts({ ...totals, amount: amountUsd, reason: input.reason, source: "owner" });
   if ("error" in checked) return json(request, { error: checked.error }, 409);
+  if (input.reason === "balance") {
+    const owed = totals.total == null ? null : Math.round(Math.max(0, totals.total - totals.paid) * 100) / 100;
+    try {
+      await supersedeStaleBalanceLinks(stripe, db, {
+        bookingId: input.bookingId,
+        totalUsd: totals.total,
+        balanceUsd: owed,
+        customerId: String(row.stripe_customer_id || ""),
+      });
+    } catch (error) {
+      console.error("bookings/charge void stale pay link failed", error);
+    }
+  }
 
   const pending = await db.from("booking_charges")
     .select("id,pay_url,stripe_checkout_session_id,amount_usd,created_at")
@@ -247,6 +258,7 @@ async function sendBalancePayLink(
         description: chargeDescription(input.reason),
         taxExempt: row.tax_exempt === true || /(?:^|\n)\s*Tax exempt\b/i.test(String(row.notes || "")),
         eventDate: String(row.event_date || ""),
+        totalUsd: totals.total,
       });
     } catch (error) {
       return json(request, { error: stripeMessage(error) }, 502);
@@ -443,6 +455,7 @@ async function handleChargePost(request: Request) {
           amountCents,
           reason,
           description,
+          totalUsd: totals.total,
         });
         await db.from("booking_charges").insert({
           booking_id: bookingId,
@@ -512,6 +525,7 @@ async function handleChargePost(request: Request) {
           amountCents,
           reason,
           description,
+          totalUsd: totals.total,
         });
         await db.from("booking_charges").insert({
           booking_id: bookingId,

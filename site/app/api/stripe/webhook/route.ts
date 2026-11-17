@@ -3,11 +3,13 @@ import Stripe from "stripe";
 import { applySucceededCharge } from "@/lib/booking-charge";
 import { validateDayOfContact } from "@/lib/booking-rules";
 import { sendCatchUpBalanceReminder } from "@/lib/balance-reminder";
+import { balanceCheckoutIsStale } from "@/lib/customer-amount.mjs";
 import { confirmedDepositUpdate, depositDollarsFromSession, totalDollarsFromCheckout } from "@/lib/deposit-payment";
 import { confirmPaidQuote } from "@/lib/quote-booking";
 import { emailOwnerAboutBooking, emailOwnerAboutMoney, paymentNoticeIds, quoteLinkedBookingId } from "@/lib/owner-booking-notify";
 import { rentalDb } from "@/lib/rental-db";
-import { isChargeReason, savedCardFromSession } from "@/lib/saved-card";
+import { bookingTotals, isChargeReason, savedCardFromSession } from "@/lib/saved-card";
+import { refundStaleBalanceCheckout } from "@/lib/supersede-pay-links";
 import { updateBooking } from "@/lib/site-booking";
 import { handleChargeRefunded, handleOffSessionIntent, handleRefundEvent, moneyEmailResponse } from "@/lib/stripe-booking-events";
 
@@ -84,6 +86,29 @@ export async function POST(request: Request) {
     const reason = isChargeReason(session.metadata.reason) ? session.metadata.reason : "balance";
     const intent = session.payment_intent;
     const paymentIntentId = typeof intent === "string" ? intent : intent?.id || null;
+    if (reason === "balance") {
+      const priced = await db.from("bookings")
+        .select("total_usd,amount_paid_usd")
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (priced.error) return NextResponse.json({ error: priced.error.message }, { status: 500 });
+      if (priced.data) {
+        const totals = bookingTotals(priced.data);
+        const balance = totals.total == null ? null : Math.round(Math.max(0, totals.total - totals.paid) * 100) / 100;
+        const stale = balanceCheckoutIsStale({
+          reason,
+          amountUsd: amount,
+          metadataTotalUsd: session.metadata.total_usd,
+          currentTotalUsd: totals.total,
+          currentBalanceUsd: balance,
+        });
+        if (stale) {
+          const refunded = await refundStaleBalanceCheckout(stripe, db, { bookingId, session, amountUsd: amount });
+          if (!refunded.ok) return NextResponse.json({ error: refunded.error }, { status: 500 });
+          return NextResponse.json({ received: true, stale: true, refunded: true });
+        }
+      }
+    }
     try {
       const applied = await applySucceededCharge(db, {
         bookingId,
