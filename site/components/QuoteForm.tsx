@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AddressField } from "@/components/AddressField";
 import { SecondCarField } from "@/components/SecondCarField";
-import { MILEAGE_ACK, MILEAGE_ACK_ERROR, isPhotoShootOnly, quoteDropoffHidden } from "@/lib/booking-rules";
+import { DROPOFF_MILEAGE_RULE_TEXT, MILEAGE_ACK, MILEAGE_ACK_ERROR, isPhotoShootOnly, quoteDropoffHidden } from "@/lib/booking-rules";
 import { quoteServices } from "@/lib/content";
 
 const hear = ["Google / Search Engine", "Wedding Planning Site", "Event Planner", "Event Venue", "Friend / Family", "Other"];
@@ -25,6 +25,7 @@ export function QuoteForm() {
   const [eventType, setEventType] = useState("");
   const [sameLocation, setSameLocation] = useState(false);
   const [mileageNote, setMileageNote] = useState("");
+  const [dropoffNote, setDropoffNote] = useState("");
   const hideDropoff = quoteDropoffHidden({ eventType, sameLocation });
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -83,26 +84,36 @@ export function QuoteForm() {
   useEffect(() => {
     if (location.trim().length < 4) {
       setMileageNote("");
+      setDropoffNote("");
       return;
     }
     let ignore = false;
     const timer = setTimeout(() => {
       const params = new URLSearchParams({ pickup: location });
       if (placeId) params.set("pickupPlaceId", placeId);
+      if (!hideDropoff && dropoff.trim()) {
+        params.set("dropoff", dropoff);
+        if (dropoffPlaceId) params.set("dropoffPlaceId", dropoffPlaceId);
+      }
       fetch(`/api/mileage/?${params}`)
         .then((response) => response.json())
         .then((data) => {
-          if (!ignore) setMileageNote(data.message || "We'll confirm mileage.");
+          if (ignore) return;
+          setMileageNote(data.message || "We'll confirm mileage.");
+          setDropoffNote(data.dropoff?.message || "No drop-off mileage.");
         })
         .catch(() => {
-          if (!ignore) setMileageNote("We'll confirm mileage.");
+          if (!ignore) {
+            setMileageNote("We'll confirm mileage.");
+            setDropoffNote(hideDropoff ? "No drop-off mileage." : "We'll confirm mileage.");
+          }
         });
     }, 400);
     return () => {
       ignore = true;
       clearTimeout(timer);
     };
-  }, [location, placeId]);
+  }, [dropoff, dropoffPlaceId, hideDropoff, location, placeId]);
 
   return (
     <form className="quote-form" onSubmit={onSubmit} noValidate={false}>
@@ -196,6 +207,9 @@ export function QuoteForm() {
       )}
       {location.trim().length >= 4 && (
         <p className="mileage-line" data-mileage>{mileageNote || "Checking mileage…"}</p>
+      )}
+      {location.trim().length >= 4 && (
+        <p className="mileage-line" data-dropoff-mileage>{dropoffNote || DROPOFF_MILEAGE_RULE_TEXT}</p>
       )}
       <label className="field">
         <span>Give us more details</span>

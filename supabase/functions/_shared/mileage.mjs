@@ -5,6 +5,8 @@
 export const SHOP_ADDRESS = "118 5th St E, Benton, LA 71006";
 export const FREE_MILES = 30;
 export const PER_MILE = 3;
+export const DROPOFF_FREE_MILES = 10;
+export const DROPOFF_PER_MILE = PER_MILE;
 export const MILEAGE_REVIEW_TEXT = "We'll confirm mileage.";
 
 const METERS_PER_MILE = 1609.344;
@@ -21,10 +23,36 @@ export function mileageCharge(pickupMiles) {
   return { miles, fee };
 }
 
+/** Same whole-mile rounding. First 10 miles free, then $3 each way. 15 miles is $30. */
+export function dropoffMileageCharge(oneWayMiles) {
+  const miles = wholeMiles(Math.max(0, Number(oneWayMiles) || 0));
+  const over = Math.max(0, miles - DROPOFF_FREE_MILES);
+  return { miles, fee: over * 2 * DROPOFF_PER_MILE };
+}
+
+export function dropoffStopsMatch(pickup, dropoff) {
+  const norm = (value) => String(value || "").toLowerCase().replace(/[.,#]/g, " ").replace(/\s+/g, " ").trim();
+  const left = norm(pickup);
+  const right = norm(dropoff);
+  if (!right) return true;
+  return left.length > 0 && left === right;
+}
+
 export function mileageMessage(charge) {
   const distance = `${charge.miles} miles from Benton to pickup.`;
   if (charge.fee <= 0) return `${distance} No mileage fee.`;
   return `${distance} Mileage fee $${charge.fee}, billed with the balance.`;
+}
+
+export function dropoffMileageMessage(charge) {
+  if (charge.miles <= 0 && charge.fee <= 0) return "No drop-off mileage.";
+  const distance = `${charge.miles} miles from pickup to drop-off.`;
+  if (charge.fee <= 0) return `${distance} No drop-off mileage fee.`;
+  return `${distance} Drop-off mileage $${charge.fee}, billed with the balance.`;
+}
+
+export function zeroDropoffMileage() {
+  return { needsReview: false, miles: 0, fee: 0, driveMinutes: 0, message: "No drop-off mileage." };
 }
 
 export function reviewMileage() {
@@ -118,6 +146,59 @@ export async function quoteDrivingMileage(input, options = {}) {
       fee: charge.fee,
       driveMinutes: routeMatrixDriveMinutes(body),
       message: mileageMessage(charge),
+    };
+  } catch {
+    return reviewMileage();
+  }
+}
+
+/**
+ * Driving miles from pickup to drop-off. Same Routes call as quoteDrivingMileage (DRIVE).
+ * No drop-off, or the same stop, is $0 and does not call Maps.
+ * A failed route returns the review quote for this line only.
+ */
+export async function quoteDropoffMileage(input, options = {}) {
+  const pickup = String(input?.pickup ?? "").trim();
+  const dropoff = String(input?.dropoff ?? "").trim();
+  const pickupPlaceId = String(input?.pickupPlaceId ?? "").trim();
+  const dropoffPlaceId = String(input?.dropoffPlaceId ?? "").trim();
+  if (!dropoff && !dropoffPlaceId) return zeroDropoffMileage();
+  if (dropoff && dropoffStopsMatch(pickup, dropoff)) return zeroDropoffMileage();
+  if (pickupPlaceId && dropoffPlaceId && pickupPlaceId === dropoffPlaceId) return zeroDropoffMileage();
+
+  const key = options.apiKey ?? "";
+  const doFetch = options.fetch ?? fetch;
+  if (!key) return reviewMileage();
+  const origin = destinationWaypoint(input?.pickupPlaceId, input?.pickup);
+  const destination = destinationWaypoint(input?.dropoffPlaceId, input?.dropoff);
+  if (!origin || !destination) return reviewMileage();
+
+  try {
+    const response = await doFetch(DISTANCE_MATRIX_URL, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": "originIndex,destinationIndex,distanceMeters,duration,status,condition",
+      },
+      body: JSON.stringify({
+        origins: [{ waypoint: origin }],
+        destinations: [{ waypoint: destination }],
+        travelMode: "DRIVE",
+      }),
+    });
+    if (!response.ok) return reviewMileage();
+    const body = await response.json();
+    const miles = routeMatrixMiles(body);
+    if (miles == null) return reviewMileage();
+    const charge = dropoffMileageCharge(miles);
+    return {
+      needsReview: false,
+      miles: charge.miles,
+      fee: charge.fee,
+      driveMinutes: routeMatrixDriveMinutes(body),
+      message: dropoffMileageMessage(charge),
     };
   } catch {
     return reviewMileage();

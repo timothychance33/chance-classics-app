@@ -167,18 +167,18 @@ begin
       if piece = '' then
         continue;
       end if;
-      if piece ~* '^\s*(sales[[:space:]]+tax|quote[[:space:]]+total|booking[[:space:]]+total|listing[[:space:]]+total|subtotal|mileage[[:space:]]+fee|deposit|balance|price|total|tip|gratuity|refund|amount[[:space:]]+paid|customer[[:space:]]+amount|venmo|stripe|wix)\M' then
+      if piece ~* '^\s*(sales[[:space:]]+tax|quote[[:space:]]+total|booking[[:space:]]+total|listing[[:space:]]+total|subtotal|drop-off[[:space:]]+mileage([[:space:]]+fee)?|mileage[[:space:]]+fee|deposit|balance|price|total|tip|gratuity|refund|amount[[:space:]]+paid|customer[[:space:]]+amount|venmo|stripe|wix)\M' then
         continue;
       end if;
 
-      if piece !~* '\$[[:space:]]*[0-9]|\m(usd|dollars)\M|\m(sales[[:space:]]+tax|quote[[:space:]]+total|booking[[:space:]]+total|listing[[:space:]]+total|subtotal|mileage[[:space:]]+fee|deposit|balance|price|total|tip|gratuity|refund|venmo|stripe|wix|amount[[:space:]]+paid|customer[[:space:]]+amount|paid)\M' then
+      if piece !~* '\$[[:space:]]*[0-9]|\m(usd|dollars)\M|\m(sales[[:space:]]+tax|quote[[:space:]]+total|booking[[:space:]]+total|listing[[:space:]]+total|subtotal|drop-off[[:space:]]+mileage([[:space:]]+fee)?|mileage[[:space:]]+fee|deposit|balance|price|total|tip|gratuity|refund|venmo|stripe|wix|amount[[:space:]]+paid|customer[[:space:]]+amount|paid)\M' then
         cleaned := piece;
       else
         cleaned := regexp_replace(piece, '\([^)]*(\$|\mdue\M|\mbalance\M|\mpaid\M|\mrefund\M|\mvenmo\M|\mstripe\M|\mwix\M)[^)]*\)', ' ', 'gi');
         cleaned := regexp_replace(cleaned, '\$[[:space:]]*[0-9][0-9,]*(?:\.[0-9]{1,2})?', ' ', 'g');
         cleaned := regexp_replace(cleaned, '\m(usd|dollars)[[:space:]]*[0-9][0-9,]*(?:\.[0-9]{1,2})?\M', ' ', 'gi');
         cleaned := regexp_replace(cleaned, '\m[0-9][0-9,]*\.[0-9]{2}[[:space:]]*(usd|dollars)\M', ' ', 'gi');
-        cleaned := regexp_replace(cleaned, '\m(sales[[:space:]]+tax([[:space:]]*\([^)]*\))?|quote[[:space:]]+total|booking[[:space:]]+total|listing[[:space:]]+total|subtotal|mileage[[:space:]]+fee|gratuity|deposit([[:space:]]+(paid|due))?|balance([[:space:]]+(billed([[:space:]]+separately)?|due|remaining))?|amount[[:space:]]+paid|customer[[:space:]]+amount|refund(ed)?|venmo|stripe|wix|paid|billed[[:space:]]+with[[:space:]]+the[[:space:]]+balance)\M[[:space:]]*:?', ' ', 'gi');
+        cleaned := regexp_replace(cleaned, '\m(sales[[:space:]]+tax([[:space:]]*\([^)]*\))?|quote[[:space:]]+total|booking[[:space:]]+total|listing[[:space:]]+total|subtotal|drop-off[[:space:]]+mileage([[:space:]]+fee)?|mileage[[:space:]]+fee|gratuity|deposit([[:space:]]+(paid|due))?|balance([[:space:]]+(billed([[:space:]]+separately)?|due|remaining))?|amount[[:space:]]+paid|customer[[:space:]]+amount|refund(ed)?|venmo|stripe|wix|paid|billed[[:space:]]+with[[:space:]]+the[[:space:]]+balance)\M[[:space:]]*:?', ' ', 'gi');
         cleaned := regexp_replace(cleaned, ',?[[:space:]]*\mfee\M[[:space:]]*', ' ', 'gi');
         cleaned := regexp_replace(cleaned, '[[:space:]]*,[[:space:]]*\.', '.', 'g');
         cleaned := regexp_replace(cleaned, '[[:space:]]*,[[:space:]]*$', '', 'g');
@@ -241,6 +241,7 @@ declare
     'amount_paid_usd',
     'balance_due_usd',
     'mileage_fee_usd',
+    'dropoff_mileage_fee',
     'hotel_fee_usd',
     'stripe_customer_id',
     'stripe_payment_method_id',

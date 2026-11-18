@@ -680,7 +680,7 @@ Deno.serve(async (req) => {
   const { data: staff } = await sb.from("staff").select("*");
   const drivers = ((staff ?? []) as Staff[]).filter((s) => (s.role || "").includes("driver") && s.active);
   const { data: assignedRows, error: assignedErr } = await sb.from("bookings")
-    .select("id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles")
+    .select("id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles,dropoff_drive_minutes,dropoff_mileage_miles")
     .not("driver_id", "is", null)
     .neq("status", "cancelled");
   if (assignedErr) (summary.errors as string[]).push(`driver availability: ${assignedErr.message}`);

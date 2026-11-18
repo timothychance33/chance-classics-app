@@ -65,6 +65,7 @@ export function totalDollarsFromCheckout(input: {
   metadata?: { total_usd?: string | null } | null;
   notes?: string | null;
   mileageFeeUsd?: number | null;
+  dropoffFeeUsd?: number | null;
   hotelFeeUsd?: number | null;
 }) {
   const fromMeta = moneyNumber(input.metadata?.total_usd);
@@ -78,11 +79,24 @@ export function totalDollarsFromCheckout(input: {
   if (!listing) return null;
   const listingUsd = moneyNumber(listing[1]);
   if (listingUsd == null) return null;
-  const feeLine = notes.match(/fee \$([0-9]+(?:\.[0-9]+)?)/i);
+  let feeLine: RegExpMatchArray | null = null;
+  let dropoffLine: RegExpMatchArray | null = null;
+  for (const line of notes.split("\n")) {
+    if (/^\s*Drop-off mileage\b/i.test(line)) {
+      if (!dropoffLine) dropoffLine = line.match(/\$([0-9]+(?:\.[0-9]+)?)/);
+      continue;
+    }
+    if (!feeLine) {
+      feeLine = line.match(/Mileage:[^\n]*fee \$([0-9]+(?:\.[0-9]+)?)/i)
+        || line.match(/Mileage fee:\s*\$([0-9]+(?:\.[0-9]+)?)/i)
+        || line.match(/fee \$([0-9]+(?:\.[0-9]+)?)/i);
+    }
+  }
   const fee = moneyNumber(input.mileageFeeUsd) ?? moneyNumber(feeLine?.[1]) ?? 0;
+  const dropoff = moneyNumber(input.dropoffFeeUsd) ?? moneyNumber(dropoffLine?.[1]) ?? 0;
   const hotelLine = notes.match(/Overnight driver hotel:\s*\$([0-9]+(?:\.[0-9]+)?)/i);
   const hotel = moneyNumber(input.hotelFeeUsd) ?? moneyNumber(hotelLine?.[1]) ?? 0;
-  const subtotal = Math.round((listingUsd + fee + hotel) * 100) / 100;
+  const subtotal = Math.round((listingUsd + fee + dropoff + hotel) * 100) / 100;
   const taxLine = notes.match(/Sales tax[^$\n]*\$([0-9]+(?:\.[0-9]+)?)/i);
   const exempt = /(?:^|\n)\s*Tax exempt\b/i.test(notes);
   const tax = exempt ? 0 : (taxLine ? (moneyNumber(taxLine[1]) ?? 0) : salesTaxOn(subtotal));

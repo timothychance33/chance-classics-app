@@ -23,10 +23,14 @@ export const HOLD_MINUTES = 30;
 export const MILE_RADIUS = 30;
 export const EXTRA_MILE_USD = 3;
 
-/** One-way Benton to pickup. The drop-off address is collected for the driver and is not part of the fee. */
+/** One-way Benton to pickup. Drop-off mileage is a separate charge. */
 export const MILEAGE_TRIP = "one-way" as const;
 export const MILE_RATE_USD = EXTRA_MILE_USD;
 export const MILE_THRESHOLD = MILE_RADIUS;
+/** One-way pickup to drop-off. The first 10 miles are free. */
+export const DROPOFF_MILE_THRESHOLD = 10;
+/** Same $3 as the Benton trailer rate. Charged on the round trip past the free miles. */
+export const DROPOFF_MILE_RATE_USD = MILE_RATE_USD;
 
 /**
  * Same 2-hour gap as BOOKING_BUFFER_HOURS in lib/quotes.mjs, plus the one-way
@@ -39,16 +43,21 @@ export const DRIVE_MPH = 55;
 const MINUTES_PER_DAY = 1440;
 export const SHOP_ADDRESS = "118 5th St E, Benton, LA 71006";
 export const MILEAGE_REVIEW_TEXT = "We'll confirm mileage.";
-/** Public examples. 30 miles or less is free. Over 30, the fee is the full distance times $3. */
+/** Public examples. Benton mileage and drop-off mileage are separate. */
 export const MILEAGE_EXAMPLES = [
-  "25 miles is $0.",
-  `45 miles is 45 × $${EXTRA_MILE_USD} = $${45 * EXTRA_MILE_USD}.`,
-  `100 miles is 100 × $${EXTRA_MILE_USD} = $${100 * EXTRA_MILE_USD}.`,
+  "25 miles from Benton is $0.",
+  `45 miles from Benton is 45 × $${EXTRA_MILE_USD} = $${45 * EXTRA_MILE_USD}.`,
+  `100 miles from Benton is 100 × $${EXTRA_MILE_USD} = $${100 * EXTRA_MILE_USD}.`,
+  "10 miles from pickup to drop-off is $0.",
+  "15 miles from pickup to drop-off is 5 miles over, counted round trip: 5 × 2 × $3 = $30.",
+  "No drop-off, or a drop-off at the pickup, is $0.",
 ] as const;
+export const DROPOFF_MILEAGE_RULE_TEXT =
+  `The first ${DROPOFF_MILE_THRESHOLD} miles from pickup to drop-off are free. After that, drop-off mileage is $${DROPOFF_MILE_RATE_USD} per mile, counted round trip, and billed with the balance.`;
 export const MILEAGE_RULE_TEXT =
-  "Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport).";
+  `Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport). ${DROPOFF_MILEAGE_RULE_TEXT}`;
 export const MILEAGE_ACK =
-  "I understand that pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport).";
+  `I understand that pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport). I understand that the first ${DROPOFF_MILE_THRESHOLD} miles from pickup to drop-off are free, and that after that drop-off mileage is $${DROPOFF_MILE_RATE_USD} per mile, counted round trip, and billed with the balance.`;
 export const MILEAGE_ACK_ERROR = "Please check this box to continue.";
 
 export type MileageCharge = { miles: number; fee: number };
@@ -62,6 +71,33 @@ export function mileageCharge(pickupMiles: number): MileageCharge {
   const miles = wholeMiles(pickupMiles);
   const fee = miles > MILE_THRESHOLD ? miles * MILE_RATE_USD : 0;
   return { miles, fee };
+}
+
+/** Compare two stops ignoring case, punctuation, and extra spaces. */
+export function dropoffStopsMatch(pickup: string, dropoff: string) {
+  const norm = (value: string) => value.toLowerCase().replace(/[.,#]/g, " ").replace(/\s+/g, " ").trim();
+  const left = norm(pickup);
+  const right = norm(dropoff);
+  if (!right) return true;
+  return left.length > 0 && left === right;
+}
+
+/**
+ * One-way pickup-to-drop-off miles, rounded the same way as mileageCharge.
+ * The first 10 miles are free. Miles past that are charged both ways at $3:
+ * fee = max(0, wholeMiles - 10) * 2 * 3. 15 miles is $30.
+ */
+export function dropoffMileageCharge(oneWayMiles: number): MileageCharge {
+  const miles = wholeMiles(Math.max(0, Number(oneWayMiles) || 0));
+  const over = Math.max(0, miles - DROPOFF_MILE_THRESHOLD);
+  return { miles, fee: over * 2 * DROPOFF_MILE_RATE_USD };
+}
+
+/** No drop-off, or the same stop as pickup, is $0. Otherwise use dropoffMileageCharge. */
+export function dropoffFeeForTrip(pickup: string, dropoff: string, oneWayMiles: number | null) {
+  if (dropoffStopsMatch(pickup, dropoff)) return { miles: 0, fee: 0 };
+  if (oneWayMiles == null || !Number.isFinite(oneWayMiles)) return { miles: 0, fee: 0 };
+  return dropoffMileageCharge(oneWayMiles);
 }
 
 /** Slots are every 15 minutes (:00, :15, :30, :45), 8:00 AM–11:45 PM Central. A rental may end after midnight. */
@@ -149,6 +185,10 @@ export type TripTravel = {
   driveMinutes?: number | string | null;
   mileage_miles?: number | string | null;
   drive_minutes?: number | string | null;
+  dropoffMiles?: number | string | null;
+  dropoffDriveMinutes?: number | string | null;
+  dropoff_mileage_miles?: number | string | null;
+  dropoff_drive_minutes?: number | string | null;
 };
 
 function knownTravelNumber(value: unknown) {
@@ -173,7 +213,17 @@ export function travelMinutes(job: TripTravel | null | undefined) {
   return Math.ceil((miles / DRIVE_MPH) * 60);
 }
 
-/** Booking window plus its drive and BOOKING_BUFFER_HOURS on both sides. An end at or before the start runs past midnight. */
+/** Minutes to drive from the drop-off back to the trailer at pickup. Added only at the end of the window. */
+export function dropoffReturnMinutes(job: TripTravel | null | undefined) {
+  if (!job || typeof job !== "object") return 0;
+  const drive = knownTravelNumber(firstTravelValue(job.dropoff_drive_minutes, job.dropoffDriveMinutes));
+  if (drive != null) return drive;
+  const miles = knownTravelNumber(firstTravelValue(job.dropoff_mileage_miles, job.dropoffMiles));
+  if (miles == null) return 0;
+  return Math.ceil((miles / DRIVE_MPH) * 60);
+}
+
+/** Booking window plus its Benton drive and BOOKING_BUFFER_HOURS on both sides, plus the drop-off return at the end. An end at or before the start runs past midnight. */
 export function blockedInterval(
   booking: {
     event_date?: string | null;
@@ -192,11 +242,12 @@ export function blockedInterval(
   if (end <= startMin) end += MINUTES_PER_DAY;
   const buffer = Number(bufferHours) * 60;
   const travel = travelMinutes(booking);
+  const dropoffReturn = dropoffReturnMinutes(booking);
   const origin = day * MINUTES_PER_DAY;
-  return { start: origin + startMin - travel - buffer, end: origin + end + travel + buffer };
+  return { start: origin + startMin - travel - buffer, end: origin + end + travel + dropoffReturn + buffer };
 }
 
-/** Requested occupancy is [start - drive, end + drive]. No extra buffer. */
+/** Requested occupancy is [start - drive, end + drive + drop-off return]. No extra buffer. */
 export function requestedInterval(
   evDate: string,
   startTime: string,
@@ -208,8 +259,9 @@ export function requestedInterval(
   const duration = Number(hours);
   if (day == null || startMin == null || !Number.isFinite(duration) || duration <= 0) return null;
   const travel = travelMinutes(job);
+  const dropoffReturn = dropoffReturnMinutes(job);
   const start = day * MINUTES_PER_DAY + startMin;
-  return { start: start - travel, end: start + duration * 60 + travel };
+  return { start: start - travel, end: start + duration * 60 + travel + dropoffReturn };
 }
 
 export function intervalsOverlap(a: Interval | null, b: Interval | null) {
@@ -232,12 +284,13 @@ export function formatClock(value: string) {
   return `${hour12}:${mins} ${period}`;
 }
 
-export function quoteTotal(basePrice: number, hours: number, mileageFee = 0, hotelFee = 0) {
+export function quoteTotal(basePrice: number, hours: number, mileageFee = 0, hotelFee = 0, dropoffFee = 0) {
   const extraHours = Math.max(0, hours - BASE_HOURS);
   const listing = basePrice + extraHours * EXTRA_HOUR_USD;
   const fee = Math.max(0, mileageFee);
   const hotel = Math.max(0, roundMoney(hotelFee));
-  const subtotal = roundMoney(listing + fee + hotel);
+  const dropoff = Math.max(0, roundMoney(dropoffFee));
+  const subtotal = roundMoney(listing + fee + hotel + dropoff);
   const tax = salesTax(subtotal);
   const total = roundMoney(subtotal + tax);
   return {
@@ -245,6 +298,7 @@ export function quoteTotal(basePrice: number, hours: number, mileageFee = 0, hot
     extraHours,
     listing,
     mileageFee: fee,
+    dropoffMileageFee: dropoff,
     hotelFee: hotel,
     subtotal,
     tax,
@@ -308,6 +362,8 @@ export function slotTaken(
       status: "active",
       drive_minutes: item.drive_minutes ?? item.driveMinutes,
       mileage_miles: item.mileage_miles ?? item.miles,
+      dropoff_drive_minutes: item.dropoff_drive_minutes ?? item.dropoffDriveMinutes,
+      dropoff_mileage_miles: item.dropoff_mileage_miles ?? item.dropoffMiles,
     });
     if (!blocked) return itemDate === date;
     return intervalsOverlap(wanted, blocked);
@@ -387,6 +443,9 @@ export function quoteCheckoutLines(quote: {
   extra_hours?: number | null;
   travel?: number | null;
   miles?: number | null;
+  dropoff_miles?: number | null;
+  dropoff_fee?: number | null;
+  dropoff_needs_review?: boolean | null;
   hotel_fee?: number | null;
   hotel_nights?: number | null;
   hotel_return_at?: string | null;
@@ -405,6 +464,15 @@ export function quoteCheckoutLines(quote: {
     label: Number(quote.miles) ? `Mileage fee (${quote.miles} mi from Benton)` : "Mileage fee",
     amount: Number(quote.travel) || 0,
   });
+  if (quote.dropoff_needs_review || quote.dropoff_miles != null || quote.dropoff_fee != null) {
+    const miles = Number(quote.dropoff_miles);
+    const label = quote.dropoff_needs_review
+      ? "Drop-off mileage (we'll confirm mileage)"
+      : Number.isFinite(miles) && miles > 0
+        ? `Drop-off mileage (${miles} mi from pickup to drop-off)`
+        : "Drop-off mileage";
+    lines.push({ label, amount: Number(quote.dropoff_fee) || 0 });
+  }
   if (Number(quote.hotel_fee) > 0) {
     const nights = Number(quote.hotel_nights) || 1;
     const showWhy = !quote.hotel_override && quote.hotel_return_at && quote.miles != null;

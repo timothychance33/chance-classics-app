@@ -23,6 +23,12 @@ export async function handleQuoteAlternatives(body: any) {
             lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(chosenName)} — base (up to 2 hours)</td><td style="padding:6px 0;text-align:right">${money(chosen.base_rate)}</td></tr>`);
             if (Number(chosen.overage) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Additional hours (${esc(chosen.extra_hours)})</td><td style="padding:6px 0;text-align:right">${money(chosen.overage)}</td></tr>`);
             if (Number(chosen.travel) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Travel (${esc(chosen.miles ?? q.miles)} mi, trailered)</td><td style="padding:6px 0;text-align:right">${money(chosen.travel)}</td></tr>`);
+            if (chosen.dropoff_mileage_needs_review || q.dropoff_mileage_needs_review) {
+              lines.push(`<tr><td style="padding:6px 14px 6px 0">Drop-off mileage</td><td style="padding:6px 0;text-align:right">We'll confirm mileage.</td></tr>`);
+            } else if (Number(chosen.dropoff_mileage_fee ?? q.dropoff_mileage_fee) > 0 || (chosen.dropoff_mileage_miles ?? q.dropoff_mileage_miles) != null) {
+              const dropoffMiles = esc(chosen.dropoff_mileage_miles ?? q.dropoff_mileage_miles ?? "");
+              lines.push(`<tr><td style="padding:6px 14px 6px 0">Drop-off mileage (${dropoffMiles} mi from pickup to drop-off)</td><td style="padding:6px 0;text-align:right">${money(chosen.dropoff_mileage_fee ?? q.dropoff_mileage_fee)}</td></tr>`);
+            }
             if (Number(chosen.hotel_fee) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(chosen.hotel_label || q.hotel_label || "Overnight driver hotel")}</td><td style="padding:6px 0;text-align:right">${money(chosen.hotel_fee)}</td></tr>`);
             lines.push(`<tr><td style="padding:6px 14px 6px 0;border-top:1px solid #ddd">Subtotal</td><td style="padding:6px 0;text-align:right;border-top:1px solid #ddd">${money(chosen.subtotal)}</td></tr>`);
             if (chosen.tax_exempt || q.tax_exempt) {
@@ -75,6 +81,7 @@ export async function handleQuoteAlternatives(body: any) {
           <p>${intro}</p>
           ${q.event_location ? `<p style="color:#6b6052">${esc(q.event_location)}</p>` : ""}
           <p style="font-size:13px;color:#6b6052">${esc(bits.join(" · "))}</p>
+          <p style="font-size:13px;color:#6b6052">The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.</p>
           <table style="border-collapse:collapse;width:100%;margin:14px 0">${altRows}</table>
           ${validLine ? `<p style="color:#b8862c;font-weight:700;font-size:13px">${validLine}</p>` : ""}
           <p style="color:#6b6052;font-size:13px;margin-top:18px">${footer}</p>

@@ -53,6 +53,8 @@ export async function GET(request: Request) {
     const slots = await openTimesForCar(db, carId, date, hours, {
       miles: optionalTravel(url.searchParams.get("miles")),
       driveMinutes: optionalTravel(url.searchParams.get("driveMinutes")),
+      dropoffMiles: optionalTravel(url.searchParams.get("dropoffMiles")),
+      dropoffDriveMinutes: optionalTravel(url.searchParams.get("dropoffDriveMinutes")),
     });
     return NextResponse.json({ connected: true, slots });
   } catch (error) {

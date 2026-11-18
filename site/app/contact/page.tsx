@@ -23,7 +23,7 @@ export default function ContactPage() {
       </p>
       <p>
         We work mostly in Northwest Louisiana and go as far as New Orleans, Longview, Jackson, and Hot Springs.
-        Pickups more than 30 miles from Benton are charged $3 per mile for the full distance, because the car is trailered.
+        Pickups more than 30 miles from Benton are charged $3 per mile for the full distance, because the car is trailered. The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.
       </p>
       <p>
         <Link className="btn" href="/quoterequest/">
