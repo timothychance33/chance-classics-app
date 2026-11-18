@@ -15,7 +15,7 @@ import {
 import { withSecondCarNote } from "@/data/packages";
 import { serviceBySlug } from "@/lib/content";
 import { hotelNotesLine, overnightDriverHotel } from "@/lib/overnight-hotel";
-import { quoteDrivingMileage } from "@/lib/mileage";
+import { quoteDrivingMileage, quoteDropoffMileage } from "@/lib/mileage";
 import { rentalDb } from "@/lib/rental-db";
 import { CARD_SAVE_TEXT, depositCheckoutSaveCard } from "@/lib/saved-card";
 import { busyRanges, carIdForName, insertBooking, releaseStaleHolds } from "@/lib/site-booking";
@@ -69,6 +69,12 @@ export async function POST(request: Request) {
     pickupPlaceId: String(raw.pickupPlaceId || "").slice(0, 300),
     pickup: value.pickup,
   });
+  const dropoffMileage = await quoteDropoffMileage({
+    pickup: value.pickup,
+    pickupPlaceId: String(raw.pickupPlaceId || "").slice(0, 300),
+    dropoff: value.dropoff,
+    dropoffPlaceId: String(raw.dropoffPlaceId || "").slice(0, 300),
+  });
   const hotel = overnightDriverHotel({
     miles: mileage.miles,
     driveMinutes: mileage.driveMinutes,
@@ -76,7 +82,7 @@ export async function POST(request: Request) {
     startTime: value.start,
     hours: value.hours,
   });
-  const money = quoteTotal(service.price, value.hours, mileage.fee ?? 0, hotel.fee);
+  const money = quoteTotal(service.price, value.hours, mileage.fee ?? 0, hotel.fee, dropoffMileage.fee ?? 0);
   const hotelNote = hotelNotesLine(hotel);
   const payments = stripeReady({
     secret: process.env.STRIPE_SECRET_KEY,
@@ -113,6 +119,8 @@ export async function POST(request: Request) {
     const clash = slotTaken(value.date, value.start, value.hours, busy, {
       miles: mileage.miles,
       driveMinutes: mileage.driveMinutes,
+      dropoffMiles: dropoffMileage.miles,
+      dropoffDriveMinutes: dropoffMileage.driveMinutes,
     });
     if (clash) {
       return NextResponse.json({ error: "That time was just taken. Pick another open time." }, { status: 409 });
@@ -127,6 +135,9 @@ export async function POST(request: Request) {
       mileage.needsReview
         ? "Mileage: We'll confirm mileage. Flagged for review."
         : `Mileage: ${mileage.miles} miles from Benton to pickup, fee $${Number(mileage.fee).toFixed(2)}, billed with the balance.`,
+      dropoffMileage.needsReview
+        ? "Drop-off mileage: We'll confirm mileage. Flagged for review."
+        : `Drop-off mileage: ${dropoffMileage.miles} miles from pickup to drop-off, fee $${Number(dropoffMileage.fee).toFixed(2)}, billed with the balance.`,
       ...(hotelNote ? [hotelNote] : []),
       `Subtotal: $${money.subtotal.toFixed(2)}`,
       `Sales tax (10.25%): $${money.tax.toFixed(2)}`,
@@ -157,6 +168,10 @@ export async function POST(request: Request) {
       mileage_fee_usd: mileage.fee,
       mileage_needs_review: mileage.needsReview,
       drive_minutes: mileage.driveMinutes,
+      dropoff_mileage_miles: dropoffMileage.miles,
+      dropoff_mileage_fee: dropoffMileage.fee,
+      dropoff_mileage_needs_review: dropoffMileage.needsReview,
+      dropoff_drive_minutes: dropoffMileage.driveMinutes,
       hotel_fee_usd: hotel.fee,
       hotel_nights: hotel.nights,
       hotel_return_at: hotel.returnLabel || null,
@@ -197,7 +212,7 @@ export async function POST(request: Request) {
               unit_amount: money.deposit * 100,
               product_data: {
                 name: `$${money.deposit} non-refundable deposit — ${service.car}`,
-                description: `${service.name}, ${value.date} ${formatClock(value.start)}–${rentalEndLabel(value.start, value.hours)}. Subtotal $${money.subtotal.toFixed(2)}. Sales tax (10.25%) $${money.tax.toFixed(2)}. Total $${money.total.toFixed(2)}. ${mileage.message}${hotelNote ? ` ${hotelNote}` : ""} Balance $${money.balance.toFixed(2)} is billed separately. ${CARD_SAVE_TEXT}`,
+                description: `${service.name}, ${value.date} ${formatClock(value.start)}–${rentalEndLabel(value.start, value.hours)}. Subtotal $${money.subtotal.toFixed(2)}. Sales tax (10.25%) $${money.tax.toFixed(2)}. Total $${money.total.toFixed(2)}. ${mileage.message} ${dropoffMileage.message}${hotelNote ? ` ${hotelNote}` : ""} Balance $${money.balance.toFixed(2)} is billed separately. ${CARD_SAVE_TEXT}`,
               },
             },
           },

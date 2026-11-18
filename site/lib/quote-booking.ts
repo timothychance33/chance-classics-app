@@ -48,6 +48,10 @@ export type QuoteRow = {
   hotel_return_at?: string | null;
   hotel_override?: boolean | null;
   drive_minutes?: number | null;
+  dropoff_mileage_miles?: number | null;
+  dropoff_mileage_fee?: number | null;
+  dropoff_drive_minutes?: number | null;
+  dropoff_mileage_needs_review?: boolean | null;
   subtotal?: number | null;
   tax: number | null;
   total: number | null;
@@ -92,6 +96,9 @@ export function publicQuoteView(quote: QuoteRow, carName: string) {
     extra_hours: Math.max(0, Number(quote.hours) - 2),
     travel: quote.travel,
     miles: quote.miles,
+    dropoff_miles: quote.dropoff_mileage_miles,
+    dropoff_fee: quote.dropoff_mileage_fee,
+    dropoff_needs_review: quote.dropoff_mileage_needs_review,
     hotel_fee: quote.hotel_fee,
     hotel_nights: quote.hotel_nights,
     hotel_return_at: quote.hotel_return_at,
@@ -149,6 +156,8 @@ export async function quoteTimeFree(db: Db, quote: QuoteRow) {
   const taken = slotTaken(quote.event_date, start, hours, busy, {
     miles: quote.miles,
     driveMinutes: quote.drive_minutes,
+    dropoffMiles: quote.dropoff_mileage_miles,
+    dropoffDriveMinutes: quote.dropoff_drive_minutes,
   });
   if (taken) return { ok: false as const, error: "That time was just taken. Ask Chance Classics for a new quote." };
   return { ok: true as const, start, end: fromMinutes(end), hours };
@@ -212,6 +221,9 @@ export async function confirmPaidQuote(
       : (Number(quote.tax) ? `Sales tax (10.25%): $${Number(quote.tax).toFixed(2)}` : ""),
     `Quote total: $${Number(money.total).toFixed(2)}`,
     `Mileage fee: $${Number(quote.travel || 0).toFixed(2)}`,
+    quote.dropoff_mileage_needs_review
+      ? "Drop-off mileage: We'll confirm mileage. Flagged for review."
+      : `Drop-off mileage fee: $${Number(quote.dropoff_mileage_fee || 0).toFixed(2)}`,
     Number(quote.hotel_fee) > 0
       ? (quote.hotel_return_at
         ? `Overnight driver hotel: $${Number(quote.hotel_fee).toFixed(2)} (${quote.miles != null ? `${quote.miles} miles from Benton, ` : ""}driver back about ${quote.hotel_return_at}).`
@@ -249,6 +261,10 @@ export async function confirmPaidQuote(
     mileage_fee_usd: quote.travel,
     mileage_needs_review: false,
     drive_minutes: quote.drive_minutes ?? null,
+    dropoff_mileage_miles: quote.dropoff_mileage_miles ?? null,
+    dropoff_mileage_fee: quote.dropoff_mileage_fee ?? null,
+    dropoff_mileage_needs_review: !!quote.dropoff_mileage_needs_review,
+    dropoff_drive_minutes: quote.dropoff_drive_minutes ?? null,
     hotel_fee_usd: Number(quote.hotel_fee) || 0,
     hotel_nights: Number(quote.hotel_nights) || (Number(quote.hotel_fee) > 0 ? 1 : 0),
     hotel_return_at: quote.hotel_return_at || null,

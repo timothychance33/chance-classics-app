@@ -80,7 +80,7 @@ export default function AboutPage() {
           Every rental includes a chauffeur. You do not drive the car. We keep a 2-hour buffer before and after each booking, so the car is not coming straight from another event. If the car you booked is not available, we offer a comparable backup. Starting prices are on the car pages, and you can book online.
         </p>
         <p>
-          Most of the work is in Northwest Louisiana. The cars also go as far as New Orleans, Longview, Jackson, and Hot Springs. A pickup more than 30 miles from Benton is trailered, and that mileage is part of the quote.
+          Most of the work is in Northwest Louisiana. The cars also go as far as New Orleans, Longview, Jackson, and Hot Springs. A pickup more than 30 miles from Benton is trailered, and that mileage is part of the quote. The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.
         </p>
         <p>
           <Link href="/portfolio/">See the cars</Link>

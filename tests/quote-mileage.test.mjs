@@ -13,6 +13,8 @@ import {
   destinationWaypoint,
   distanceMatrixBody,
   mileageCharge,
+  dropoffMileageCharge,
+  quoteDropoffMileage,
   mileageMessage,
   quoteDrivingMileage,
   reviewMileage,
@@ -40,6 +42,11 @@ assert.equal(mileageCharge(31).miles, 31);
 assert.equal(mileageCharge(31).fee, 93);
 assert.equal(mileageCharge(60).miles, 60);
 assert.equal(mileageCharge(60).fee, 180);
+assert.equal(dropoffMileageCharge(0).fee, 0);
+assert.equal(dropoffMileageCharge(10).fee, 0);
+assert.equal(dropoffMileageCharge(11).miles, 11);
+assert.equal(dropoffMileageCharge(11).fee, 6);
+assert.equal(dropoffMileageCharge(15).fee, 30);
 assert.equal(mileageMessage(mileageCharge(12)), '12 miles from Benton to pickup. No mileage fee.');
 assert.equal(mileageMessage(mileageCharge(45)), '45 miles from Benton to pickup. Mileage fee $135, billed with the balance.');
 assert.deepEqual(reviewMileage(), {
@@ -207,5 +214,36 @@ assert.match(config, /\[functions\.quote-mileage\]\s+verify_jwt = false/);
 
 const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).filter((s) => s.trim());
 for (const source of scripts) new vm.Script(source);
+
+const noDrop = await quoteDropoffMileage({ pickup: '1001 Airport Dr, Shreveport, LA' }, { apiKey: 'test-key', fetch: async () => { throw new Error('should not fetch'); } });
+assert.equal(noDrop.fee, 0);
+assert.equal(noDrop.needsReview, false);
+const sameStop = await quoteDropoffMileage(
+  { pickup: '100 Main St, Monroe, LA', dropoff: '100 main st, monroe, la' },
+  { apiKey: 'test-key', fetch: async () => { throw new Error('should not fetch'); } },
+);
+assert.equal(sameStop.fee, 0);
+const failedDrop = await quoteDropoffMileage(
+  { pickup: '1001 Airport Dr, Shreveport, LA', dropoff: '200 Crockett St, Shreveport, LA' },
+  { apiKey: 'test-key', fetch: async () => { throw new Error('network'); } },
+);
+assert.equal(failedDrop.needsReview, true);
+assert.equal(failedDrop.message, "We'll confirm mileage.");
+const pricedDrop = await quoteDropoffMileage(
+  { pickup: '3501 Forsythe Ave, Monroe, LA 71201', dropoff: '1463 Logtown Loop Rd, Monroe, LA 71202' },
+  {
+    apiKey: 'test-key',
+    fetch: async (_url, init) => {
+      const body = JSON.parse(init.body);
+      assert.equal(body.travelMode, 'DRIVE');
+      assert.equal(body.origins[0].waypoint.address, '3501 Forsythe Ave, Monroe, LA 71201');
+      assert.equal(body.destinations[0].waypoint.address, '1463 Logtown Loop Rd, Monroe, LA 71202');
+      return { ok: true, json: async () => [{ originIndex: 0, destinationIndex: 0, condition: 'ROUTE_EXISTS', distanceMeters: 15 * METERS_PER_MILE, duration: '1200s' }] };
+    },
+  },
+);
+assert.equal(pricedDrop.miles, 15);
+assert.equal(pricedDrop.fee, 30);
+assert.equal(pricedDrop.driveMinutes, 20);
 
 console.log('quote-mileage tests passed');

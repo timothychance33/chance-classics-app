@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     if (bookingError) throw bookingError;
 
     const { data: assigned, error: assignedError } = await sb.from("bookings")
-      .select("id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles")
+      .select("id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles,dropoff_drive_minutes,dropoff_mileage_miles")
       .eq("driver_id", me.id)
       .neq("status", "cancelled");
     if (assignedError) throw assignedError;
@@ -107,12 +107,12 @@ Deno.serve(async (req) => {
     if (!claimed?.length) return json({ error: "This booking is already claimed" }, 409);
 
     const { data: assignedNow, error: nowError } = await sb.from("bookings")
-      .select("id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles")
+      .select("id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles,dropoff_drive_minutes,dropoff_mileage_miles")
       .not("driver_id", "is", null)
       .neq("status", "cancelled");
     if (nowError) throw nowError;
     const { data: openOffers, error: openError } = await sb.from("bookings")
-      .select("id,driver_id,event_date,start_time,end_time,status,offer_rank,passed_by,open_to_all,needs_trailer,pay_tier,drive_minutes,mileage_miles")
+      .select("id,driver_id,event_date,start_time,end_time,status,offer_rank,passed_by,open_to_all,needs_trailer,pay_tier,drive_minutes,mileage_miles,dropoff_drive_minutes,dropoff_mileage_miles")
       .is("driver_id", null)
       .not("offer_rank", "is", null)
       .neq("status", "cancelled");

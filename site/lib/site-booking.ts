@@ -20,6 +20,8 @@ type Row = {
   created_at: string | null;
   drive_minutes?: number | string | null;
   mileage_miles?: number | string | null;
+  dropoff_drive_minutes?: number | string | null;
+  dropoff_mileage_miles?: number | string | null;
 };
 
 export async function carIdForName(db: Db, name: string) {
@@ -43,14 +45,39 @@ export async function releaseStaleHolds(db: Db, carId: string) {
 
 export async function busyRanges(db: Db, carId: string, date: string, now = new Date()): Promise<Busy[]> {
   const dates = [addDays(date, -1), date, addDays(date, 1)];
-  const { data, error } = await db
+  const columns = "id,event_date,start_time,end_time,status,source,created_at,drive_minutes,mileage_miles,dropoff_drive_minutes,dropoff_mileage_miles";
+  const withDropoff = await db
     .from("bookings")
-    .select("id,event_date,start_time,end_time,status,source,created_at,drive_minutes,mileage_miles")
+    .select(columns)
     .eq("car_id", carId)
     .in("event_date", dates)
     .neq("status", "cancelled");
-  if (error) throw new Error(error.message);
-  return ((data || []) as Row[])
+  if (withDropoff.error && /dropoff_/i.test(withDropoff.error.message || "")) {
+    const fallback = await db
+      .from("bookings")
+      .select("id,event_date,start_time,end_time,status,source,created_at,drive_minutes,mileage_miles")
+      .eq("car_id", carId)
+      .in("event_date", dates)
+      .neq("status", "cancelled");
+    if (fallback.error) throw new Error(fallback.error.message);
+    return ((fallback.data || []) as Row[])
+      .filter((row) => {
+        if (row.status === "hold" && row.created_at && !holdIsFresh(row.created_at, now)) return false;
+        if (row.start_time && row.end_time) return true;
+        return String(row.event_date || "") === date;
+      })
+      .map((row) => ({
+        start: String(row.start_time || ""),
+        end: String(row.end_time || ""),
+        date: String(row.event_date || date),
+        drive_minutes: row.drive_minutes ?? null,
+        mileage_miles: row.mileage_miles ?? null,
+        dropoff_drive_minutes: null,
+        dropoff_mileage_miles: null,
+      }));
+  }
+  if (withDropoff.error) throw new Error(withDropoff.error.message);
+  return ((withDropoff.data || []) as Row[])
     .filter((row) => {
       if (row.status === "hold" && row.created_at && !holdIsFresh(row.created_at, now)) return false;
       if (row.start_time && row.end_time) return true;
@@ -62,6 +89,8 @@ export async function busyRanges(db: Db, carId: string, date: string, now = new 
       date: String(row.event_date || date),
       drive_minutes: row.drive_minutes ?? null,
       mileage_miles: row.mileage_miles ?? null,
+      dropoff_drive_minutes: row.dropoff_drive_minutes ?? null,
+      dropoff_mileage_miles: row.dropoff_mileage_miles ?? null,
     }));
 }
 
@@ -78,7 +107,7 @@ export async function openTimesForCar(
 }
 
 function optionalBookingColumn(name: string) {
-  return /^(mileage_|day_of_contact_|wedding_|hotel_)/.test(name)
+  return /^(mileage_|day_of_contact_|wedding_|hotel_|dropoff_)/.test(name)
     || name === "drive_minutes"
     || name === "stripe_deposit_session_id"
     || name === "stripe_balance_session_id"

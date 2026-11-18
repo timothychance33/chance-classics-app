@@ -18,7 +18,7 @@ export type FaqItem = { q: string; a: string; examples?: readonly string[] };
 export const faqItems: FaqItem[] = [
   {
     q: "What areas does Chance Classics serve?",
-    a: "Chance Classics is based in Benton. We work mostly in Northwest Louisiana and go as far as New Orleans, Longview, Jackson, and Hot Springs. A pickup 30 miles or less from Benton has no mileage charge. Farther than that, the car is trailered and the charge is $3 per mile for the whole distance, from mile one.",
+    a: "Chance Classics is based in Benton. We work mostly in Northwest Louisiana and go as far as New Orleans, Longview, Jackson, and Hot Springs. A pickup 30 miles or less from Benton has no mileage charge. Farther than that, the car is trailered and the charge is $3 per mile for the whole distance, from mile one. The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.",
   },
   {
     q: "How many classic cars does Chance Classics have?",
@@ -30,7 +30,7 @@ export const faqItems: FaqItem[] = [
   },
   {
     q: "How much does it cost to rent a classic car?",
-    a: "Published starting prices are on each car. The first 2 hours are that starting price. Each additional hour is $100. A $250 deposit is due when you book, and the balance is billed separately. Mileage is separate when the pickup is more than 30 miles from Benton.",
+    a: "Published starting prices are on each car. The first 2 hours are that starting price. Each additional hour is $100. A $250 deposit is due when you book, and the balance is billed separately. Mileage is separate when the pickup is more than 30 miles from Benton. The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.",
   },
   {
     q: "How far in advance should I book?",
@@ -62,7 +62,7 @@ export const faqItems: FaqItem[] = [
   },
   {
     q: "How does mileage work?",
-    a: "A pickup 30 miles or less from Benton has no mileage charge. Farther than 30 miles, the car is trailered and the charge is $3 per mile for the whole distance, from mile one.",
+    a: "A pickup 30 miles or less from Benton has no mileage charge. Farther than 30 miles, the car is trailered and the charge is $3 per mile for the whole distance, from mile one. The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.",
     examples: MILEAGE_EXAMPLES,
   },
   {

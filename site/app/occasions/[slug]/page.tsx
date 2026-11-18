@@ -66,6 +66,7 @@ export default async function OccasionPage({ params }: { params: Promise<{ slug:
         <li>A professional chauffeur. You don’t drive the car yourself.</li>
         <li>The car’s listing price covers the first 2 hours.</li>
         <li>A pickup {MILE_THRESHOLD} miles or less from Benton has no mileage fee.</li>
+        <li>The first 10 miles from pickup to drop-off are free.</li>
       </ul>
       <h2>Extras and rules</h2>
       <ul>

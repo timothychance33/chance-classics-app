@@ -128,6 +128,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   const [slotsReady, setSlotsReady] = useState(false);
   const [slotNote, setSlotNote] = useState("");
   const [mileage, setMileage] = useState<MileagePreview | null>(null);
+  const [dropoffMileage, setDropoffMileage] = useState<MileagePreview | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [celebrateOpen, setCelebrateOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -227,26 +228,35 @@ export function BookingForm({ car, carName, basePrice }: Props) {
   useEffect(() => {
     if (draft.pickup.trim().length < 4) {
       setMileage(null);
+      setDropoffMileage(null);
       return;
     }
     let ignore = false;
     const timer = setTimeout(() => {
       const params = new URLSearchParams({ pickup: draft.pickup });
       if (draft.pickupPlaceId) params.set("pickupPlaceId", draft.pickupPlaceId);
+      const dropoff = draft.sameDropoff ? draft.pickup : draft.dropoff;
+      if (dropoff.trim()) params.set("dropoff", dropoff);
+      if (!draft.sameDropoff && draft.dropoffPlaceId) params.set("dropoffPlaceId", draft.dropoffPlaceId);
       fetch(`/api/mileage/?${params}`)
         .then((response) => response.json())
         .then((data) => {
-          if (!ignore) setMileage(data);
+          if (ignore) return;
+          setMileage(data);
+          setDropoffMileage(data.dropoff || { needsReview: false, miles: 0, fee: 0, driveMinutes: 0, message: "No drop-off mileage." });
         })
         .catch(() => {
-          if (!ignore) setMileage({ needsReview: true, miles: null, fee: null, message: "We'll confirm mileage." });
+          if (!ignore) {
+            setMileage({ needsReview: true, miles: null, fee: null, message: "We'll confirm mileage." });
+            setDropoffMileage({ needsReview: true, miles: null, fee: null, message: "We'll confirm mileage." });
+          }
         });
     }, 400);
     return () => {
       ignore = true;
       clearTimeout(timer);
     };
-  }, [draft.pickup, draft.pickupPlaceId]);
+  }, [draft.dropoff, draft.dropoffPlaceId, draft.pickup, draft.pickupPlaceId, draft.sameDropoff]);
 
   useEffect(() => {
     let ignore = false;
@@ -255,11 +265,18 @@ export function BookingForm({ car, carName, basePrice }: Props) {
     const params = new URLSearchParams({ car, date: draft.date, hours: String(draft.hours) });
     if (mileage?.miles != null) params.set("miles", String(mileage.miles));
     if (mileage?.driveMinutes != null) params.set("driveMinutes", String(mileage.driveMinutes));
+    if (dropoffMileage?.miles != null) params.set("dropoffMiles", String(dropoffMileage.miles));
+    if (dropoffMileage?.driveMinutes != null) params.set("dropoffDriveMinutes", String(dropoffMileage.driveMinutes));
     fetch(`/api/availability/?${params}`)
       .then((response) => response.json())
       .then((data) => {
         if (ignore) return;
-        const trip = { miles: mileage?.miles, driveMinutes: mileage?.driveMinutes };
+        const trip = {
+          miles: mileage?.miles,
+          driveMinutes: mileage?.driveMinutes,
+          dropoffMiles: dropoffMileage?.miles,
+          dropoffDriveMinutes: dropoffMileage?.driveMinutes,
+        };
         const next = data.connected === false ? openStartTimes(draft.hours, [], draft.date, trip) : Array.isArray(data.slots) ? data.slots : [];
         setSlots(next);
         setSlotsReady(true);
@@ -286,7 +303,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
     return () => {
       ignore = true;
     };
-  }, [car, draft.date, draft.hours, mileage?.driveMinutes, mileage?.miles]);
+  }, [car, draft.date, draft.hours, dropoffMileage?.driveMinutes, dropoffMileage?.miles, mileage?.driveMinutes, mileage?.miles]);
 
   const input = useMemo(() => bookingInput(draft, car), [draft, car]);
   const wedding = useMemo(() => weddingInput(draft), [draft]);
@@ -301,7 +318,8 @@ export function BookingForm({ car, carName, basePrice }: Props) {
     }),
     [draft.date, draft.hours, draft.start, mileage?.driveMinutes, mileage?.miles],
   );
-  const money = quoteTotal(basePrice, draft.hours, mileage?.fee ?? 0, hotel.fee);
+  const money = quoteTotal(basePrice, draft.hours, mileage?.fee ?? 0, hotel.fee, dropoffMileage?.fee ?? 0);
+  const pricePending = draft.pickup.trim().length >= 4 && (mileage?.fee == null || dropoffMileage?.fee == null || !!dropoffMileage?.needsReview);
   const returnToReview = furthest >= STEPS.length - 1 && step !== "review";
 
   function patch(partial: Partial<Draft>) {
@@ -419,6 +437,7 @@ export function BookingForm({ car, carName, basePrice }: Props) {
           pickup: draft.pickup,
           pickupPlaceId: draft.pickupPlaceId,
           dropoff: input.dropoff,
+          dropoffPlaceId: draft.sameDropoff ? draft.pickupPlaceId : draft.dropoffPlaceId,
           dayOfName: input.dayOfName,
           dayOfPhone: input.dayOfPhone,
           dayOfRole: input.dayOfRole,
@@ -757,6 +776,11 @@ export function BookingForm({ car, carName, basePrice }: Props) {
               ? "Mileage is calculated from the pickup address."
               : mileage?.message || "Checking mileage…"}
           </p>
+          <p className="mileage-status" data-dropoff-mileage aria-live="polite">
+            {draft.sameDropoff || draft.dropoff.trim().length < 4
+              ? dropoffMileage?.message || "No drop-off mileage."
+              : dropoffMileage?.message || "Checking drop-off mileage…"}
+          </p>
           <label className="check">
             <input
               type="checkbox"
@@ -863,15 +887,19 @@ export function BookingForm({ car, carName, basePrice }: Props) {
                 ? "Enter the pickup address to calculate mileage."
                 : mileage?.message || "Checking mileage…"}
             </p>
+            <p className="mileage-status" data-dropoff-mileage aria-live="polite">
+              {dropoffMileage?.message || "Checking drop-off mileage…"}
+            </p>
             <div className="book-price" data-price-breakdown>
               <p>Listing {usd(money.listing)}.</p>
               <p>Mileage {mileage?.fee == null ? "to be confirmed" : usd(mileage.fee)}.</p>
+              <p>Drop-off mileage {dropoffMileage?.needsReview || dropoffMileage?.fee == null ? "to be confirmed" : usd(dropoffMileage.fee)}.</p>
               {hotel.fee > 0 && (
                 <p data-hotel-line>{hotel.lineLabel}: {usd(hotel.fee)}.</p>
               )}
-              <p>Subtotal {usd(money.subtotal)}{mileage?.fee == null ? " before mileage" : ""}.</p>
+              <p>Subtotal {usd(money.subtotal)}{pricePending ? " before mileage" : ""}.</p>
               <p>Sales tax (10.25%) {usd(money.tax)}.</p>
-              <p className="price">Total {usd(money.total)}{mileage?.fee == null ? " before mileage" : ""}.</p>
+              <p className="price">Total {usd(money.total)}{pricePending ? " before mileage" : ""}.</p>
               <p>Deposit due now {usd(money.deposit)}. Balance {usd(money.balance)} is billed separately.</p>
             </div>
             <p>{CARD_SAVE_TEXT}</p>

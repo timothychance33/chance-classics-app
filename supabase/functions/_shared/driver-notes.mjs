@@ -11,6 +11,8 @@ const FIELD_LABELS = [
   "Listing total",
   "Booking total",
   "Quote total",
+  "Drop-off mileage fee",
+  "Drop-off mileage",
   "Mileage fee",
   "Sales tax",
   "Deposit paid",
@@ -75,15 +77,15 @@ function splitFields(text) {
   return out;
 }
 
-const MONEY_LINE = /^\s*(?:sales\s+tax|quote\s+total|booking\s+total|listing\s+total|subtotal|mileage\s+fee|deposit|balance|price|total|tip|gratuity|refund|amount\s+paid|customer\s+amount|venmo|stripe|wix)\b/i;
+const MONEY_LINE = /^\s*(?:sales\s+tax|quote\s+total|booking\s+total|listing\s+total|subtotal|drop-off\s+mileage(?:\s+fee)?|mileage\s+fee|deposit|balance|price|total|tip|gratuity|refund|amount\s+paid|customer\s+amount|venmo|stripe|wix)\b/i;
 
-const MONEY_HINT = /\$\s?\d|\b(?:usd|dollars)\b|\b(?:sales\s+tax|quote\s+total|booking\s+total|listing\s+total|subtotal|mileage\s+fee|deposit|balance|price|total|tip|gratuity|refund|venmo|stripe|wix|amount\s+paid|customer\s+amount)\b/i;
+const MONEY_HINT = /\$\s?\d|\b(?:usd|dollars)\b|\b(?:sales\s+tax|quote\s+total|booking\s+total|listing\s+total|subtotal|drop-off\s+mileage(?:\s+fee)?|mileage\s+fee|deposit|balance|price|total|tip|gratuity|refund|venmo|stripe|wix|amount\s+paid|customer\s+amount)\b/i;
 
 const PAREN_MONEY = /\([^)]*(?:\$|\bdue\b|\bbalance\b|\bpaid\b|\brefund\b|\bvenmo\b|\bstripe\b|\bwix\b)[^)]*\)/gi;
 const DOLLAR = /\$\s?\d[\d,]*(?:\.\d{1,2})?/g;
 const USD_BEFORE = /\b(?:usd|dollars)\s*\d[\d,]*(?:\.\d{1,2})?\b/gi;
 const USD_AFTER = /\b\d[\d,]*(?:\.\d{2})\s*(?:usd|dollars)\b/gi;
-const MONEY_PHRASE = /\b(?:sales\s+tax(?:\s*\([^)]*\))?|quote\s+total|booking\s+total|listing\s+total|subtotal|mileage\s+fee|gratuity|deposit(?:\s+(?:paid|due))?|balance(?:\s+(?:billed(?:\s+separately)?|due|remaining))?|amount\s+paid|customer\s+amount|refund(?:ed)?|venmo|stripe|wix|paid|billed\s+with\s+the\s+balance)\b\s*:?/gi;
+const MONEY_PHRASE = /\b(?:sales\s+tax(?:\s*\([^)]*\))?|quote\s+total|booking\s+total|listing\s+total|subtotal|drop-off\s+mileage(?:\s+fee)?|mileage\s+fee|gratuity|deposit(?:\s+(?:paid|due))?|balance(?:\s+(?:billed(?:\s+separately)?|due|remaining))?|amount\s+paid|customer\s+amount|refund(?:ed)?|venmo|stripe|wix|paid|billed\s+with\s+the\s+balance)\b\s*:?/gi;
 const FEE_WORD = /,?\s*\bfee\b\s*/gi;
 
 const GLUE = new Set([

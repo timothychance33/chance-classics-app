@@ -102,7 +102,7 @@ async function offerSkippedForBusyDriver(driverEmail: string, bookingId: unknown
     db: { schema: "rental" },
   });
   const { data: booking, error: bookingError } = await sb.from("bookings")
-    .select("id,event_date,start_time,end_time,status,driver_id,drive_minutes,mileage_miles")
+    .select("id,event_date,start_time,end_time,status,driver_id,drive_minutes,mileage_miles,dropoff_drive_minutes,dropoff_mileage_miles")
     .eq("id", id)
     .maybeSingle();
   if (bookingError || !booking) {
@@ -121,7 +121,7 @@ async function offerSkippedForBusyDriver(driverEmail: string, bookingId: unknown
   );
   if (!driver?.id) return false;
   const { data: assigned, error: assignedError } = await sb.from("bookings")
-    .select("id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles")
+    .select("id,driver_id,event_date,start_time,end_time,status,drive_minutes,mileage_miles,dropoff_drive_minutes,dropoff_mileage_miles")
     .eq("driver_id", driver.id)
     .neq("status", "cancelled");
   if (assignedError || !assigned) {
@@ -295,6 +295,12 @@ Deno.serve(async (req) => {
       lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(q.car_name ?? "Classic car")} — base (up to 2 hours)</td><td style="padding:6px 0;text-align:right">${money(q.base_rate)}</td></tr>`);
       if (q.overage > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">Additional hours (${esc(q.extra_hours)})</td><td style="padding:6px 0;text-align:right">${money(q.overage)}</td></tr>`);
       if (Number(q.travel) > 0 || lockedBook) lines.push(`<tr><td style="padding:6px 14px 6px 0">Mileage fee (${esc(q.miles)} mi from Benton)</td><td style="padding:6px 0;text-align:right">${money(q.travel)}</td></tr>`);
+      if (q.dropoff_mileage_needs_review) {
+        lines.push(`<tr><td style="padding:6px 14px 6px 0">Drop-off mileage</td><td style="padding:6px 0;text-align:right">We'll confirm mileage.</td></tr>`);
+      } else if (q.dropoff_mileage_miles != null && q.dropoff_mileage_miles !== "" || Number(q.dropoff_mileage_fee) > 0) {
+        const dropoffMiles = esc(q.dropoff_mileage_miles ?? "");
+        lines.push(`<tr><td style="padding:6px 14px 6px 0">Drop-off mileage (${dropoffMiles} mi from pickup to drop-off)</td><td style="padding:6px 0;text-align:right">${money(q.dropoff_mileage_fee)}</td></tr>`);
+      }
       if (Number(q.hotel_fee) > 0) lines.push(`<tr><td style="padding:6px 14px 6px 0">${esc(q.hotel_label || "Overnight driver hotel")}</td><td style="padding:6px 0;text-align:right">${money(q.hotel_fee)}</td></tr>`);
       const customItems = Array.isArray(q.custom_items) ? q.custom_items : [];
       for (const item of customItems) {
@@ -325,6 +331,7 @@ Deno.serve(async (req) => {
           ${q.expires ? `<p style="color:#b8862c;font-weight:700;font-size:13px">This quote is valid through ${esc(q.expires)}.</p>` : ""}
           <p style="margin-top:20px">${lockedBook ? "Ready to book? This link checks out only this quote. The $250 deposit is due now." : `Ready to book? Reserve your date for the ${esc(q.car_name ?? "car")} here:`}</p>
           <p><a href="${esc(bookUrl)}" style="background:#6e1d1a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">${esc(buttonLabel)}</a></p>
+          <p style="color:#6b6052;font-size:13px">Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport). The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.</p>
           <p style="color:#6b6052;font-size:13px;margin-top:18px">${reserveNote}</p>
         </div>`;
       result = await sendEmail(to, `Your Chance Classics quote${q.event_date ? ` — ${q.event_date}` : ""}`, html);

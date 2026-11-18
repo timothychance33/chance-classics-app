@@ -3,7 +3,7 @@ import { CallLine } from "@/components/CallLine";
 import { ServiceAreaMap } from "@/components/ServiceAreaMap";
 import { cities } from "@/data/cities";
 import { EMAIL, PHONE_TEL, SITE_URL, pageMeta } from "@/lib/content";
-import { EXTRA_MILE_USD, MILE_THRESHOLD, MILEAGE_EXAMPLES, SHOP_ADDRESS } from "@/lib/booking-rules";
+import { DROPOFF_MILEAGE_RULE_TEXT, EXTRA_MILE_USD, MILE_THRESHOLD, MILEAGE_EXAMPLES, SHOP_ADDRESS } from "@/lib/booking-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +67,7 @@ export default function ServiceAreaPage() {
       <p>
         A pickup {MILE_THRESHOLD} miles or less from Benton has no mileage charge.
         Farther than {MILE_THRESHOLD} miles, the car is trailered and the charge is ${EXTRA_MILE_USD} per mile for the whole distance, from mile one.
+        {" "}{DROPOFF_MILEAGE_RULE_TEXT}
       </p>
       <ul className="mileage-examples">
         {MILEAGE_EXAMPLES.map((line) => (

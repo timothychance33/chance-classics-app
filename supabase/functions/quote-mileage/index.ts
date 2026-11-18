@@ -19,7 +19,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { allowQuoteMileage, roleTokens } from "./access.mjs";
-import { quoteDrivingMileage } from "../_shared/mileage.mjs";
+import { quoteDrivingMileage, quoteDropoffMileage } from "../_shared/mileage.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -77,11 +77,15 @@ Deno.serve(async (req) => {
     // Mileage is the pickup drive only. A quote with no drop-off still looks up.
     const pickup = String(body.pickup ?? body.address ?? "").slice(0, 300);
     const pickupPlaceId = String(body.pickupPlaceId ?? "").slice(0, 300);
-    const quote = await quoteDrivingMileage(
-      { pickup, pickupPlaceId },
-      { apiKey: Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "" },
+    const dropoff = String(body.dropoff ?? "").slice(0, 300);
+    const dropoffPlaceId = String(body.dropoffPlaceId ?? "").slice(0, 300);
+    const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
+    const quote = await quoteDrivingMileage({ pickup, pickupPlaceId }, { apiKey });
+    const dropoffQuote = await quoteDropoffMileage(
+      { pickup, pickupPlaceId, dropoff, dropoffPlaceId },
+      { apiKey },
     );
-    return json(200, quote);
+    return json(200, { ...quote, dropoff: dropoffQuote });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("quote-mileage error:", message);

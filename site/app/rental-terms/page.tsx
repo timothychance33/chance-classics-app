@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { EXTRA_HOUR_USD } from "@/lib/booking-rules";
+import { EXTRA_HOUR_USD, MILEAGE_RULE_TEXT } from "@/lib/booking-rules";
 import { fixCopy, pageMeta, services } from "@/lib/content";
 import { sharedTerms } from "@/lib/terms";
 
@@ -16,6 +16,8 @@ export default function RentalTermsPage() {
       <p>
         Booking on this site uses the listing price on the car’s page: that amount for the first 2 hours, then ${EXTRA_HOUR_USD} for each additional hour. Additional consecutive hours requested on the day of the event are ${EXTRA_HOUR_USD} per hour when the vehicle is available.
       </p>
+      <h2>Mileage</h2>
+      <p>{MILEAGE_RULE_TEXT}</p>
       <h2>Listing price by car</h2>
       <ul>
         {services.map((service) => (

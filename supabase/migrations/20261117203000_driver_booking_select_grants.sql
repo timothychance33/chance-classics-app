@@ -75,6 +75,7 @@ declare
     'amount_paid_usd',
     'balance_due_usd',
     'mileage_fee_usd',
+    'dropoff_mileage_fee',
     'hotel_fee_usd',
     'stripe_customer_id',
     'stripe_payment_method_id',

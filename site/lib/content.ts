@@ -197,7 +197,7 @@ export function serviceDescription(service: Service) {
     .replaceAll("cahrged", "charged")
     .replaceAll(
       "(chauffeured) at a location within 30 miles of Benton, LA (locations outside of the radius will be charged an additional $3/mile)",
-      "(chauffeured). Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport)",
+      "(chauffeured). Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport). The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.",
     );
   if (service.car === "Elsa") text = text.replace("$500 for 2 hour", "$600 for 2 hour");
   if (service.car === "Rosie") text = text.replace("$500 for 2 hour", "$700 for 2 hour");
@@ -306,6 +306,7 @@ export const posts: Post[] = [
           "The listed price covers the first 2 hours. Each extra hour is $100.",
           "A pickup 30 miles or less from Benton has no mileage charge.",
           "Farther than that, the car is trailered and the charge is $3 per mile for the full distance.",
+          "The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.",
           "Reservations have to be made at least 7 days ahead. A $250 non-refundable retainer holds the time.",
           "Prom weekends in the spring can overlap. If you want a specific car, ask while it is still open.",
         ],
@@ -349,7 +350,7 @@ export const posts: Post[] = [
       { type: "h3", text: "Where the car comes from" },
       {
         type: "p",
-        html: 'The shop is in Benton. A pickup 30 miles or less from Benton has no mileage charge. Past 30 miles the car is trailered at $3 per mile for the whole distance. Book at least 7 days ahead. Homecoming Fridays in the fall land on the same afternoon, so a specific car can already be taken. Call or text <a href="tel:+13183445001">318-344-5001</a>.',
+        html: 'The shop is in Benton. A pickup 30 miles or less from Benton has no mileage charge. Past 30 miles the car is trailered at $3 per mile for the whole distance. The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance. Book at least 7 days ahead. Homecoming Fridays in the fall land on the same afternoon, so a specific car can already be taken. Call or text <a href="tel:+13183445001">318-344-5001</a>.',
       },
     ],
   },
@@ -375,7 +376,7 @@ export const posts: Post[] = [
       { type: "h3", text: "Use the two hours on purpose" },
       {
         type: "p",
-        html: "The listed price covers 2 hours at the location, then $100 an hour. A pickup 30 miles or less from Benton has no mileage fee. Past that, trailer mileage is $3 per mile for the full distance. Shreveport and Bossier City are the short drives from the Benton shop. A session farther out belongs in the quote so the mileage is priced before you book.",
+        html: "The listed price covers 2 hours at the location, then $100 an hour. A pickup 30 miles or less from Benton has no mileage fee. Past that, trailer mileage is $3 per mile for the full distance. The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance. Shreveport and Bossier City are the short drives from the Benton shop. A session farther out belongs in the quote so the mileage is priced before you book.",
       },
       { type: "h3", text: "Tell the driver the stops" },
       {
@@ -495,7 +496,7 @@ export const posts: Post[] = [
         items: [
           "Vehicle choice. Our more valuble and higher demand cars cost more than others.",
           "Rental duration. A quick photo-and-exit rental costs less than a full-day booking that covers ceremony, photos, and reception.",
-          "Distance from Benton. Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport).",
+          "Distance from Benton. Pickups more than 30 miles from Benton are charged $3 per mile for the full distance (trailer transport). The first 10 miles from pickup to drop-off are free. After that, drop-off mileage is $3 per mile, counted round trip, and billed with the balance.",
           "Season and date. Peak wedding season (spring and fall) books up faster, though pricing itself doesn't change seasonally.",
         ],
       },

@@ -1,4 +1,10 @@
-import { MILEAGE_REVIEW_TEXT, SHOP_ADDRESS, mileageCharge } from "@/lib/booking-rules";
+import {
+  MILEAGE_REVIEW_TEXT,
+  SHOP_ADDRESS,
+  dropoffMileageCharge,
+  dropoffStopsMatch,
+  mileageCharge,
+} from "@/lib/booking-rules";
 
 const METERS_PER_MILE = 1609.344;
 
@@ -64,6 +70,17 @@ export function mileageMessage(charge: { miles: number; fee: number }) {
   return `${distance} Mileage fee $${charge.fee}, billed with the balance.`;
 }
 
+export function dropoffMileageMessage(charge: { miles: number; fee: number }) {
+  if (charge.miles <= 0 && charge.fee <= 0) return "No drop-off mileage.";
+  const distance = `${charge.miles} miles from pickup to drop-off.`;
+  if (charge.fee <= 0) return `${distance} No drop-off mileage fee.`;
+  return `${distance} Drop-off mileage $${charge.fee}, billed with the balance.`;
+}
+
+export function zeroDropoffMileage(): MileageQuote {
+  return { needsReview: false, miles: 0, fee: 0, driveMinutes: 0, message: "No drop-off mileage." };
+}
+
 export function reviewMileage(): MileageQuote {
   return { needsReview: true, miles: null, fee: null, driveMinutes: null, message: MILEAGE_REVIEW_TEXT };
 }
@@ -111,6 +128,63 @@ export async function quoteDrivingMileage(input: {
       fee: charge.fee,
       driveMinutes: routeMatrixDriveMinutes(body),
       message: mileageMessage(charge),
+    };
+  } catch {
+    return reviewMileage();
+  }
+}
+
+/**
+ * Driving miles from pickup to drop-off. Same Routes call as the Benton lookup (DRIVE).
+ * No drop-off, or the same stop, is $0 and does not call Maps.
+ * A failed route returns the review quote for this line only.
+ */
+export async function quoteDropoffMileage(input: {
+  pickup?: string;
+  pickupPlaceId?: string;
+  dropoff?: string;
+  dropoffPlaceId?: string;
+}): Promise<MileageQuote> {
+  const pickup = input.pickup?.trim() || "";
+  const dropoff = input.dropoff?.trim() || "";
+  const pickupPlaceId = input.pickupPlaceId?.trim() || "";
+  const dropoffPlaceId = input.dropoffPlaceId?.trim() || "";
+  if (!dropoff && !dropoffPlaceId) return zeroDropoffMileage();
+  if (dropoff && dropoffStopsMatch(pickup, dropoff)) return zeroDropoffMileage();
+  if (pickupPlaceId && dropoffPlaceId && pickupPlaceId === dropoffPlaceId) return zeroDropoffMileage();
+
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) return reviewMileage();
+  const origin = destinationWaypoint(pickupPlaceId, pickup);
+  const destination = destinationWaypoint(dropoffPlaceId, dropoff);
+  if (!origin || !destination) return reviewMileage();
+
+  try {
+    const response = await fetch("https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": "originIndex,destinationIndex,distanceMeters,duration,status,condition",
+      },
+      body: JSON.stringify({
+        origins: [{ waypoint: origin }],
+        destinations: [{ waypoint: destination }],
+        travelMode: "DRIVE",
+      }),
+    });
+    if (!response.ok) return reviewMileage();
+    const body = await response.json();
+    const miles = routeMatrixMiles(body);
+    if (miles == null) return reviewMileage();
+    const charge = dropoffMileageCharge(miles);
+    return {
+      needsReview: false,
+      miles: charge.miles,
+      fee: charge.fee,
+      driveMinutes: routeMatrixDriveMinutes(body),
+      message: dropoffMileageMessage(charge),
     };
   } catch {
     return reviewMileage();

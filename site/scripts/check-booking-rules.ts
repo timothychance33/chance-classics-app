@@ -10,8 +10,13 @@ import {
   earliestBookableDate,
   endMinutes,
   mileageCharge,
+  dropoffFeeForTrip,
+  dropoffMileageCharge,
+  dropoffReturnMinutes,
   BOOKING_BUFFER_HOURS,
   DRIVE_MPH,
+  blockedInterval,
+  requestedInterval,
   travelMinutes,
   openStartTimes,
   quoteCheckoutLines,
@@ -158,6 +163,37 @@ assert(mileageCharge(30).miles === 30 && mileageCharge(30).fee === 0, "30 has no
 assert(mileageCharge(30.2).miles === 31 && mileageCharge(30.2).fee === 93, "30.2 is $93");
 assert(mileageCharge(31).miles === 31 && mileageCharge(31).fee === 93, "31 is $93");
 assert(mileageCharge(60).miles === 60 && mileageCharge(60).fee === 180, "60 is $180");
+assert(dropoffMileageCharge(0).miles === 0 && dropoffMileageCharge(0).fee === 0, "0 drop-off miles is $0");
+assert(dropoffMileageCharge(10).miles === 10 && dropoffMileageCharge(10).fee === 0, "10 drop-off miles is free");
+assert(dropoffMileageCharge(10.1).miles === 11 && dropoffMileageCharge(10.1).fee === 6, "10.1 drop-off miles rounds up like Benton mileage");
+assert(dropoffMileageCharge(11).miles === 11 && dropoffMileageCharge(11).fee === 6, "11 drop-off miles is $6");
+assert(dropoffMileageCharge(15).miles === 15 && dropoffMileageCharge(15).fee === 30, "15 drop-off miles is $30");
+assert(dropoffFeeForTrip("3501 Forsythe Ave", "", 15).fee === 0, "no drop-off is $0");
+assert(dropoffFeeForTrip("100 Main St, Monroe, LA", "100 main st, monroe, la", 15).fee === 0, "the same stop is $0");
+assert(dropoffFeeForTrip("100 Main St", "200 Oak St", 15).fee === 30, "a different drop-off uses the round-trip fee");
+const localWindow = blockedInterval({
+  event_date: "2026-12-12",
+  start_time: "17:00",
+  end_time: "19:00",
+  drive_minutes: 30,
+});
+const dropoffWindow = blockedInterval({
+  event_date: "2026-12-12",
+  start_time: "17:00",
+  end_time: "19:00",
+  drive_minutes: 30,
+  dropoff_drive_minutes: 20,
+});
+assert(localWindow && dropoffWindow && dropoffWindow.start === localWindow.start && dropoffWindow.end === localWindow.end + 20, "drop-off return minutes extend only the end of the busy window");
+const localRequest = requestedInterval("2026-12-12", "17:00", 2, { driveMinutes: 30 });
+const dropoffRequest = requestedInterval("2026-12-12", "17:00", 2, { driveMinutes: 30, dropoffDriveMinutes: 20 });
+assert(dropoffReturnMinutes({ dropoffMiles: 11 }) === Math.ceil((11 / DRIVE_MPH) * 60), "drop-off miles estimate the return drive");
+assert(localRequest && dropoffRequest && dropoffRequest.start === localRequest.start && dropoffRequest.end === localRequest.end + 20, "a new booking keeps the return drive after the rental");
+const withDropoff = quoteTotal(500, 2, 180, 0, 30);
+assert(
+  withDropoff.dropoffMileageFee === 30 && withDropoff.subtotal === 710 && withDropoff.deposit === 250 && withDropoff.balance === withDropoff.total - 250,
+  "drop-off mileage is taxed with the rental and billed with the balance",
+);
 
 const saved = quoteRequestRecord({
   firstName: "Emily",
@@ -412,7 +448,20 @@ assert(totalDollarsFromCheckout({
   notes: "Listing total: $500.00\nMileage: 75 miles from Benton to pickup, fee $225.00, billed with the balance.\nOvernight driver hotel: $200.00 (75 miles from Benton, driver back about 2:15 AM the next day).",
 }) === 1019.81, "a listing note adds the hotel before tax");
 assert(lines.some((line) => line.label === "Flowers" && line.amount === 40), "custom line item");
-assert(!lines.some((line) => /drop-off/i.test(line.label)), "drop-off is not a price line");
+assert(!lines.some((line) => /drop-off/i.test(line.label)), "an old quote without drop-off miles has no drop-off price line");
+const dropoffLines = quoteCheckoutLines({
+  car_name: "Patsy",
+  base_rate: 500,
+  travel: 0,
+  miles: 12,
+  dropoff_miles: 15,
+  dropoff_fee: 30,
+  tax: 54.33,
+});
+assert(
+  dropoffLines.some((line) => line.label === "Drop-off mileage (15 mi from pickup to drop-off)" && line.amount === 30),
+  "quote checkout shows drop-off mileage on its own line",
+);
 
 const early = validateBooking({
   car: "1953-packard-limo",
