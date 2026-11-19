@@ -32,10 +32,17 @@
 // Weekly digest also accepts a Vercel cron POST { weekly_only: true }.
 // Idempotent per driver + week via rental.driver_weekly_digest_sends.
 //
-// Deploy: supabase functions deploy scheduled-tasks
+// Deploy as an esbuild bundle (do not paste this file into the dashboard):
+//   supabase functions deploy scheduled-tasks --project-ref ldhmwuhhejaabsvcyzdo
 //   Settings -> Verify JWT OFF (same as today).
+//   A bare `supabase functions deploy` also uploads this function.
 //   Reuses: RESEND_API_KEY, FROM_EMAIL, OWNER_EMAIL, APP_URL
-//   Balance pay links also need STRIPE_SECRET_KEY (same secret as the website).
+//   Balance pay links read CLASSICS_STRIPE_SECRET_KEY only. Do not fall back
+//   to STRIPE_SECRET_KEY: on shared project ldhmwuhhejaabsvcyzdo that secret is
+//   the 2nd Chance Speed Shop Stripe key. Set CLASSICS_STRIPE_SECRET_KEY to
+//   the Chance Classics key before deploying. Before any pay link, GET
+//   /v1/account must return CLASSICS_STRIPE_ACCOUNT_ID (optional env; default
+//   acct_1UN13v2QPFJvQROw). A missing key or account mismatch sends no pay link.
 //   Optional SITE_URL (defaults to https://chanceclassics.com).
 //   Plus the automatic SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY.
 // ============================================================
@@ -78,7 +85,10 @@ const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? DEFAULT_FROM_EMAIL;
 const OWNER_EMAIL = Deno.env.get("OWNER_EMAIL") ?? "chanceclassics@gmail.com";
 const APP_URL = Deno.env.get("APP_URL") ?? "https://app.chanceclassics.com";
 const SITE_URL = Deno.env.get("SITE_URL") ?? "https://chanceclassics.com";
-const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
+const DEFAULT_CLASSICS_STRIPE_ACCOUNT_ID = "acct_1UN13v2QPFJvQROw";
+const CLASSICS_STRIPE_SECRET_KEY = Deno.env.get("CLASSICS_STRIPE_SECRET_KEY") ?? "";
+const CLASSICS_STRIPE_ACCOUNT_ID = Deno.env.get("CLASSICS_STRIPE_ACCOUNT_ID")?.trim()
+  || DEFAULT_CLASSICS_STRIPE_ACCOUNT_ID;
 const CHICAGO_TZ = "America/Chicago";
 
 const ADVANCE_HOURS = 48;
@@ -253,8 +263,45 @@ async function sendEmail(to: string, subject: string, html: string, text?: strin
 
 function fmtDate(d: string | null | undefined) { return d ?? "TBD"; }
 
+type PayLinkGate = { ok: true } | { ok: false; reason: string };
+
+function stripeKeyMissingReason() {
+  return "CLASSICS_STRIPE_SECRET_KEY is not set on scheduled-tasks";
+}
+
+function stripeAccountMismatchReason(actualId: string) {
+  const seen = actualId ? `Stripe account ${actualId}` : "Stripe returned no account id";
+  return `CLASSICS_STRIPE_SECRET_KEY account mismatch: ${seen} is not ${CLASSICS_STRIPE_ACCOUNT_ID}`;
+}
+
+function stripeAccountUnverifiedReason() {
+  return `CLASSICS_STRIPE_SECRET_KEY account mismatch: Stripe account could not be verified (expected ${CLASSICS_STRIPE_ACCOUNT_ID})`;
+}
+
+// One account lookup per invocation. Reset at the start of each request so a
+// warm isolate does not reuse the previous run. Never log the secret.
+let invocationAccountCheck: Promise<PayLinkGate> | null = null;
+
+function beginStripeInvocation() {
+  invocationAccountCheck = null;
+}
+
+function stripeErrorText(status: number, message: string | undefined) {
+  const text = (message || "").replace(/\s+/g, " ").trim();
+  const leaks = (CLASSICS_STRIPE_SECRET_KEY && text.includes(CLASSICS_STRIPE_SECRET_KEY))
+    || /sk_(live|test)_/i.test(text);
+  if (!text || leaks) return `Stripe request failed (${status}).`;
+  return text.slice(0, 300);
+}
+
 async function stripeForm(path: string, method: "GET" | "POST", body?: URLSearchParams) {
-  const headers: Record<string, string> = { Authorization: `Bearer ${STRIPE_SECRET_KEY}` };
+  // The account probe is the guard. Every other Stripe call waits for it.
+  if (path !== "/account") {
+    const gate = await payLinksAllowed();
+    if (!gate.ok) throw new Error(gate.reason);
+  }
+  if (!CLASSICS_STRIPE_SECRET_KEY) throw new Error(stripeKeyMissingReason());
+  const headers: Record<string, string> = { Authorization: `Bearer ${CLASSICS_STRIPE_SECRET_KEY}` };
   if (method === "POST") headers["Content-Type"] = "application/x-www-form-urlencoded";
   const r = await fetch(`https://api.stripe.com/v1${path}`, {
     method,
@@ -269,8 +316,27 @@ async function stripeForm(path: string, method: "GET" | "POST", body?: URLSearch
     error?: { message?: string };
   } = {};
   try { parsed = JSON.parse(text); } catch { parsed = { error: { message: text.slice(0, 300) } }; }
-  if (!r.ok) throw new Error(parsed.error?.message || "Stripe request failed.");
+  if (!r.ok) throw new Error(stripeErrorText(r.status, parsed.error?.message));
   return parsed;
+}
+
+async function verifyClassicsStripeAccount(): Promise<PayLinkGate> {
+  try {
+    const account = await stripeForm("/account", "GET");
+    const id = typeof account.id === "string" ? account.id : "";
+    if (id !== CLASSICS_STRIPE_ACCOUNT_ID) return { ok: false, reason: stripeAccountMismatchReason(id) };
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: stripeAccountUnverifiedReason() };
+  }
+}
+
+function payLinksAllowed(): Promise<PayLinkGate> {
+  if (!CLASSICS_STRIPE_SECRET_KEY) {
+    return Promise.resolve({ ok: false, reason: stripeKeyMissingReason() });
+  }
+  if (!invocationAccountCheck) invocationAccountCheck = verifyClassicsStripeAccount();
+  return invocationAccountCheck;
 }
 
 async function expireStaleBalanceSessions(
@@ -347,7 +413,9 @@ async function balancePayLink(input: {
   eventDate: string;
   taxExempt?: boolean;
   today?: string;
+  gate: PayLinkGate;
 }) {
+  if (!input.gate.ok) throw new Error(input.gate.reason);
   const totalUsd = input.totalUsd == null || !Number.isFinite(Number(input.totalUsd))
     ? null
     : Math.round(Number(input.totalUsd) * 100) / 100;
@@ -656,6 +724,7 @@ async function runCarCheckinMail(
 }
 
 Deno.serve(async (req) => {
+  beginStripeInvocation();
   const url = new URL(req.url);
   let weeklyOnly = url.searchParams.get("weekly_only") === "1";
   let force = url.searchParams.get("force") === "1";
@@ -974,13 +1043,15 @@ Deno.serve(async (req) => {
     const chicagoNow = chicagoParts(now);
     const balanceSummary = summary.balance_reminders as { sent: number; skipped: number; errors: string[]; reason?: string };
     const eventWindow = balanceReminderCatchupWindow(chicagoNow.date);
+    let payGate: PayLinkGate = { ok: false, reason: stripeKeyMissingReason() };
+    if (eventWindow.from && eventWindow.to && chicagoNow.hour >= 7) payGate = await payLinksAllowed();
     if (!eventWindow.from || !eventWindow.to) {
       balanceSummary.reason = "Chicago date is missing";
     } else if (chicagoNow.hour < 7) {
       balanceSummary.reason = `before 7am in ${CHICAGO_TZ} (hour ${chicagoNow.hour})`;
-    } else if (!STRIPE_SECRET_KEY) {
-      balanceSummary.reason = "STRIPE_SECRET_KEY is not set on scheduled-tasks";
-      balanceSummary.errors.push(balanceSummary.reason);
+    } else if (!payGate.ok) {
+      balanceSummary.reason = payGate.reason;
+      balanceSummary.errors.push(payGate.reason);
     } else if (!RESEND_API_KEY) {
       balanceSummary.reason = "RESEND_API_KEY is not set";
       balanceSummary.errors.push(balanceSummary.reason);
@@ -1040,6 +1111,7 @@ Deno.serve(async (req) => {
               eventDate,
               taxExempt: bookingTaxExempt(b),
               today: chicagoNow.date,
+              gate: payGate,
             });
             const cn = await carName(b.car_id);
             const payMail = {
@@ -1154,9 +1226,13 @@ Deno.serve(async (req) => {
             quote: quotes.get(row.id) || null,
             driver: null,
           });
-          if (preview.needsPayLink && !STRIPE_SECRET_KEY) {
-            daySummary.errors.push(`${row.id}: STRIPE_SECRET_KEY is not set on scheduled-tasks`);
-            continue;
+          let payGate: PayLinkGate | null = null;
+          if (preview.needsPayLink) {
+            payGate = await payLinksAllowed();
+            if (!payGate.ok) {
+              daySummary.errors.push(`${row.id}: ${payGate.reason}`);
+              continue;
+            }
           }
           if (dryRun) {
             daySummary.sent += 1;
@@ -1180,6 +1256,7 @@ Deno.serve(async (req) => {
             const driver = driverName ? { name: driverName, phone: person?.phone || "" } : null;
             let payUrl = "";
             if (preview.needsPayLink) {
+              if (!payGate || payGate.ok !== true) throw new Error(stripeKeyMissingReason());
               payUrl = await balancePayLink({
                 sb,
                 bookingId: String(row.id),
@@ -1190,6 +1267,7 @@ Deno.serve(async (req) => {
                 eventDate: String(row.event_date || "").slice(0, 10),
                 taxExempt: bookingTaxExempt(row),
                 today: chicagoNow.date,
+                gate: payGate,
               });
             }
             const mail = renderDayBeforeEmail({

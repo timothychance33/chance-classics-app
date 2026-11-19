@@ -124,6 +124,12 @@ assert.match(scheduled, /10\.25% sales tax/);
 assert.match(scheduled, /metadata\[purpose\]", "charge"/);
 assert.doesNotMatch(scheduled, /payment_method_types\s*[:=]/);
 assert.doesNotMatch(scheduled, /service_role/);
+assert.match(scheduled, /Deno\.env\.get\("CLASSICS_STRIPE_SECRET_KEY"\)/);
+assert.doesNotMatch(scheduled, /Deno\.env\.get\("STRIPE_SECRET_KEY"\)/);
+assert.match(scheduled, /acct_1UN13v2QPFJvQROw/);
+assert.match(scheduled, /stripeForm\("\/account", "GET"\)/);
+assert.match(scheduled, /CLASSICS_STRIPE_SECRET_KEY is not set on scheduled-tasks/);
+assert.match(scheduled, /CLASSICS_STRIPE_SECRET_KEY account mismatch/);
 
 const garage = read('index.html');
 assert.match(garage, /Charge saved card/);
