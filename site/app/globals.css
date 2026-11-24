@@ -646,6 +646,103 @@ input[type="checkbox"], input[type="radio"] { accent-color: #111; }
   .mileage-error { margin-left: 46px; }
 }
 
+
+/* Quote calendar: booked days are gray and labeled (Already booked). */
+.quote-cal {
+  border: 1px solid #ccc;
+  background: #f2f2f2;
+  padding: 12px;
+}
+.quote-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.quote-cal-month {
+  margin: 0;
+  font-weight: 700;
+  font-size: 16px;
+  text-align: center;
+}
+.quote-cal-nav {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #222;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.quote-cal-nav:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.quote-cal-week,
+.quote-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.quote-cal-week {
+  margin-bottom: 4px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5c5c5c;
+}
+.quote-cal-empty { min-height: 58px; }
+.quote-cal-day {
+  min-height: 58px;
+  border: 1px solid #d5d5d5;
+  background: #fff;
+  color: #222;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.quote-cal-day.is-selected {
+  outline: 2px solid #111;
+  outline-offset: 1px;
+  border-color: #111;
+}
+.quote-cal-day.is-disabled {
+  background: #e8e8e8;
+  color: #9a9a9a;
+  cursor: not-allowed;
+}
+.quote-cal-day.is-booked {
+  background: #dcdcdc;
+  color: #6f6f6f;
+}
+.quote-cal-num { font-size: 14px; line-height: 1.2; }
+.quote-cal-label {
+  font-size: 9px;
+  line-height: 1.15;
+  font-weight: 700;
+  text-align: center;
+  max-width: 100%;
+}
+.quote-cal-note {
+  margin: 10px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.quote-cal-note.is-booked { color: #8a1f11; }
+.quote-submit:disabled {
+  background: #9a9a9a;
+  border-color: #9a9a9a;
+  cursor: not-allowed;
+}
+
 /* FAQ */
 .faq { max-width: 760px; margin: 0 auto; }
 .faq details {

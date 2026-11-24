@@ -567,6 +567,67 @@ export function quoteRequestRecord(input: {
   };
 }
 
+/** Shown on the public quote calendar for a day that already has a booking. */
+export const ALREADY_BOOKED_LABEL = "(Already booked)";
+/** How far ahead the quote form loads booked days (about 18 months). */
+export const QUOTE_BOOKED_HORIZON_DAYS = 548;
+
+export type BookingDayRow = {
+  event_date: string | null;
+  status: string | null;
+  created_at: string | null;
+};
+
+/** A non-cancelled booking, or an unexpired hold, blocks that event date. Expired holds do not. */
+export function bookingBlocksDate(row: BookingDayRow, now = new Date()) {
+  const status = String(row.status || "").trim().toLowerCase();
+  if (!status || status === "cancelled") return false;
+  if (status === "hold" && row.created_at && !holdIsFresh(row.created_at, now)) return false;
+  return true;
+}
+
+/** Unique event dates (YYYY-MM-DD) blocked by bookings. Never includes customer fields. */
+export function bookedEventDates(rows: BookingDayRow[], now = new Date()) {
+  const dates = new Set<string>();
+  for (const row of rows) {
+    const date = String(row.event_date || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    if (!bookingBlocksDate(row, now)) continue;
+    dates.add(date);
+  }
+  return [...dates].sort();
+}
+
+/** Calendar date as a long English label, using the date itself (not the viewer’s zone). */
+export function formatCalendarDate(iso: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+export function quoteDateBookedMessage(carName: string, date: string) {
+  const who = String(carName || "That car").trim() || "That car";
+  return `${who} is already booked on ${formatCalendarDate(date)}. Please choose another date, or call or text (318) 344-5001.`;
+}
+
+/** Match a quote “Select a Service” value (e.g. “Phyllis - 1941 Buick Super”) to a garage car. */
+export function matchQuoteServiceCar<T extends { id?: string; name?: string }>(
+  service: string | null | undefined,
+  cars: T[] | null | undefined,
+) {
+  if (!service || !Array.isArray(cars)) return null;
+  const text = service.toLowerCase();
+  return cars.find((car) => car?.name && text.startsWith(String(car.name).toLowerCase()))
+    ?? cars.find((car) => car?.name && text.includes(String(car.name).toLowerCase()))
+    ?? null;
+}
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type DayOfContact = {

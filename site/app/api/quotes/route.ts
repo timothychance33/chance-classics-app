@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import { withSecondCarNote } from "@/data/packages";
-import { MILEAGE_ACK_ERROR, quoteDropoffError, quoteRequestRecord } from "@/lib/booking-rules";
+import {
+  MILEAGE_ACK_ERROR,
+  matchQuoteServiceCar,
+  quoteDateBookedMessage,
+  quoteDropoffError,
+  quoteRequestRecord,
+} from "@/lib/booking-rules";
 import { emailOwnerAboutQuote } from "@/lib/owner-booking-notify";
 import { rentalDb } from "@/lib/rental-db";
-
-function matchCar(service: string | null, cars: { id?: string; name?: string }[] | null) {
-  if (!service || !Array.isArray(cars)) return null;
-  const text = service.toLowerCase();
-  return cars.find((car) => car?.name && text.startsWith(String(car.name).toLowerCase()))
-    ?? cars.find((car) => car?.name && text.includes(String(car.name).toLowerCase()))
-    ?? null;
-}
+import { bookedDaysForCar } from "@/lib/site-booking";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -58,7 +57,16 @@ export async function POST(request: Request) {
   }
 
   const cars = await db.from("cars").select("id,name");
-  const hit = matchCar(record.service_name, cars.data);
+  const hit = matchQuoteServiceCar(record.service_name, cars.data);
+  if (hit?.id && record.event_date) {
+    const booked = await bookedDaysForCar(db, String(hit.id), record.event_date, record.event_date);
+    if (booked.includes(record.event_date)) {
+      return NextResponse.json(
+        { error: quoteDateBookedMessage(String(hit.name || "That car"), record.event_date) },
+        { status: 409 },
+      );
+    }
+  }
   const row = {
     ...record,
     car_id: hit?.id ?? null,

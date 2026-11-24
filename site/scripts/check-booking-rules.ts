@@ -29,6 +29,11 @@ import {
   quoteDropoffError,
   quoteDropoffHidden,
   isPhotoShootOnly,
+  ALREADY_BOOKED_LABEL,
+  bookedEventDates,
+  formatCalendarDate,
+  matchQuoteServiceCar,
+  quoteDateBookedMessage,
   dayOfContactColumns,
   dayOfContactNotes,
   weddingCelebrationColumns,
@@ -235,6 +240,26 @@ assert(!isPhotoShootOnly("Wedding") && !isPhotoShootOnly("Wedding photo shoot") 
 assert(quoteDropoffHidden({ eventType: "Photo Session", sameLocation: false }), "photo shoot hides the drop-off field");
 assert(quoteDropoffHidden({ eventType: "Parade", sameLocation: true }), "same-location events hide the drop-off field");
 assert(!quoteDropoffHidden({ eventType: "Wedding", sameLocation: false }), "a wedding with a different drop-off still shows the field");
+
+const bookedNow = new Date("2026-11-24T16:56:00Z");
+const blockedDays = bookedEventDates([
+  { event_date: "2026-12-12", status: "confirmed", created_at: "2026-01-01T00:00:00Z" },
+  { event_date: "2026-12-12", status: "confirmed", created_at: "2026-01-02T00:00:00Z" },
+  { event_date: "2026-12-13", status: "cancelled", created_at: "2026-01-01T00:00:00Z" },
+  { event_date: "2026-12-14", status: "hold", created_at: "2026-11-24T16:40:00Z" },
+  { event_date: "2026-12-15", status: "hold", created_at: "2026-11-24T15:00:00Z" },
+  { event_date: "2026-12-16", status: "prepping", created_at: "2026-10-01T00:00:00Z" },
+  { event_date: null, status: "confirmed", created_at: "2026-01-01T00:00:00Z" },
+], bookedNow);
+assert(blockedDays.join(",") === "2026-12-12,2026-12-14,2026-12-16", "whole-day blocks: confirmed, fresh hold, other statuses; cancelled and expired holds stay open");
+assert(ALREADY_BOOKED_LABEL === "(Already booked)", "quote calendar label");
+assert(formatCalendarDate("2026-12-12") === "Saturday, December 12, 2026", "calendar date is the Chicago calendar day, not the viewer zone");
+const bookedMessage = quoteDateBookedMessage("Phyllis", "2026-12-12");
+assert(bookedMessage.includes("Phyllis is already booked on Saturday, December 12, 2026"), "server message names the car and date");
+assert(bookedMessage.includes("(318) 344-5001") && !/customer|email|@/i.test(bookedMessage), "server message has the shop phone and no customer details");
+assert(matchQuoteServiceCar("Phyllis - 1941 Buick Super", [{ id: "p", name: "Phyllis" }, { id: "b", name: "Bonnie" }])?.id === "p", "quote service matches the car name");
+assert(matchQuoteServiceCar("", [{ id: "p", name: "Phyllis" }]) === null, "an empty service does not invent a car");
+
 
 const linkNow = new Date("2026-10-11T00:00:00Z");
 assert(quoteLinkOpen({ status: "sent", book_expires_at: "2026-10-18T00:00:00Z" }, linkNow).ok, "link inside 7 days");
@@ -584,5 +609,19 @@ mountShopMap(null as unknown as HTMLElement, {
 assert(drawn.marker?.title === "Chance Classics, 118 5th St E, Benton, LA 71006", "map pin names the shop");
 assert(drawn.circle?.radius === freeMileageRadiusMeters() && drawn.circle?.geodesic === true, "map circle is the free mileage zone");
 assert(drawn.fitted === true, "map frames the 30-mile circle");
+
+
+const quoteForm = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../components/QuoteForm.tsx"), "utf8");
+assert(quoteForm.includes("/api/availability/booked-days/") && quoteForm.includes("QuoteDatePicker"), "quote form loads booked days into the calendar");
+assert(quoteForm.includes("ALREADY_BOOKED_LABEL") && quoteForm.includes("quoteDateBookedMessage"), "quote form labels booked days and blocks submit");
+assert(!quoteForm.includes('type="datetime-local"'), "quote form no longer uses a single datetime picker that cannot gray out days");
+const quoteDatePicker = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../components/QuoteDatePicker.tsx"), "utf8");
+assert(quoteDatePicker.includes("ALREADY_BOOKED_LABEL") && quoteDatePicker.includes("is-booked"), "date picker grays booked days and shows (Already booked)");
+const quoteRoute = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../app/api/quotes/route.ts"), "utf8");
+assert(quoteRoute.includes("bookedDaysForCar") && quoteRoute.includes("quoteDateBookedMessage"), "quote POST rejects a booked car and date");
+const bookedDaysRoute = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../app/api/availability/booked-days/route.ts"), "utf8");
+assert(bookedDaysRoute.includes("bookedDaysForCar") && bookedDaysRoute.includes('select("id,name")'), "booked-days route reuses garage availability data");
+assert(!/customer_name|customer_email|customer_phone/.test(bookedDaysRoute), "booked-days route does not read customer fields");
+assert(siteBooking.includes("bookedDaysForCar") && siteBooking.includes('select("event_date,status,created_at")'), "booked days query only loads date, status, and hold age");
 
 console.log("booking rules ok");
