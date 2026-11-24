@@ -1,10 +1,22 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AddressField } from "@/components/AddressField";
+import { QuoteDatePicker } from "@/components/QuoteDatePicker";
 import { SecondCarField } from "@/components/SecondCarField";
-import { DROPOFF_MILEAGE_RULE_TEXT, MILEAGE_ACK, MILEAGE_ACK_ERROR, isPhotoShootOnly, quoteDropoffHidden } from "@/lib/booking-rules";
+import {
+  ALREADY_BOOKED_LABEL,
+  DROPOFF_MILEAGE_RULE_TEXT,
+  MILEAGE_ACK,
+  MILEAGE_ACK_ERROR,
+  QUOTE_BOOKED_HORIZON_DAYS,
+  addDays,
+  chicagoDate,
+  isPhotoShootOnly,
+  quoteDateBookedMessage,
+  quoteDropoffHidden,
+} from "@/lib/booking-rules";
 import { quoteServices } from "@/lib/content";
 
 const hear = ["Google / Search Engine", "Wedding Planning Site", "Event Planner", "Event Venue", "Friend / Family", "Other"];
@@ -26,13 +38,34 @@ export function QuoteForm() {
   const [sameLocation, setSameLocation] = useState(false);
   const [mileageNote, setMileageNote] = useState("");
   const [dropoffNote, setDropoffNote] = useState("");
+  const [service, setService] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [eventTime, setEventTime] = useState("");
+  const [bookedDates, setBookedDates] = useState<string[]>([]);
+  const [bookedReady, setBookedReady] = useState(true);
   const hideDropoff = quoteDropoffHidden({ eventType, sameLocation });
+  const today = useMemo(() => chicagoDate(), []);
+  const lastDate = useMemo(() => addDays(today, QUOTE_BOOKED_HORIZON_DAYS), [today]);
+  const dateBooked = Boolean(service && eventDate && bookedDates.includes(eventDate));
+  const carLabel = service.split(" - ")[0].trim() || "That car";
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
     if (!data.get("mileage")) {
       setMileageError(true);
+      return;
+    }
+    if (!service) {
+      setFormError("Choose a service.");
+      return;
+    }
+    if (!eventDate || !eventTime) {
+      setFormError("Choose a date and time.");
+      return;
+    }
+    if (dateBooked) {
+      setFormError(quoteDateBookedMessage(carLabel, eventDate));
       return;
     }
     setFormError("");
@@ -46,9 +79,9 @@ export function QuoteForm() {
           lastName: data.get("last_name"),
           email: data.get("email"),
           phone: data.get("phone"),
-          service: data.get("service"),
+          service,
           eventType: data.get("event_type"),
-          when: data.get("when"),
+          when: `${eventDate}T${eventTime}`,
           pickup: location,
           dropoff: hideDropoff ? "" : dropoff,
           details: data.get("details"),
@@ -80,6 +113,37 @@ export function QuoteForm() {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!service) {
+      setBookedDates([]);
+      setBookedReady(true);
+      return;
+    }
+    let ignore = false;
+    setBookedReady(false);
+    const params = new URLSearchParams({
+      service,
+      from: today,
+      to: lastDate,
+    });
+    fetch(`/api/availability/booked-days/?${params}`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (ignore) return;
+        setBookedDates(Array.isArray(data.dates) ? data.dates.filter((value: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(value))) : []);
+        setBookedReady(true);
+      })
+      .catch(() => {
+        if (!ignore) {
+          setBookedDates([]);
+          setBookedReady(true);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [lastDate, service, today]);
 
   useEffect(() => {
     if (location.trim().length < 4) {
@@ -138,10 +202,15 @@ export function QuoteForm() {
       </label>
       <label className="field">
         <span>Select a Service</span>
-        <select name="service" required defaultValue="">
+        <select
+          name="service"
+          required
+          value={service}
+          onChange={(event) => setService(event.target.value)}
+        >
           <option value="" disabled>Choose an option</option>
           {quoteServices.map((option) => (
-            <option key={option}>{option}</option>
+            <option key={option} value={option}>{option}</option>
           ))}
         </select>
       </label>
@@ -154,9 +223,36 @@ export function QuoteForm() {
           onChange={(event) => setEventType(event.target.value)}
         />
       </label>
+      <div className="field">
+        <span>Event Date</span>
+        <span className="sr-only">Booked days are marked {ALREADY_BOOKED_LABEL} and cannot be selected.</span>
+        <QuoteDatePicker
+          date={eventDate}
+          bookedDates={bookedDates}
+          minDate={today}
+          maxDate={lastDate}
+          ready={bookedReady}
+          hasCar={Boolean(service)}
+          carLabel={service}
+          onChange={(next) => {
+            setEventDate(next);
+            if (formError) setFormError("");
+          }}
+        />
+        {dateBooked && (
+          <p className="form-error" role="alert">{quoteDateBookedMessage(carLabel, eventDate)}</p>
+        )}
+      </div>
       <label className="field">
-        <span>Event Date and Time</span>
-        <input name="when" type="datetime-local" required />
+        <span>Event Time</span>
+        <input
+          name="event_time"
+          type="time"
+          required
+          value={eventTime}
+          disabled={!eventDate || dateBooked}
+          onChange={(event) => setEventTime(event.target.value)}
+        />
       </label>
       <label className="field">
         <span>Event Location (With Address)</span>
@@ -265,7 +361,7 @@ export function QuoteForm() {
         )}
       </div>
       {formError && <p className="form-error" role="alert">{formError}</p>}
-      <button className="quote-submit" type="submit" disabled={busy}>{busy ? "Please wait…" : "Request a Quote"}</button>
+      <button className="quote-submit" type="submit" disabled={busy || dateBooked}>{busy ? "Please wait…" : "Request a Quote"}</button>
     </form>
   );
 }

@@ -1,6 +1,7 @@
 import {
   HOLD_MINUTES,
   addDays,
+  bookedEventDates,
   holdIsFresh,
   openStartTimes,
   type Busy,
@@ -104,6 +105,29 @@ export async function openTimesForCar(
   await releaseStaleHolds(db, carId);
   const busy = await busyRanges(db, carId, date);
   return openStartTimes(hours, busy, date, request);
+}
+
+
+/** Event dates already taken for this car. Returns only YYYY-MM-DD strings. */
+export async function bookedDaysForCar(
+  db: Db,
+  carId: string,
+  from: string,
+  to: string,
+  now = new Date(),
+) {
+  const { data, error } = await db
+    .from("bookings")
+    .select("event_date,status,created_at")
+    .eq("car_id", carId)
+    .neq("status", "cancelled")
+    .gte("event_date", from)
+    .lte("event_date", to);
+  if (error) throw new Error(error.message);
+  return bookedEventDates(
+    (data || []) as { event_date: string | null; status: string | null; created_at: string | null }[],
+    now,
+  );
 }
 
 function optionalBookingColumn(name: string) {
