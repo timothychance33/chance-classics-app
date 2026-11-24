@@ -51,6 +51,15 @@ for (const [slug, agreement] of cars) {
   assert.doesNotMatch(hours[0].text, /\$200 per hour/);
 }
 
+for (const [slug, agreement] of cars) {
+  const price = agreement.blocks.filter((block) => block.type === 'p' && block.text.startsWith('Current Price'));
+  assert.equal(price.length, 1, `${slug} has one Current Price paragraph`);
+  assert.match(price[0].text, /\$100 for each additional consecutive hour/, `${slug} extra hour is $100`);
+  assert.doesNotMatch(price[0].text, /\$200 for each additional consecutive hour/, `${slug} extra hour is not $200`);
+}
+const phyllisPrice = agreements.phyllis.blocks.find((block) => block.type === 'p' && block.text.startsWith('Current Price'));
+assert.match(phyllisPrice.text, /\$700 for the first 2 hours/, 'Phyllis starting price in the client agreement is $700');
+
 assert.doesNotMatch(JSON.stringify(agreements), /automatically be charged to the CLIENT/);
 for (const [slug, agreement] of cars) {
   const blocks = agreement.blocks.filter((block) => block.type === 'p');
