@@ -735,17 +735,32 @@ async function loadAll(){
   }catch(e){const msg=e?.message||e?.error_description||e?.hint||JSON.stringify(e);toast('Load error: '+msg);console.error('Load error detail:',e)}
 }
 
-// If a sent quote's customer email matches a real booking, mark it booked.
+// A sent quote only auto-matches one non-cancelled, non-hold booking with
+// the same customer email, event date, and car. Two matches means no guess.
+function matchingBookingForQuote(q, bookings){
+  if(!q||!q.customer_email||!q.event_date||!q.car_id) return null;
+  const email=q.customer_email.toLowerCase().trim();
+  const date=String(q.event_date).slice(0,10);
+  const hits=(bookings||DATA.bookings||[]).filter(b=>{
+    if(!b||b.status==='cancelled'||b.status==='hold') return false;
+    if(!b.customer_email||b.customer_email.toLowerCase().trim()!==email) return false;
+    if(!b.event_date||String(b.event_date).slice(0,10)!==date) return false;
+    return b.car_id===q.car_id;
+  });
+  return hits.length===1?hits[0]:null;
+}
+
+// If a sent quote matches one real booking on email, date, and car, mark it booked and link it.
 async function autoMatchQuotes(){
   const sent=(DATA.quotes||[]).filter(q=>q.status==='sent' && q.customer_email);
   if(!sent.length) return;
   let anyChanged=false;
   for(const q of sent){
-    const email=q.customer_email.toLowerCase().trim();
-    const match=DATA.bookings.find(b=>b.customer_email && b.customer_email.toLowerCase().trim()===email);
+    const match=matchingBookingForQuote(q);
     if(match){
-      await SB.from('quote_requests').update({status:'booked'}).eq('id',q.id);
+      await SB.from('quote_requests').update({status:'booked', booking_id:match.id}).eq('id',q.id);
       q.status='booked'; // update in-memory copy too, avoids a second full reload
+      q.booking_id=match.id;
       anyChanged=true;
     }
   }
@@ -1432,8 +1447,8 @@ function ownerCustomerAmountEditorHtml(b, after){
     ${hint?`<small class="hint">${esc(hint)}</small>`:''}
   </div>`;
 }
-// Pair each booking with at most one quote. Same email match autoMatchQuotes already
-// uses to mark a quote booked; prefer email+date, then email+car, then email.
+// Pair each booking with at most one quote for Earnings. autoMatchQuotes only
+// links a quote when email, date, and car all match; this helper is looser.
 function assignQuotesToBookings(bookings, quotes){
   const used=new Set();
   const map={};
@@ -2858,9 +2873,15 @@ async function deleteQuote(qid){
 }
 
 async function markQuoteBooked(qid){
-  const {error}=await SB.from('quote_requests').update({status:'booked'}).eq('id',qid);
+  const q=(DATA.quotes||[]).find(x=>x.id===qid);
+  if(!q) return;
+  const match=matchingBookingForQuote(q);
+  const patch={status:'booked'};
+  if(match) patch.booking_id=match.id;
+  else if(!confirm('No matching booking was found for this customer, date, and car. Mark the quote booked anyway, without linking a booking?')) return;
+  const {error}=await SB.from('quote_requests').update(patch).eq('id',qid);
   if(error){toast(error.message);return}
-  toast('Marked as booked 🎉');closeModal();await loadAll();
+  toast(match?'Marked as booked and linked to the booking 🎉':'Marked as booked 🎉');closeModal();await loadAll();
 }
 async function sendReminderEmail(qid){
   const q=(DATA.quotes||[]).find(x=>x.id===qid); if(!q||!q.customer_email) return;
